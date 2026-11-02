@@ -161,28 +161,42 @@ func TestRestartPolicy(t *testing.T) {
 func TestRules(t *testing.T) {
 	ok := with("[]", `{
 	  "m": {"type": "integer", "default": 1},
-	  "s": {"type": "array", "x-pack-rules": [{"rule": "!has(values.conf.s) || size(values.conf.s) == 0"}]}
+	  "s": {"type": "array", "x-pack-rules": [{"rule": "!has(values.conf.s) || size(values.conf.s) == 0"}]},
+	  "both": {"type": "integer", "x-pack-rules": [{"rule": "values.conf.both > 0", "phases": ["preMutate", "postMutate"]}]},
+	  "dyn": {"type": "integer", "x-pack-rules": [{"rule": "values.conf.dyn"}]}
 	}`)
 	if ps := run(t, ok); len(ps) != 0 {
+		// dyn: a rule whose type the checker cannot fix is the render's to judge, not the author's
 		t.Errorf("a well-formed rule is refused: %v", ps)
 	}
 
 	bad := with("[]", `{
 	  "cel":   {"type": "integer", "x-pack-rules": [{"rule": "values.conf.cel +"}]},
-	  "type":   {"type": "integer", "x-pack-rules": [{"rule": "values.conf.type + 1"}]},
-	  "phase":  {"type": "integer", "x-pack-rules": [{"rule": "true", "phases": ["preInstall"]}]},
-	  "replica": {"type": "integer", "x-pack-rules": [{"rule": "pack.index > 0"}]}
+	  "type":  {"type": "integer", "x-pack-rules": [{"rule": "values.conf.type + 1"}]},
+	  "mismatch": {"type": "integer", "x-pack-rules": [{"rule": "1 + 'a'"}]},
+	  "phase": {"type": "integer", "x-pack-rules": [{"rule": "true", "phases": ["preInstall"]}]},
+	  "replica":  {"type": "integer", "x-pack-rules": [{"rule": "pack.index > 0"}]},
+	  "replica2": {"type": "integer", "x-pack-rules": [{"rule": "pack.instance != ''"}]},
+	  "replica3": {"type": "integer", "x-pack-rules": [{"rule": "pack.ordinal == 1"}]},
+	  "twice": {"type": "integer", "x-pack-rules": [{"rule": "true"}, {"rule": "values.conf.twice + 1"}]}
 	}`)
 	ps := run(t, bad)
 	for _, want := range []struct{ path, msg string }{
 		{"/conf/cel/x-pack-rules/0", "does not compile"},
 		{"/conf/type/x-pack-rules/0", "a rule must be boolean"},
+		{"/conf/mismatch/x-pack-rules/0", "does not type-check"},
 		{"/conf/phase/x-pack-rules/0", `phase "preInstall" is not one a rule runs at`},
 		{"/conf/replica/x-pack-rules/0", "not per-replica"},
+		{"/conf/replica2/x-pack-rules/0", "not per-replica"},
+		{"/conf/replica3/x-pack-rules/0", "not per-replica"},
+		{"/conf/twice/x-pack-rules/1", "a rule must be boolean"}, // the second rule of the node
 	} {
 		if !has(ps, want.path, want.msg) {
 			t.Errorf("missing %s: %s — got %v", want.path, want.msg, ps)
 		}
+	}
+	if has(ps, "/conf/twice/x-pack-rules/0", "") {
+		t.Errorf("the first rule of the node is well-formed: %v", ps)
 	}
 
 	// on the field of a held pack: the field is a $ref, the flat view cuts it out
@@ -203,6 +217,31 @@ func TestRules(t *testing.T) {
 	}
 	if !has(ps, "/dep", "cut out of the flat view") {
 		t.Errorf("rules on a held pack's field must be refused: %v", ps)
+	}
+}
+
+// A dynamic index off values makes the set of a formula's reads unknowable —
+// it is the formula's ordering that needs them static; a rule answers about
+// one document and may index as it likes. A literal index is a path like any
+// other.
+func TestDynamicIndexIsRefused(t *testing.T) {
+	ok := with("[]", `{
+	  "src":  {"type": "array"},
+	  "head": {"type": "string", "x-pack-compute": "values.conf.src[0]"},
+	  "b":    {"type": "object", "x-pack-rules": [{"rule": "size(values.conf.b[values.conf.i]) > 0"}]},
+	  "i":    {"type": "integer"}
+	}`)
+	if ps := run(t, ok); len(ps) != 0 {
+		t.Errorf("a literal index, and a rule's dynamic one, are fine: %v", ps)
+	}
+
+	bad := with("[]", `{
+	  "a": {"type": "integer", "x-pack-compute": "size(values.conf.b[values.conf.i])"},
+	  "b": {"type": "object"},
+	  "i": {"type": "integer"}
+	}`)
+	if ps := run(t, bad); !has(ps, "/conf/a", "dynamic index in values.conf.b[]") {
+		t.Errorf("a dynamic index in a formula must be refused: %v", ps)
 	}
 }
 

@@ -280,3 +280,156 @@ func TestAFormulaThatNamesNoKeyOfThePackIsReported(t *testing.T) {
 		t.Fatalf("openbao: %v, %v", ps, err)
 	}
 }
+
+// Ruled has a rule with a message and one without; both refuse at once.
+type Ruled struct {
+	Port int    `json:"port,omitempty"`
+	Name string `json:"name,omitempty"`
+}
+
+func (*Ruled) SetDefaults()              {}
+func (*Ruled) PackRoot() packschema.Root { return packschema.Root{} }
+func (*Ruled) Meta() sdk.Meta {
+	return sdk.Meta{Name: "ruled", Version: "1", Artifact: "oci://packs/ruled", Dir: "/nonexistent"}
+}
+func (*Ruled) PackRules() map[string][]packschema.Rule {
+	return map[string][]packschema.Rule{
+		"/port": {{Rule: "values.port > 100"}},
+		"/name": {{Rule: "size(values.name) > 3", Message: "the name is too short"}},
+	}
+}
+
+// Every violation of the phase is one refusal: both pointers, in order; a
+// rule without a message says the default.
+func TestEveryViolationIsReported(t *testing.T) {
+	_, err := renderPack(loadPack(t, &Ruled{}), map[string]any{"port": 1, "name": "ab"})
+	if err == nil {
+		t.Fatal("both rules must refuse")
+	}
+	name, port := strings.Index(err.Error(), "/name: the name is too short"), strings.Index(err.Error(), "/port: the rule does not hold")
+	if name < 0 || port < 0 {
+		t.Fatalf("both violations, each with its message:\n%v", err)
+	}
+	if name > port {
+		t.Errorf("the violations are sorted: /name before /port:\n%v", err)
+	}
+	if !strings.Contains(err.Error(), "(preMutate)") {
+		t.Errorf("a rule without phases runs at preMutate: %v", err)
+	}
+	// and the document that holds passes
+	if _, err := renderPack(loadPack(t, &Ruled{}), map[string]any{"port": 5432, "name": "postgres"}); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// Held is a pack with a rule of its own; Holder holds it, optionally.
+type Held struct {
+	URL string `json:"url,omitempty"`
+}
+
+func (*Held) SetDefaults()              {}
+func (*Held) PackRoot() packschema.Root { return packschema.Root{} }
+func (*Held) Meta() sdk.Meta {
+	return sdk.Meta{Name: "held", Version: "1", Artifact: "oci://packs/held", Dir: "/nonexistent"}
+}
+func (*Held) PackRules() map[string][]packschema.Rule {
+	return map[string][]packschema.Rule{
+		"/url": {{Rule: "has(values.url) && values.url != ''", Message: "the url is required"}},
+	}
+}
+
+type Holder struct {
+	H *Held `json:"h,omitempty"`
+}
+
+func (*Holder) SetDefaults()              {}
+func (*Holder) PackRoot() packschema.Root { return packschema.Root{} }
+func (*Holder) Meta() sdk.Meta {
+	return sdk.Meta{Name: "holder", Version: "1", Artifact: "oci://packs/holder", Dir: "/nonexistent"}
+}
+
+// A pack the release does not install has no rules to break; once it is
+// chosen, its rule reads ITS values subtree, and the refusal speaks the
+// operator's pointer.
+func TestRulesOfAnUnselectedPackAreNotEvaluated(t *testing.T) {
+	b := loadPack(t, &Holder{})
+	if _, err := renderPack(b, map[string]any{}); err != nil {
+		t.Fatalf("the held pack is not named: nothing of it runs, no rule of it fires: %v", err)
+	}
+	if _, err := renderPack(b, map[string]any{"h": map[string]any{"url": "postgres://db"}}); err != nil {
+		t.Fatal(err)
+	}
+	_, err := renderPack(b, map[string]any{"h": map[string]any{}})
+	if err == nil || !strings.Contains(err.Error(), "/h/url: the url is required") {
+		t.Fatalf("the held pack's rule, at the operator's pointer: %v", err)
+	}
+}
+
+// Sized refuses resources below what it can run on — a rule reads limits and
+// me like a formula does.
+type Sized struct {
+	Port int `json:"port,omitempty"`
+}
+
+func (*Sized) SetDefaults()              {}
+func (*Sized) PackRoot() packschema.Root { return packschema.Root{} }
+func (*Sized) Meta() sdk.Meta {
+	return sdk.Meta{Name: "sized", Version: "1", Artifact: "oci://packs/sized", Dir: "/nonexistent"}
+}
+func (*Sized) PackRules() map[string][]packschema.Rule {
+	return map[string][]packschema.Rule{
+		"/port": {{Rule: "limits.memory >= 536870912 && me.replicas >= 1", Message: "512Mi of memory at the least"}},
+	}
+}
+
+func TestARuleReadsLimitsAndMe(t *testing.T) {
+	b := loadPack(t, &Sized{})
+	renderSized := func(limit string) error {
+		p := render.Placement{}
+		if len(limit) > 0 {
+			p.Resources = &render.Resources{Limits: map[string]string{"memory": limit}}
+		}
+		_, err := render.Render(b, render.Values{Values: map[string]any{"port": 5432}}, render.Context{
+			Installation: "t", Target: memory.New(), Keys: map[string]render.Placement{"sized": p},
+		})
+		return err
+	}
+	if err := renderSized("1Gi"); err != nil {
+		t.Fatalf("1Gi is plenty: %v", err)
+	}
+	if err := renderSized("256Mi"); err == nil || !strings.Contains(err.Error(), "512Mi of memory at the least") {
+		t.Fatalf("256Mi must be refused with the rule's message: %v", err)
+	}
+	if err := renderSized(""); err == nil {
+		t.Fatal("no limits at all: limits.memory is not there to compare — an evaluation error is a refusal too")
+	}
+}
+
+// GhostRule has a rule that names a key its pack does not have.
+type GhostRule struct {
+	URL string `json:"url,omitempty"`
+}
+
+func (*GhostRule) SetDefaults()              {}
+func (*GhostRule) PackRoot() packschema.Root { return packschema.Root{} }
+func (*GhostRule) Meta() sdk.Meta {
+	return sdk.Meta{Name: "ghostrule", Version: "1", Artifact: "oci://packs/ghostrule", Dir: "/nonexistent"}
+}
+func (*GhostRule) PackRules() map[string][]packschema.Rule {
+	return map[string][]packschema.Rule{"/url": {{Rule: "has(pack.keys.ghost)"}}}
+}
+
+// CheckBundle names the keys a rule reads like it does a formula's.
+func TestARuleThatNamesNoKeyOfThePackIsReported(t *testing.T) {
+	ps, err := render.CheckBundle(loadPack(t, &GhostRule{}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var found bool
+	for _, p := range ps {
+		found = found || (p.Path == "/url" && strings.Contains(p.Message, "a rule reads pack.keys.ghost") && strings.Contains(p.Message, "not a key of the pack"))
+	}
+	if !found {
+		t.Fatalf("problems = %v", ps)
+	}
+}

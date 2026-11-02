@@ -166,7 +166,7 @@ func Run(c Component) ([]Problem, error) {
 					add(ptr, "x-pack-compute reads %s: replicas are byte-identical, so an instance's identity may only reach a perInstance file", r)
 				}
 			}
-			if strings.HasSuffix(r, "[]") && strings.HasPrefix(r, "values.") {
+			if strings.HasSuffix(r, "[]") && (r == "values[]" || strings.HasPrefix(r, "values.")) {
 				add(ptr, "dynamic index in %s: the set of reads must be static", r)
 			}
 			// 3. no formula reads a password

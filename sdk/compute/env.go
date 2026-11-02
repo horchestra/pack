@@ -179,13 +179,15 @@ func Reads(a *cel.Ast) []string {
 			return
 		}
 		if p, ok := path(e); ok {
-			if root, _, _ := strings.Cut(p, "."); isVar(root) {
+			// the root of "values.conf[]" is "values"; of "values[]" too
+			if root, _, _ := strings.Cut(p, "."); isVar(strings.TrimSuffix(root, "[]")) {
 				add(p)
 			}
-			// still descend for dynamic index operands
+			// a read inside the index of values[…] is a read too — the path
+			// itself ended at []
 			if e.Kind() == ast.CallKind {
-				for _, arg := range e.AsCall().Args() {
-					walk(arg)
+				if c := e.AsCall(); c.FunctionName() == "_[_]" && len(c.Args()) == 2 {
+					walk(c.Args()[1])
 				}
 			}
 			return
