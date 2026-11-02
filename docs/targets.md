@@ -28,27 +28,35 @@ target: docker
 ```yaml
 # release.yaml
 targets:
-  docker: https://github.com/horchestra/targets/releases/download/v0.1.0/pack-target-docker_{os}_{arch}.tar.gz
-  k8s:    oci://ghcr.io/horchestra/targets/k8s:0.1.0-{os}-{arch}
+  docker: https://github.com/horchestra/targets/releases/download/docker/v0.1.0/pack-target-docker_{os}_{arch}.tar.gz
+  k8s: oci://ghcr.io/horchestra/targets/k8s:0.1.0-{os}-{arch}
 ```
 
 `pack init` takes the targets the environment uses (`target:` and the `target:` of each entry of `targets:`), downloads
 each from its source into `.pack/bin/pack-target-<name>`, and writes the SHA-256 of what came into `release.lock.json`:
 
 ```json
-{"targets": {"docker": {"source": "https://…/pack-target-docker_{os}_{arch}.tar.gz", "sha256": "20fb7888…"}}}
+{
+  "targets": {
+    "docker": {
+      "source": "https://…/pack-target-docker_{os}_{arch}.tar.gz",
+      "sha256": "20fb7888…"
+    }
+  }
+}
 ```
 
 A source is:
 
-| | |
-|---|---|
-| `https://…/pack-target-docker_{os}_{arch}` | the program itself |
-| `https://…/….tar.gz`, `….tgz`, `….zip` | an archive that holds `pack-target-<name>`, wherever in it |
-| `oci://host/repo:tag` | an OCI artifact with the file `pack-target-<name>` ([registry.md](registry.md#publishing-a-target)); the registry's credentials are `PACK_REGISTRY_USER` / `PACK_REGISTRY_PASSWORD`, `registry.plain_http` in `env.yaml` |
-| `http://…` | the same, in the clear — a mirror inside |
+|                                            |                                                                                                                                                                                                                          |
+|--------------------------------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `https://…/pack-target-docker_{os}_{arch}` | the program itself                                                                                                                                                                                                       |
+| `https://…/….tar.gz`, `….tgz`, `….zip`     | an archive that holds `pack-target-<name>`, wherever in it                                                                                                                                                               |
+| `oci://host/repo:tag`                      | an OCI artifact with the file `pack-target-<name>` ([registry.md](registry.md#publishing-a-target)); the registry's credentials are `PACK_REGISTRY_USER` / `PACK_REGISTRY_PASSWORD`, `registry.plain_http` in `env.yaml` |
+| `http://…`                                 | the same, in the clear — a mirror inside                                                                                                                                                                                 |
 
-`{os}` and `{arch}` stand for GOOS and GOARCH of the machine pack runs on, so one line serves a team with both. A program
+`{os}` and `{arch}` stand for GOOS and GOARCH of the machine pack runs on, so one line serves a team with both. A
+program
 that is in `.pack/bin` with the locked checksum is not downloaded again. A source that gives another checksum than the
 lock has is refused (and the program removed) — `pack init --upgrade` takes the new one. A target with no source in
 `release.yaml` needs `pack-target-<name>` to be in `.pack/bin` already. `memory` is in pack and needs nothing.
