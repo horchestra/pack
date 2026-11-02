@@ -4,35 +4,64 @@ A **target** is the system a pack is installed on. The core knows none by name: 
 addresses and instances of the keys end up inside config files), plans the saga and hands the target one step at a time.
 A target says what the environment's placement of a key means on its system and performs the steps in it.
 
-This repository has three, each a module of its own with its own `go.mod` and `main.go`, built into a program that pack
-starts and speaks to over gRPC:
+The targets are in their own
+repository, [github.com/horchestra/targets](https://github.com/horchestra/targets/tree/main): three modules, each with
+its own `go.mod`
+and `main.go`, built into a program that pack starts and speaks to over gRPC:
 
-| `target:` | program               |                                                                                                     |
-|-----------|-----------------------|-----------------------------------------------------------------------------------------------------|
-| `docker`  | `pack-target-docker`  | [Docker engines](../targets/docker/README.md): one, or several hosts, over the CLI or an SSH tunnel |
-| `ansible` | `pack-target-ansible` | [classic hosts](../targets/ansible/README.md): packages, files and systemd services over SSH        |
-| `k8s`     | `pack-target-k8s`     | [Kubernetes](../targets/k8s/README.md): StatefulSets, Jobs, Services, Secrets, with client-go       |
-| `memory`  | (in pack)             | runs nothing; keeps what it was told in the process — for plans, templates and tests                |
+| `target:` | program               |                                                                                                                                       |
+|-----------|-----------------------|---------------------------------------------------------------------------------------------------------------------------------------|
+| `docker`  | `pack-target-docker`  | [Docker engines](https://github.com/horchestra/targets/tree/main/docker#readme): one, or several hosts, over the CLI or an SSH tunnel |
+| `ansible` | `pack-target-ansible` | [classic hosts](https://github.com/horchestra/targets/tree/main/ansible#readme): packages, files and systemd services over SSH        |
+| `k8s`     | `pack-target-k8s`     | [Kubernetes](https://github.com/horchestra/targets/tree/main/k8s#readme): StatefulSets, Jobs, Services, Secrets, with client-go       |
+| `memory`  | (in pack)             | runs nothing; keeps what it was told in the process — for plans, templates and tests                                                  |
 
 ## Using one
 
-```
-(cd targets/docker && go build -o ~/bin/pack-target-docker .)
-```
+Like terraform's providers, a target is named in the release and **downloaded by `pack init`**:
 
 ```yaml
 # env.yaml
 target: docker
 ```
 
-`pack` looks for `pack-target-<name>` in the directories `PACK_TARGET_PATH` lists, beside itself, then on `PATH`. A
-`provider:` setting names another way: a binary's path, or `oci://host/repo:tag`, a container image that podman or
-docker runs (for a target written in a language whose runtime the machine lacks; the port is published on 127.0.0.1
-only). The target is stopped when the command ends.
+```yaml
+# release.yaml
+targets:
+  docker: https://github.com/horchestra/targets/releases/download/v0.1.0/pack-target-docker_{os}_{arch}.tar.gz
+  k8s:    oci://ghcr.io/horchestra/targets/k8s:0.1.0-{os}-{arch}
+```
+
+`pack init` takes the targets the environment uses (`target:` and the `target:` of each entry of `targets:`), downloads
+each from its source into `.pack/bin/pack-target-<name>`, and writes the SHA-256 of what came into `release.lock.json`:
+
+```json
+{"targets": {"docker": {"source": "https://…/pack-target-docker_{os}_{arch}.tar.gz", "sha256": "20fb7888…"}}}
+```
+
+A source is:
+
+| | |
+|---|---|
+| `https://…/pack-target-docker_{os}_{arch}` | the program itself |
+| `https://…/….tar.gz`, `….tgz`, `….zip` | an archive that holds `pack-target-<name>`, wherever in it |
+| `oci://host/repo:tag` | an OCI artifact with the file `pack-target-<name>` ([registry.md](registry.md#publishing-a-target)); the registry's credentials are `PACK_REGISTRY_USER` / `PACK_REGISTRY_PASSWORD`, `registry.plain_http` in `env.yaml` |
+| `http://…` | the same, in the clear — a mirror inside |
+
+`{os}` and `{arch}` stand for GOOS and GOARCH of the machine pack runs on, so one line serves a team with both. A program
+that is in `.pack/bin` with the locked checksum is not downloaded again. A source that gives another checksum than the
+lock has is refused (and the program removed) — `pack init --upgrade` takes the new one. A target with no source in
+`release.yaml` needs `pack-target-<name>` to be in `.pack/bin` already. `memory` is in pack and needs nothing.
+
+`pack` looks for the programs in the directories `PACK_TARGET_PATH` lists, by default **`.pack/bin` of the release it
+runs in** — nowhere else (not beside itself, not on `PATH`). A `provider:` setting in `env.yaml` names another way for a
+target: a binary's path, or `oci://host/repo:tag` of a container image that podman or docker runs (for a target written
+in a language whose runtime the machine lacks; the port is published on 127.0.0.1 only). The target is stopped when the
+command ends.
 
 A target is a module of its own so that what it pulls in (client-go, the docker CLI's helpers, an SSH library) is not
 the
-core's. It is tested on its own: `cd targets/<name> && go test ./...` — `go test ./...` of the root does not reach it.
+core's. It is tested on its own, in its repository: `cd <name> && go test ./...`.
 
 ## Writing one
 
@@ -50,7 +79,7 @@ import (
 
 func main() {
 	if err := remote.Serve("mytarget", factory, remote.CapRecord); err != nil {
-	_, _ = fmt.Fprintln(os.Stderr, "pack-target-mytarget:", err)
+		_, _ = fmt.Fprintln(os.Stderr, "pack-target-mytarget:", err)
 		os.Exit(1)
 	}
 }

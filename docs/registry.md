@@ -32,6 +32,24 @@ build attestations is an image, and stays a reference.
 
 `oci-packer get oci://host/repo:tag:path/in/the/pack` reads one file of a pack without extracting it.
 
+## Publishing a target
+
+A target's program is published the same way, as an artifact with one file, `pack-target-<name>`, one tag per platform
+(`{os}` and `{arch}` of the source line stand for GOOS and GOARCH):
+
+```
+# pack.yaml
+type: application/vnd.pack.target.v1
+items:
+- from: file://pack-target-docker
+```
+
+```
+oci-pack oci://registry.example/targets/docker:0.1.0-linux-amd64 -f pack.yaml
+```
+
+and `release.yaml` names it: `targets: {docker: oci://registry.example/targets/docker:0.1.0-{os}-{arch}}`.
+
 ## pack init
 
 ```

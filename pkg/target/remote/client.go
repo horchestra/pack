@@ -28,42 +28,46 @@ import (
 )
 
 const (
-	// EnvPath lists directories searched for provider binaries before the
-	// directory of pack itself and PATH.
+	// EnvPath lists the directories searched for the programs of targets. Unset, it is .pack/bin of the release the
+	// command runs in — where `pack init` downloads them.
 	EnvPath = "PACK_TARGET_PATH"
+	// DefaultDir is what EnvPath defaults to, relative to the directory pack runs in.
+	DefaultDir = ".pack/bin"
 	// Prefix names a target binary: pack-target-<target>.
 	Prefix = "pack-target-"
 
-	// EnvRuntime names the container runtime that runs a provider image;
-	// unset — podman, else docker, whichever is on PATH.
+	// EnvRuntime names the container runtime that runs a target image; unset — podman, else docker, whichever is on
+	// PATH.
 	EnvRuntime = "PACK_CONTAINER_RUNTIME"
 
 	binaryStart = 10 * time.Second
 	imageStart  = 3 * time.Minute // the runtime may pull the image first
-	imagePort   = "7353"          // where a provider listens inside its container
+	imagePort   = "7353"          // where a target listens inside its container
 )
 
-// Find locates pack-target-<name>: in PACK_TARGET_PATH, beside the
-// running pack, then on PATH.
+// Dirs are the directories the programs of targets are searched in: PACK_TARGET_PATH, else .pack/bin here.
+func Dirs() []string {
+	if p := os.Getenv(EnvPath); len(p) > 0 {
+		return filepath.SplitList(p)
+	}
+	abs, err := filepath.Abs(DefaultDir)
+	if err != nil {
+		return []string{DefaultDir}
+	}
+	return []string{abs}
+}
+
+// Find locates pack-target-<name> in Dirs.
 func Find(name string) (string, error) {
 	bin := Prefix + name
-	var dirs []string
-	if p := os.Getenv(EnvPath); len(p) > 0 {
-		dirs = append(dirs, filepath.SplitList(p)...)
-	}
-	if self, err := os.Executable(); err == nil {
-		dirs = append(dirs, filepath.Dir(self))
-	}
+	dirs := Dirs()
 	for _, d := range dirs {
 		p := filepath.Join(d, bin)
 		if fi, err := os.Stat(p); err == nil && fi.Mode().IsRegular() && fi.Mode()&0o111 != 0 {
 			return p, nil
 		}
 	}
-	if p, err := exec.LookPath(bin); err == nil {
-		return p, nil
-	}
-	return "", fmt.Errorf("target %q: no %s in %s, beside pack, or on PATH", name, bin, EnvPath)
+	return "", fmt.Errorf("target %q: no %s in %s — `pack init` downloads it from the source release.yaml names under targets:", name, bin, strings.Join(dirs, string(filepath.ListSeparator)))
 }
 
 // Plugin is a provider running in its own process, as a target.Target.

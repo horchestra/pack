@@ -4,7 +4,6 @@ GO       ?= go
 PROTOC   ?= protoc
 GOBIN    := $(shell $(GO) env GOPATH)/bin
 BIN      ?= bin
-TARGETS  := docker ansible k8s
 
 # protoc-gen-go and protoc-gen-go-grpc live in GOBIN
 export PATH := $(GOBIN):$(PATH)
@@ -14,7 +13,7 @@ PROTO_OUT := pkg/target/remote/remotepb
 PROTOS    := $(wildcard $(PROTO_DIR)/*.proto)
 
 .DEFAULT_GOAL := help
-.PHONY: help proto build test test-core test-targets test-sdk golden vet fmt tidy clean
+.PHONY: help proto build test test-core test-sdk golden vet fmt clean
 
 help: ## list the targets
 	@grep -E '^[a-zA-Z_-]+:.*## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*## "}; {printf "  %-14s %s\n", $$1, $$2}'
@@ -29,23 +28,13 @@ proto: ## regenerate the target protocol stubs (proto/*.proto -> pkg/target/remo
 		--go-grpc_out=$(PROTO_OUT) --go-grpc_opt=paths=source_relative \
 		$(PROTOS)
 
-build: ## build pack and the targets (pack-target-docker, -ansible, -k8s) into bin/
+build: ## build pack into bin/
 	$(GO) build -o $(BIN)/pack ./cmd/pack
-	@for t in $(TARGETS); do \
-		echo "build pack-target-$$t"; \
-		(cd targets/$$t && $(GO) build -o ../../$(BIN)/pack-target-$$t .) || exit 1; \
-	done
 
-test: test-core test-targets test-sdk ## everything
+test: test-core test-sdk ## everything
 
 test-core: ## the core, its SDK and the Go example
 	$(GO) test -race ./pkg/... ./internal/... ./cmd/... ./sdk/... ./examples/...
-
-test-targets: ## the target modules (modules of their own: the root ./... does not reach them)
-	@for t in $(TARGETS); do \
-		echo "test targets/$$t"; \
-		(cd targets/$$t && $(GO) test -race ./...) || exit 1; \
-	done
 
 test-sdk: ## the Python and Java SDKs and examples against the golden files
 	cd sdk/python && python3 -I -m unittest discover -s tests
@@ -64,11 +53,8 @@ golden: ## rewrite the golden files the SDKs and examples are compared with (aft
 vet: ## go vet of the core
 	$(GO) vet ./pkg/... ./internal/... ./cmd/... ./sdk/... ./examples/...
 
-fmt: ## gofmt of the core and the targets
-	gofmt -l -w pkg internal cmd sdk examples targets emit secretstore
-
-tidy: ## go mod tidy of the target modules (the root's go.mod is yours)
-	@for t in $(TARGETS); do (cd targets/$$t && $(GO) mod tidy) || exit 1; done
+fmt: ## gofmt of the core
+	gofmt -l -w pkg internal cmd sdk examples emit secretstore
 
 clean: ## remove bin/
 	rm -rf $(BIN)

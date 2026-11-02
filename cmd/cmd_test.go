@@ -1,20 +1,29 @@
 package cmd
 
 import (
+	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"io"
 	"maps"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"reflect"
 	"slices"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/horchestra/pack/sdk"
 	"sigs.k8s.io/yaml"
 
+	"github.com/horchestra/pack/internal/oci"
 	"github.com/horchestra/pack/internal/release"
 	"github.com/horchestra/pack/internal/testpacks/openbao"
 	"github.com/horchestra/pack/internal/testpacks/regserver"
+	"github.com/horchestra/pack/pkg/environment"
 	"github.com/horchestra/pack/pkg/render"
 )
 
@@ -167,7 +176,7 @@ func TestInitFromARegistry(t *testing.T) {
 	}
 	// again: the same lock, nothing new
 	pack(t, d, "init")
-	if again, _ := release.ReadLock(d); again == nil || *again != *lock {
+	if again, _ := release.ReadLock(d); again == nil || !reflect.DeepEqual(again, lock) {
 		t.Fatalf("lock changed: %+v", again)
 	}
 	// and what follows runs from the pack directory
@@ -190,5 +199,80 @@ func TestInitMakesTheIDOfAStateKeptInTheTarget(t *testing.T) {
 	pack(t, d, "init")
 	if rel, _ := release.Load(d, ""); rel.ID != id {
 		t.Fatalf("the id changed: %s → %s", id, rel.ID)
+	}
+}
+
+// The programs of the targets are downloaded by init from the sources release.yaml names, into .pack/bin; the lock
+// keeps their checksums; a source that gives something else is refused until --upgrade.
+func TestInitBringsTheTargets(t *testing.T) {
+	body := []byte("#!/bin/sh\necho one\n")
+	var mu sync.Mutex
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		defer mu.Unlock()
+		_, _ = w.Write(body)
+	}))
+	defer srv.Close()
+
+	packDir := generated(t)
+	d := releaseOf(t, packDir, map[string]any{"target": "fake"})
+	write(t, d, "release.yaml", map[string]any{
+		"pack":    packDir,
+		"targets": map[string]any{"fake": srv.URL + "/pack-target-fake_{os}_{arch}"},
+	})
+	out := pack(t, d, "init")
+	file := filepath.Join(d, ".pack", "bin", "pack-target-fake")
+	if got, err := os.ReadFile(file); err != nil || string(got) != string(body) {
+		t.Fatalf("the program: %q %v\n%s", got, err, out)
+	}
+	if fi, _ := os.Stat(file); fi.Mode().Perm()&0o111 == 0 {
+		t.Errorf("not executable: %v", fi.Mode())
+	}
+	sum := sha256.Sum256(body)
+	lock, err := release.ReadLock(d)
+	if err != nil || lock.Targets["fake"].SHA256 != hex.EncodeToString(sum[:]) || !strings.Contains(lock.Targets["fake"].Source, "{os}") {
+		t.Fatalf("lock = %+v, %v", lock, err)
+	}
+	if !strings.Contains(out, "downloaded") {
+		t.Errorf("init: %s", out)
+	}
+
+	// again: the file is there with the locked checksum, nothing is fetched
+	if out := pack(t, d, "init"); !strings.Contains(out, "up to date") {
+		t.Errorf("again: %s", out)
+	}
+
+	// the source gives something else: refused (a failing command exits, so the step is called directly)
+	mu.Lock()
+	body = []byte("#!/bin/sh\necho two\n")
+	mu.Unlock()
+	_ = os.Remove(file)
+	rel, err := release.Load(d, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	env, err := environment.Load(context.Background(), rel.Config(), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := bringTargets(context.Background(), rel, env, lock, oci.Options{}); err == nil || !strings.Contains(err.Error(), "--upgrade") {
+		t.Fatalf("a program that is not the locked one: %v", err)
+	}
+	if _, err := os.Stat(file); err == nil {
+		t.Error("the refused program is removed")
+	}
+	// --upgrade takes it
+	pack(t, d, "init", "--upgrade")
+	initUpgrade = false // a flag keeps its value between runs in one process
+	if got, _ := os.ReadFile(file); string(got) != string(body) {
+		t.Errorf("after --upgrade: %q", got)
+	}
+
+	// a target with no source and no program is said so
+	d2 := releaseOf(t, packDir, map[string]any{"target": "nowhere"})
+	rel2, _ := release.Load(d2, "")
+	env2, _ := environment.Load(context.Background(), rel2.Config(), nil)
+	if err := bringTargets(context.Background(), rel2, env2, &release.Lock{}, oci.Options{}); err == nil || !strings.Contains(err.Error(), "no source") {
+		t.Errorf("no source, no program: %v", err)
 	}
 }

@@ -1,0 +1,32 @@
+name: release
+
+# a tag v* builds pack for the platforms and attaches the archives to the release
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - run: go test -race ./...
+      - name: archives
+        run: |
+          mkdir dist
+          for p in linux/amd64 linux/arm64 darwin/amd64 darwin/arm64; do
+            os=${p%/*}; arch=${p#*/}; tmp=$(mktemp -d)
+            CGO_ENABLED=0 GOOS=$os GOARCH=$arch go build -trimpath -o "$tmp/pack" ./cmd/pack
+            tar -C "$tmp" -czf "dist/pack_${os}_${arch}.tar.gz" pack
+          done
+          (cd dist && sha256sum * > checksums.txt)
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*
+          generate_release_notes: true

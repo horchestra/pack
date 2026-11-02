@@ -4,7 +4,8 @@ A package format and the tool that installs it, independent of any platform. Bes
 leaf packages that import nothing themselves: `emit` (templates, config formats) and `secretstore` (the secret store
 clients).
 
-The reference is in [docs/](docs/README.md).
+The reference is in [docs/](docs/README.md). The targets (docker, ansible, k8s) are programs of their own, in
+[github.com/horchestra/targets](https://github.com/horchestra/targets).
 
 ## The model
 
@@ -98,7 +99,6 @@ pkg/graph       the dependency graph; pkg/runner runs it; pkg/saga makes it tran
 pkg/adapter     graph nodes ↔ plan steps ↔ target steps
 pkg/target      what a target must do (Resolve, Execute; optional Recorder, Observer); target/memory runs nothing;
                 target/remote starts a target that is a program of its own (gRPC, proto/target.proto) and serves one
-targets/        docker, ansible, k8s: a module each, with its own go.mod and main.go (pack-target-<name>)
 examples/       postgres, written in Go, Python and Java; the golden files all three are compared with
 pkg/environment env.yaml; pkg/format names of artifacts and annotations
 ```

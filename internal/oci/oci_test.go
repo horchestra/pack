@@ -96,3 +96,30 @@ func TestIsRef(t *testing.T) {
 		}
 	}
 }
+
+// Prog is an artifact that carries a program, the way a target is published: a file named pack-target-<name>.
+type Prog struct {
+	Bin string `json:"bin,omitempty" file:"/pack-target-fake" template:"pack-target-fake" format:"raw" mode:"0755"`
+}
+
+func (*Prog) SetDefaults() {}
+func (*Prog) Meta() sdk.Meta {
+	return sdk.Meta{Name: "fake", Version: "0.1.0", Artifact: "oci://targets/fake", Dir: "testdata/prog"}
+}
+func (*Prog) PackRoot() packschema.Root { return packschema.Root{} }
+
+// PullFile reads a file of an artifact that is no pack, by its name, wherever the artifact put it.
+func TestPullFile(t *testing.T) {
+	_ = os.MkdirAll("testdata/prog/content", 0o755)
+	_ = os.WriteFile("testdata/prog/content/pack-target-fake", []byte("#!/bin/sh\necho fake\n"), 0o755)
+	t.Cleanup(func() { _ = os.RemoveAll("testdata") })
+	host := regserver.Serve(t, &Prog{})
+	o := oci.Options{PlainHTTP: true}
+	got, err := oci.PullFile(context.Background(), "oci://"+host+"/packs/fake:0.1.0", "pack-target-fake", o)
+	if err != nil || string(got) != "#!/bin/sh\necho fake\n" {
+		t.Fatalf("PullFile = %q, %v", got, err)
+	}
+	if _, err := oci.PullFile(context.Background(), "oci://"+host+"/packs/fake:0.1.0", "pack-target-nothing", o); err == nil {
+		t.Error("a file the artifact has not")
+	}
+}

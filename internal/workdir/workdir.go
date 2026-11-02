@@ -72,6 +72,10 @@ func (d *Dir) JournalPath() string {
 // PacksPath is where the packs brought from a registry are, one directory for each digest.
 func (d *Dir) PacksPath() string { return filepath.Join(d.Path, "packs") }
 
+// BinPath is where the programs of the targets are, pack-target-<name> each: what `pack init` downloads, and where
+// pack looks for them unless PACK_TARGET_PATH says otherwise.
+func (d *Dir) BinPath() string { return filepath.Join(d.Path, "bin") }
+
 // JournalFor is the journal of an installation, by its id; nil when it is off.
 func (d *Dir) JournalFor(id string) saga.Journal {
 	if d.Journal == "off" {

@@ -37,6 +37,10 @@ type Release struct {
 	// ID is the installation's UUID. A file state makes and keeps its own at the first apply; state: target has
 	// no file to keep it in, so it is written here.
 	ID string `json:"id,omitempty"`
+	// Targets say where `pack init` downloads the programs of the targets the environment uses from, by the
+	// target's name: an http(s) URL of the program or of an archive that holds it, or oci://host/repo:tag. {os}
+	// and {arch} stand for the machine's.
+	Targets map[string]string `json:"targets,omitempty"`
 
 	values []string
 	env    string // the environment file, "" — none

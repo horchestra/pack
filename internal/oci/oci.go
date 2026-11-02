@@ -159,3 +159,35 @@ func isDigest(s string) bool {
 
 // ErrNoLock is returned when a pack in a registry has no lock.
 var ErrNoLock = errors.New("the pack is in a registry and has no lock")
+
+// PullFile reads one file out of an OCI artifact that is not a pack — a program published with oci-packer — wherever the
+// artifact put it: the file with that base name. A target is brought this way.
+func PullFile(ctx context.Context, ref, name string, o Options) ([]byte, error) {
+	parsed, err := reference.Parse(ref)
+	if err != nil {
+		return nil, fmt.Errorf("%s: %w", ref, err)
+	}
+	c, err := client(parsed, o)
+	if err != nil {
+		return nil, err
+	}
+	tmp, err := os.MkdirTemp("", "pack-file-")
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = os.RemoveAll(tmp) }()
+	if _, err := extract.Extract(ctx, c, reference.Reference{Ref: parsed.Ref}, tmp, extract.Options{Repo: parsed.Path}); err != nil {
+		return nil, fmt.Errorf("%s: %w", ref, err)
+	}
+	var found string
+	_ = filepath.WalkDir(tmp, func(p string, d os.DirEntry, err error) error {
+		if err == nil && d.Type().IsRegular() && d.Name() == name && len(found) == 0 {
+			found = p
+		}
+		return nil
+	})
+	if len(found) == 0 {
+		return nil, fmt.Errorf("%s: the artifact has no file %s", ref, name)
+	}
+	return os.ReadFile(found)
+}

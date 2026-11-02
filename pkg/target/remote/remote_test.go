@@ -128,3 +128,24 @@ func TestTokenIsRequired(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+// With PACK_TARGET_PATH unset the programs are in .pack/bin of the directory pack runs in.
+func TestDefaultDirIsDotPackBin(t *testing.T) {
+	src := fakeBin(t)
+	rel := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(rel, ".pack", "bin"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Rename(filepath.Join(src, Prefix+"fake"), filepath.Join(rel, ".pack", "bin", Prefix+"fake")); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv(EnvPath, "")
+	t.Chdir(rel)
+	bin, err := Find("fake")
+	if err != nil || filepath.Base(filepath.Dir(bin)) != "bin" || !strings.HasSuffix(filepath.Dir(bin), filepath.Join(".pack", "bin")) {
+		t.Fatalf("Find = %q, %v", bin, err)
+	}
+	if _, err := Find("nothing"); err == nil || !strings.Contains(err.Error(), "pack init") {
+		t.Errorf("the error says how to get it: %v", err)
+	}
+}

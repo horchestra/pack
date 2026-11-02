@@ -1,0 +1,78 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  go:
+    name: go
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: go.mod is tidy
+        run: |
+          go mod tidy -diff
+      - name: gofmt
+        run: |
+          out=$(gofmt -l pkg internal cmd sdk examples)
+          test -z "$out" || { echo "gofmt:"; echo "$out"; exit 1; }
+      - run: go build ./...
+      - run: go vet ./...
+      - run: go test -race ./...
+
+  proto:
+    name: proto is up to date
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - uses: arduino/setup-protoc@v3
+        with:
+          version: "33.4"
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+      - name: generators
+        run: |
+          go install google.golang.org/protobuf/cmd/protoc-gen-go@v1.36.11
+          go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@v1.6.0
+      - run: make proto
+      - name: the stubs are what proto/target.proto makes
+        run: git diff --exit-code -- pkg/target/remote/remotepb
+
+  python:
+    name: python sdk
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: cd sdk/python && python3 -I -m unittest discover -s tests
+      - run: cd examples/postgres/python && python3 -m unittest test_postgres
+
+  java:
+    name: java sdk
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+      - name: the sdk and the example against the golden files
+        run: |
+          out=$(mktemp -d)
+          javac --release 21 -d "$out/sdk" $(find sdk/java/src/main -name '*.java')
+          javac --release 21 -cp "$out/sdk" -d "$out/sdk-test" $(find sdk/java/src/test -name '*.java')
+          (cd sdk/java && java -cp "$out/sdk:$out/sdk-test" dev.kstool.pack.sdk.GoldenTest)
+          javac --release 21 -d "$out/ex" $(find sdk/java/src/main -name '*.java') examples/postgres/java/*.java
+          (cd examples/postgres/java && java -cp "$out/ex" PostgresTest)

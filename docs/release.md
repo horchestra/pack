@@ -58,8 +58,8 @@ keys: # how the environment runs each key of the pack
 
 - `target:` names a target; the core knows none by name. `memory` is in pack (it keeps what it is told in the
   process: what the tests and `plan`/`template` use; `observe: "true"` makes it report what it holds, so drift can be
-  seen). `docker`, `ansible` and `k8s` are programs of their own that pack starts, `pack-target-<name>`, see
-  [targets.md](targets.md); each one's settings and the entries of `keys:` it reads are in its README.
+  seen). `docker`, `ansible` and `k8s` are programs of their own that `pack init` downloads and pack starts,
+  `pack-target-<name>`, see [targets.md](targets.md); each one's settings and the entries of `keys:` it reads are in its README.
 - The default target is the one the top-level keys describe; each entry of `targets` is a target of its own, none
   inherited from the default one.
 - `keys` is where placement lives: **values configure the application, the environment runs it.** `replicas` is how many

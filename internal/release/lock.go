@@ -11,10 +11,18 @@ import (
 // the release's, like release.yaml — in the repository.
 const LockFile = "release.lock.json"
 
-// Lock pins a pack of a registry.
+// Lock pins a pack of a registry and the programs of the targets.
 type Lock struct {
-	Pack   string `json:"pack"`   // as release.yaml says: oci://host/repo:tag
-	Digest string `json:"digest"` // what the registry had for it
+	Pack   string `json:"pack,omitempty"`   // as release.yaml says: oci://host/repo:tag
+	Digest string `json:"digest,omitempty"` // what the registry had for it
+	// Targets are the programs `pack init` downloaded, by the target's name.
+	Targets map[string]TargetLock `json:"targets,omitempty"`
+}
+
+// TargetLock is a downloaded program: where it came from, as release.yaml says, and its SHA-256 that day.
+type TargetLock struct {
+	Source string `json:"source"`
+	SHA256 string `json:"sha256"`
 }
 
 // ReadLock reads the release's lock; nil when there is none.
