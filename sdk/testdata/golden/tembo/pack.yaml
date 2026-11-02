@@ -1,0 +1,17 @@
+annotations:
+  org.opencontainers.image.description: PostgreSQL with raft
+  org.opencontainers.image.licenses: Apache-2.0
+  org.opencontainers.image.source: https://example.org/tembo
+  org.opencontainers.image.title: tembo
+  org.opencontainers.image.version: 0.2.0
+  pack.name: tembo
+  pack.version: 0.2.0
+items:
+- annotations:
+    pack.image: "true"
+  from: oci://images/tembo:0.2.0
+- from: file://schema.json
+  type: application/vnd.pack.schema.v1+json
+- from: dir://templates/
+  type: application/vnd.pack.template.v1
+type: application/vnd.pack.pack.v1+json

@@ -1,0 +1,97 @@
+import dev.kstool.pack.sdk.Meta;
+import dev.kstool.pack.sdk.Pack;
+import dev.kstool.pack.sdk.PackSdk;
+import dev.kstool.pack.sdk.Paths;
+import dev.kstool.pack.sdk.Root;
+import dev.kstool.pack.sdk.Secret;
+import dev.kstool.pack.sdk.Setting;
+
+import java.util.Map;
+
+/**
+ * postgres: a single-instance PostgreSQL with an install hook (the extensions every database gets, after the first
+ * start) and a major-version upgrade hook (the saga runs pg_upgrade with the component stopped, and takes it back if
+ * it fails). The same pack is written in Go and Python next to this one; all three generate the same artifacts
+ * (examples/postgres/golden).
+ *
+ * <pre>
+ * java -cp out Postgres generate -o out/pack     (from examples/postgres/java; see ../../../sdk/java/README.md)
+ * </pre>
+ */
+public class Postgres extends Pack {
+    public static class Superuser {
+        @Setting(env = "POSTGRES_USER", omitempty = true)
+        public String name = "";
+        @Setting(env = "POSTGRES_PASSWORD") // required: the operator names a Secret
+        public Secret password = new Secret();
+    }
+
+    public static class Conf {
+        @Setting(json = "max_connections", omitempty = true)
+        public int maxConnections;
+        @Setting(json = "shared_buffers", omitempty = true) // a quarter of the memory limit, unless the operator says
+        public String sharedBuffers = "";
+        @Setting(json = "listen_addresses", omitempty = true)
+        public String listenAddresses = "";
+        @Setting(omitempty = true)
+        public int port;
+    }
+
+    public String database = ""; // required: no omitempty
+    public Superuser superuser = new Superuser();
+    /** postgresql.conf, written from the subtree as properties. */
+    @Setting(file = "/etc/postgresql/postgresql.conf", format = "properties")
+    public Conf conf = new Conf();
+    /** The scripts the hooks run are files of content/, shipped as they are. */
+    @Setting(json = "init_extensions", omitempty = true, file = "/opt/pack/init-extensions.sh", template = "init-extensions.sh", format = "raw", mode = "0755")
+    public String initExtensions = "";
+    @Setting(json = "restore_15", omitempty = true, file = "/opt/pack/restore-15.sh", template = "restore-15.sh", format = "raw", mode = "0755")
+    public String restore15 = "";
+
+    @Override
+    public void setDefaults() {
+        superuser.name = "postgres";
+        conf.maxConnections = 100;
+        conf.listenAddresses = "*";
+        conf.port = 5432;
+    }
+
+    @Override
+    public Meta meta() {
+        // the directory whose content/ holds the files: where the program is run from, unless -Dpack.dir says
+        return new Meta("postgres", "16.4").description("PostgreSQL").license("PostgreSQL")
+                .image("oci://images/postgres:16.4").artifact("oci://packs/postgres")
+                .dir(System.getProperty("pack.dir", "."));
+    }
+
+    @Override
+    public Root packRoot() {
+        return new Root()
+                .port("pg", 5432)
+                .data("data", new Root.Volume("/var/lib/postgresql/data").size("10Gi"))
+                .minimum("cpu", "500m").minimum("memory", "512Mi")
+                .readiness(Root.Readiness.tcp("pg"))
+                .upgrade(new Root.Upgrade(">=15"))
+                .hook(new Root.Hook("init-extensions", "postInstall", "/opt/pack/init-extensions.sh")
+                        .image("new").idempotent().timeout("5m"))
+                .hook(new Root.Hook("pg-upgrade", "preUpgrade", "/usr/lib/postgresql/16/bin/pg_upgrade",
+                        "--old-bindir=/usr/lib/postgresql/15/bin", "--new-bindir=/usr/lib/postgresql/16/bin",
+                        "--old-datadir=/var/lib/postgresql/data", "--new-datadir=/var/lib/postgresql/data.16")
+                        .when(new Root.When().from("<16").to(">=16")).image("new").exclusive().timeout("30m")
+                        .compensate(new Root.Step("/opt/pack/restore-15.sh").image("old")))
+                .hook(new Root.Hook("analyze", "postUpgrade", "vacuumdb", "--all", "--analyze-in-stages")
+                        .when(new Root.When().to(">=16")).image("new").idempotent());
+    }
+
+    /** A quarter of the memory limit, in MB: the formula fills the leaf when the operator did not write it. The key
+     *  is the field's pointer, found from the field itself. */
+    @Override
+    public Map<String, String> packCompute() {
+        return Map.of(Paths.pointer(Postgres.class, "conf", "sharedBuffers"),
+                "has(limits.memory) ? string(limits.memory / 1048576 / 4) + 'MB' : '128MB'");
+    }
+
+    public static void main(String[] args) {
+        System.exit(PackSdk.main(args, new Postgres()));
+    }
+}

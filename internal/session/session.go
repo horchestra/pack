@@ -1,0 +1,186 @@
+// Package session is a command's connection to the world: the release's environment, the target it names bound
+// to the installation, the other targets of the environment, and the place the record is kept. Everything comes
+// from the release's files (release.yaml, env.yaml); the command line adds nothing to it.
+package session
+
+import (
+	"context"
+	"fmt"
+	"io"
+	"maps"
+	"slices"
+	"strings"
+
+	"github.com/horchestra/pack/internal/workdir"
+	"github.com/horchestra/pack/pkg/bundle"
+	"github.com/horchestra/pack/pkg/environment"
+	"github.com/horchestra/pack/pkg/graph"
+	"github.com/horchestra/pack/pkg/render"
+	"github.com/horchestra/pack/pkg/saga"
+	"github.com/horchestra/pack/pkg/saga/storage"
+	"github.com/horchestra/pack/pkg/secretstore"
+	"github.com/horchestra/pack/pkg/target"
+	_ "github.com/horchestra/pack/pkg/target/memory" // the targets there are
+	_ "github.com/horchestra/pack/pkg/target/remote" // a target that is not compiled in is a program of its own
+)
+
+// Session is what a command works with.
+type Session struct {
+	Dir    *workdir.Dir
+	ID     string // the installation's UUID
+	Env    *environment.Environment
+	Target string
+	Inst   target.Installation
+	Execs  map[string]target.Executor // the environment's other targets by name
+	Ctx    render.Context
+	Store  saga.Store
+
+	ctx context.Context
+}
+
+// Open reads the environment, opens the targets it names and binds them to the installation.
+// ctx is the command's: an interrupt cuts short what the session reads from a registry or a store.
+// readOnly: the secret store is only read — plan looks, apply writes.
+func Open(ctx context.Context, d *workdir.Dir, readOnly bool) (*Session, error) {
+	id, err := d.InstallationID()
+	if err != nil {
+		return nil, err
+	}
+	env, err := environment.Load(ctx, d.Release.Config(), nil)
+	if err != nil {
+		return nil, err
+	}
+	if len(env.Target) == 0 {
+		return nil, fmt.Errorf("no target: write `target:` in env.yaml (known: %s)", strings.Join(target.Names(), ", "))
+	}
+	s := &Session{ctx: ctx, Dir: d, ID: id, Env: env, Target: env.Target}
+	// the store is every target's to use: it goes into each one's set, the token with it, in memory
+	scfg := secretstore.Config{Provider: env.Store.Provider, Addr: env.Store.Addr, Mount: env.Store.Mount,
+		Prefix: env.Store.Prefix, CACert: env.Store.CACert}
+	storeSet := scfg.Settings()
+	maps.Copy(env.Settings, storeSet)
+
+	if s.Inst, err = target.Open(s.Target, id, env.Settings); err != nil {
+		return nil, err
+	}
+	s.Ctx = render.Context{Installation: id, Target: s.Inst, Keys: placements(env.Keys)}
+	s.Execs = map[string]target.Executor{}
+	for _, tn := range slices.Sorted(maps.Keys(env.Targets)) {
+		t := env.Targets[tn]
+		maps.Copy(t.Settings, storeSet)
+		oi, err := target.Open(t.Target, id, t.Settings)
+		if err != nil {
+			return nil, fmt.Errorf("targets.%s: %w", tn, err)
+		}
+		if s.Ctx.Targets == nil {
+			s.Ctx.Targets = map[string]render.Target{}
+		}
+		s.Ctx.Targets[tn] = oi
+		s.Execs[tn] = oi
+	}
+
+	st, err := secretstore.Open(scfg)
+	if err != nil {
+		return nil, fmt.Errorf("store: %w", err)
+	}
+	if st != nil {
+		s.Ctx.Secrets = &storeSource{ctx: ctx, store: st, cfg: scfg, installation: id, readOnly: readOnly}
+	}
+	rec, _ := s.Inst.(target.Recorder)
+	if s.Store, err = d.Store(rec); err != nil {
+		return nil, err
+	}
+	// A command that installs keeps the installation's id from here on: the passwords it makes and the objects the
+	// target names are known by it, and a first apply that fails before its first step must not lose it.
+	if !readOnly {
+		if cur, err := s.Store.Load(); err != nil {
+			return nil, err
+		} else if cur == nil {
+			if err := s.Store.Save(&saga.Record{ID: id}); err != nil {
+				return nil, fmt.Errorf("keep the installation's id: %w", err)
+			}
+		}
+	}
+	if !readOnly {
+		s.pruneJournal()
+	}
+	return s, nil
+}
+
+// pruneJournal drops the oldest sagas of the installation beyond run.journal_keep; a journal that cannot be
+// pruned is no reason to stop an apply.
+func (s *Session) pruneJournal() {
+	keep := s.Env.Run.JournalKeep
+	if keep == 0 {
+		keep = environment.DefaultJournalKeep
+	}
+	if j, ok := s.Dir.JournalFor(s.ID).(storage.FileJournal); ok {
+		_, _ = j.Prune(keep)
+	}
+}
+
+// placements are the environment's keys as the render takes them.
+func placements(keys map[string]environment.Key) map[string]render.Placement {
+	out := make(map[string]render.Placement, len(keys))
+	for name, k := range keys {
+		p := render.Placement{Target: k.Target, Replicas: k.Replicas, Labels: k.Labels, Annotations: k.Annotations, Raw: k.Raw}
+		if k.Resources != nil {
+			p.Resources = &render.Resources{Requests: k.Resources.Requests, Limits: k.Resources.Limits}
+		}
+		for _, e := range k.Env {
+			ev := render.EnvVar{Name: e.Name, Value: e.Value}
+			if e.SecretRef != nil {
+				ev.Secret = &render.SecretRef{Name: e.SecretRef.Name, Key: e.SecretRef.Key}
+			}
+			p.Env = append(p.Env, ev)
+		}
+		if k.Reach != nil {
+			p.Reach = &render.Reach{Instances: k.Reach.Instances, Ports: k.Reach.Ports}
+		}
+		out[name] = p
+	}
+	return out
+}
+
+// Close releases the session: a target that is a program of its own (target/remote) is stopped.
+func (s *Session) Close() {
+	closeTarget(s.Inst)
+	for _, x := range s.Execs {
+		closeTarget(x)
+	}
+}
+
+func closeTarget(t any) {
+	if c, ok := t.(io.Closer); ok {
+		_ = c.Close()
+	}
+}
+
+// Installed is the record and the installed version rendered with its recorded values, against the
+// environment as it is now; rec is nil when nothing is recorded, rel nil for a record without a version.
+func (s *Session) Installed() (rec *saga.Record, b *bundle.Bundle, rel *render.Release, err error) {
+	if rec, err = s.Store.Load(); err != nil {
+		return nil, nil, nil, err
+	}
+	if rec != nil && len(rec.Pack) > 0 {
+		if b, rel, err = s.Version(rec.Installation); err != nil {
+			return nil, nil, nil, fmt.Errorf("the installed version %s: %w", rec.Pack, err)
+		}
+	}
+	return rec, b, rel, nil
+}
+
+// Run is a saga over the graph with the executor the session gives it.
+func (s *Session) Run(g *graph.Graph, ex saga.Executor) *saga.Run {
+	return &saga.Run{
+		Graph:      g,
+		Exec:       ex,
+		Store:      s.Store,
+		ID:         s.ID,
+		Jobs:       s.Env.Run.Jobs,
+		NoRollback: s.Env.Run.NoRollback,
+		Keep:       s.Env.Run.Keep,
+		Journal:    s.Dir.JournalFor(s.ID),
+		Events:     func(line string) { fmt.Println(line) },
+	}
+}

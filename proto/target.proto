@@ -1,0 +1,154 @@
+syntax = "proto3";
+
+// Target is the seam between pack and a system it installs on — Docker engines, Kubernetes, hosts reached by
+// Ansible. pack knows no target: it renders a pack to a target-neutral release, plans the saga and drives it step
+// by step; a target, a program of its own with its own go.mod and main, says what the environment's placement of a
+// key means on its system and performs each step in it.
+//
+// pack starts the target — a binary (pack-target-<name>), or a container image run with podman or docker for a
+// target whose language's runtime the machine lacks — and tells it in its environment where to listen and the
+// token to demand:
+//
+//   PACK_TARGET_ADDRESS  unix:///<path> (a binary: a socket in a private directory) or tcp://<host>:<port> (an
+//                        image: the port is published on 127.0.0.1 only)
+//   PACK_TARGET_TOKEN    every call carries it as the metadata pack-target-token; refuse a call without it
+//
+// EOF on the target's stdin is its signal to exit.
+//
+// What the render knows of a key — its unit, the placement, the credentials — travels as JSON, the documents
+// render.Unit, render.Placement and []render.Credential marshal to: they are many and they grow, and a number in
+// them must stay an integer where it was one (protobuf's Struct makes every number a double).
+package pack.target.v1;
+
+option go_package = "github.com/horchestra/pack/pkg/target/remote/remotepb;remotepb";
+
+service Target {
+  // Handshake is the first call: the protocol the target speaks and the target it is. pack refuses a protocol it
+  // does not know.
+  rpc Handshake(HandshakeRequest) returns (HandshakeResponse);
+  // Configure binds the target to one installation; every call after it is about that installation. A setting
+  // the target does not take is an InvalidArgument.
+  rpc Configure(ConfigureRequest) returns (ConfigureResponse);
+  // Resolve says what a selected key is on the target, given how the environment places it.
+  rpc Resolve(ResolveRequest) returns (ResolveResponse);
+
+  // ReadInstalled, WriteInstalled, DeleteInstalled keep pack's record of the installation in the target's own
+  // system. Require the "record" capability.
+  rpc ReadInstalled(ReadInstalledRequest) returns (ReadInstalledResponse);
+  rpc WriteInstalled(WriteInstalledRequest) returns (WriteInstalledResponse);
+  rpc DeleteInstalled(DeleteInstalledRequest) returns (DeleteInstalledResponse);
+  // Observe says what the target holds of the installation, by key. Requires the "observe" capability.
+  rpc Observe(ObserveRequest) returns (ObserveResponse);
+  // Execute performs one step of the saga on the target and reports as it goes; the last event says whether the
+  // step succeeded.
+  rpc Execute(ExecuteRequest) returns (stream ExecuteEvent);
+}
+
+message HandshakeRequest {
+  string protocol = 1;
+}
+
+message HandshakeResponse {
+  string protocol = 1;
+  string target = 2;
+  // capabilities beyond performing steps: "record" — the target keeps the installation's record (ReadInstalled,
+  // WriteInstalled, DeleteInstalled); "observe" — it says what it holds (Observe).
+  repeated string capabilities = 3;
+}
+
+message ConfigureRequest {
+  string installation = 1;
+  map<string, string> settings = 2;
+}
+
+message ConfigureResponse {
+  // namespace is the scope the target installs into; empty where it has none.
+  string namespace = 1;
+}
+
+message ResolveRequest {
+  string key = 1;
+  // placement_json is render.Placement: replicas, resources, env, labels, annotations, reach and the rest of the
+  // key's entry in the environment (raw), which only the target reads.
+  bytes placement_json = 2;
+}
+
+message ResolveResponse {
+  string service = 1;
+  string address = 2;
+  repeated Instance instances = 3;
+  // reach: how the key is reached from outside the target; absent — the target does not say.
+  Reach reach = 4;
+}
+
+message Reach {
+  repeated string instances = 1;
+  map<string, int32> ports = 2;
+  bool same_ports = 3;
+}
+
+message Instance {
+  string name = 1;
+  string address = 2;
+}
+
+message ReadInstalledRequest {}
+
+message ReadInstalledResponse {
+  bool exists = 1;
+  bytes record = 2;
+}
+
+message WriteInstalledRequest {
+  bytes record = 1;
+}
+
+message WriteInstalledResponse {}
+
+message DeleteInstalledRequest {}
+
+message DeleteInstalledResponse {}
+
+message ObserveRequest {}
+
+message ObserveResponse {
+  map<string, Observed> held = 1;
+}
+
+message Observed {
+  string image = 1;
+  int64 replicas = 2;
+}
+
+// ExecuteRequest is one step of the saga, with everything the target needs to perform it.
+message ExecuteRequest {
+  Step step = 1;
+  // unit_json is render.Unit of the key in the version being installed; previous_json the installed version's,
+  // where there is one; credentials_json is []render.Credential.
+  bytes unit_json = 2;
+  bytes previous_json = 3;
+  bytes credentials_json = 4;
+}
+
+message Step {
+  int64 n = 1;
+  string key = 2;
+  // kind: stop | hook | apply | wait | remove.
+  string kind = 3;
+  string name = 4;
+  string phase = 5;
+  string timeout = 6;
+  bool exclusive = 7;
+  string image = 8;
+  repeated string command = 9;
+  // rollback: this step undoes an earlier one — an apply of the previous unit, a remove of a key that was added,
+  // a hook's compensation.
+  bool rollback = 10;
+}
+
+message ExecuteEvent {
+  string message = 1;
+  bool done = 2;
+  // error, on the last event: why the step failed; empty — it succeeded.
+  string error = 3;
+}

@@ -1,0 +1,13 @@
+[project]
+name = "packsdk"
+version = "0.1.0"
+description = "Author side of pack: write a pack as a Python class, generate schema.json, pack.yaml and templates/"
+requires-python = ">=3.12"
+dependencies = []
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+packages = ["packsdk"]

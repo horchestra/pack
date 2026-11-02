@@ -1,0 +1,16 @@
+annotations:
+  example.org/tier: core
+  org.opencontainers.image.description: secrets
+  org.opencontainers.image.licenses: MPL-2.0
+  org.opencontainers.image.title: openbao
+  org.opencontainers.image.version: 2.1.0
+  pack.name: openbao
+  pack.version: 2.1.0
+items:
+- annotations:
+    pack.image: "true"
+  from: oci://images/openbao:2.1.0
+- from: file://schema.json
+  type: application/vnd.pack.schema.v1+json
+- from: oci://packs/tembo:0.2.0
+type: application/vnd.pack.pack.v1+json
