@@ -1,4 +1,4 @@
-package dev.kstool.pack.sdk;
+package io.horchestra.pack.sdk;
 
 import java.lang.annotation.ElementType;
 import java.lang.annotation.Retention;

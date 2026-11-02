@@ -91,7 +91,7 @@ ends the process, and the record stays `in-progress` for `rollback` or the next 
 cmd/            the commands (cobra), nothing else
 internal/       release, session (a command's connection to the world), workdir, oci, values, interrupt, testpacks
 sdk             author side: Pack, Meta, schema generation, packschema (PackRoot vocabulary), compute (CEL)
-sdk/python      the same author side in Python (packsdk); sdk/java the same in Java (dev.kstool.pack.sdk)
+sdk/python      the same author side in Python (packsdk); sdk/java the same in Java (io.horchestra.pack.sdk)
 pkg/bundle      a pack read from disk: the virtual composition of the pack and the packs it holds
 pkg/render      values → units, files, report (configure → resolve → collect → mutate → validate → convert)
 pkg/plan        the plan between two versions (changes, hooks, savepoints, drift)

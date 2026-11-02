@@ -40,7 +40,7 @@ Tests (no framework; a JDK is in GoLand's `jbr`, `Contents/Home/bin`), from `sdk
 ```
 javac --release 21 -d out/main $(find src/main -name '*.java')
 javac --release 21 -cp out/main -d out/test $(find src/test -name '*.java')
-java -cp out/main:out/test dev.kstool.pack.sdk.GoldenTest
+java -cp out/main:out/test io.horchestra.pack.sdk.GoldenTest
 ```
 
 The generated artifacts of the test packs equal `sdk/testdata/golden` (written by the Go sdk) byte for byte.

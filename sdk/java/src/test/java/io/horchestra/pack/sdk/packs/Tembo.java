@@ -1,10 +1,10 @@
-package dev.kstool.pack.sdk.packs;
+package io.horchestra.pack.sdk.packs;
 
-import dev.kstool.pack.sdk.Meta;
-import dev.kstool.pack.sdk.Pack;
-import dev.kstool.pack.sdk.Root;
-import dev.kstool.pack.sdk.Secret;
-import dev.kstool.pack.sdk.Setting;
+import io.horchestra.pack.sdk.Meta;
+import io.horchestra.pack.sdk.Pack;
+import io.horchestra.pack.sdk.Root;
+import io.horchestra.pack.sdk.Secret;
+import io.horchestra.pack.sdk.Setting;
 
 /** tembo, the pack of the Go tests (internal/testpacks/tembo), written in Java. */
 public class Tembo extends Pack {

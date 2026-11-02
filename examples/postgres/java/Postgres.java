@@ -1,10 +1,10 @@
-import dev.kstool.pack.sdk.Meta;
-import dev.kstool.pack.sdk.Pack;
-import dev.kstool.pack.sdk.PackSdk;
-import dev.kstool.pack.sdk.Paths;
-import dev.kstool.pack.sdk.Root;
-import dev.kstool.pack.sdk.Secret;
-import dev.kstool.pack.sdk.Setting;
+import io.horchestra.pack.sdk.Meta;
+import io.horchestra.pack.sdk.Pack;
+import io.horchestra.pack.sdk.PackSdk;
+import io.horchestra.pack.sdk.Paths;
+import io.horchestra.pack.sdk.Root;
+import io.horchestra.pack.sdk.Secret;
+import io.horchestra.pack.sdk.Setting;
 
 import java.util.Map;
 

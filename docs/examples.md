@@ -25,4 +25,4 @@ What each shows, in the same order in all three:
 
 The generated directory is what `oci-packer` pushes ([registry.md](registry.md)). Packs that hold other packs are the
 test packs of the core: `internal/testpacks/openbao` holds `internal/testpacks/tembo`, in Go, and the same two in
-[Python](../sdk/python/tests/packs) and [Java](../sdk/java/src/test/java/dev/kstool/pack/sdk/packs).
+[Python](../sdk/python/tests/packs) and [Java](../sdk/java/src/test/java/io/horchestra/pack/sdk/packs).

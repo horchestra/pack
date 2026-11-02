@@ -42,7 +42,7 @@ test-sdk: ## the Python and Java SDKs and examples against the golden files
 	@set -e; out=$$(mktemp -d); \
 	javac --release 21 -d $$out/sdk $$(find sdk/java/src/main -name '*.java'); \
 	javac --release 21 -cp $$out/sdk -d $$out/sdk-test $$(find sdk/java/src/test -name '*.java'); \
-	(cd sdk/java && java -cp $$out/sdk:$$out/sdk-test dev.kstool.pack.sdk.GoldenTest); \
+	(cd sdk/java && java -cp $$out/sdk:$$out/sdk-test io.horchestra.pack.sdk.GoldenTest); \
 	javac --release 21 -d $$out/ex $$(find sdk/java/src/main -name '*.java') examples/postgres/java/*.java; \
 	(cd examples/postgres/java && java -cp $$out/ex PostgresTest); \
 	rm -rf $$out

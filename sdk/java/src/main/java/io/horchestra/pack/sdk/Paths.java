@@ -1,4 +1,4 @@
-package dev.kstool.pack.sdk;
+package io.horchestra.pack.sdk;
 
 import java.lang.reflect.ParameterizedType;
 import java.lang.reflect.Type;

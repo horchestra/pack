@@ -1,7 +1,7 @@
-package dev.kstool.pack.sdk;
+package io.horchestra.pack.sdk;
 
-import dev.kstool.pack.sdk.packs.OpenBao;
-import dev.kstool.pack.sdk.packs.Tembo;
+import io.horchestra.pack.sdk.packs.OpenBao;
+import io.horchestra.pack.sdk.packs.Tembo;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -19,7 +19,7 @@ import java.util.stream.Stream;
  * <pre>
  * javac --release 21 -d out/main $(find src/main -name '*.java')
  * javac --release 21 -cp out/main -d out/test $(find src/test -name '*.java')
- * java -cp out/main:out/test dev.kstool.pack.sdk.GoldenTest
+ * java -cp out/main:out/test io.horchestra.pack.sdk.GoldenTest
  * </pre>
  */
 public final class GoldenTest {

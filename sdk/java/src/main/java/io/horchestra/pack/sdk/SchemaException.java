@@ -1,4 +1,4 @@
-package dev.kstool.pack.sdk;
+package io.horchestra.pack.sdk;
 
 /** A pack that cannot be turned into its artifacts. */
 public class SchemaException extends RuntimeException {
