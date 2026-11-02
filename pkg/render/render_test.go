@@ -116,7 +116,7 @@ type Db struct {
 
 func (*Db) SetDefaults() {}
 func (*Db) Meta() sdk.Meta {
-	return sdk.Meta{Name: "db", Version: "1", Artifact: "oci://packs/db", Dir: "/nonexistent"}
+	return sdk.Meta{Name: "db", Version: "1", Dir: "/nonexistent"}
 }
 func (*Db) PackCompute() map[string]string { return map[string]string{"/url": "'db://' + me.service"} }
 func (*Db) PackRoot() packschema.Root      { return packschema.Root{} }
@@ -128,7 +128,7 @@ type Pair struct {
 
 func (*Pair) SetDefaults() {}
 func (*Pair) Meta() sdk.Meta {
-	return sdk.Meta{Name: "pair", Version: "1", Artifact: "oci://packs/pair", Dir: "/nonexistent"}
+	return sdk.Meta{Name: "pair", Version: "1", Dir: "/nonexistent"}
 }
 func (*Pair) PackRoot() packschema.Root { return packschema.Root{} }
 
@@ -188,7 +188,7 @@ type Calc struct {
 func (*Calc) SetDefaults()              {}
 func (*Calc) PackRoot() packschema.Root { return packschema.Root{} }
 func (*Calc) Meta() sdk.Meta {
-	return sdk.Meta{Name: "calc", Version: "1", Artifact: "oci://packs/calc", Dir: "/nonexistent"}
+	return sdk.Meta{Name: "calc", Version: "1", Dir: "/nonexistent"}
 }
 func (*Calc) PackCompute() map[string]string {
 	return map[string]string{"/url": "'host:' + string(values.port)"}
@@ -227,7 +227,7 @@ type Odd struct {
 func (*Odd) SetDefaults()              {}
 func (*Odd) PackRoot() packschema.Root { return packschema.Root{} }
 func (*Odd) Meta() sdk.Meta {
-	return sdk.Meta{Name: "odd", Version: "1", Artifact: "oci://packs/odd", Dir: "/nonexistent"}
+	return sdk.Meta{Name: "odd", Version: "1", Dir: "/nonexistent"}
 }
 func (*Odd) PackRules() map[string][]packschema.Rule {
 	return map[string][]packschema.Rule{
@@ -256,7 +256,7 @@ type Ghost struct {
 func (*Ghost) SetDefaults()              {}
 func (*Ghost) PackRoot() packschema.Root { return packschema.Root{} }
 func (*Ghost) Meta() sdk.Meta {
-	return sdk.Meta{Name: "ghost", Version: "1", Artifact: "oci://packs/ghost", Dir: "/nonexistent"}
+	return sdk.Meta{Name: "ghost", Version: "1", Dir: "/nonexistent"}
 }
 func (*Ghost) PackCompute() map[string]string {
 	return map[string]string{"/url": "has(pack.values.postgres) ? pack.keys.postgres.service : null"}
@@ -290,7 +290,7 @@ type Ruled struct {
 func (*Ruled) SetDefaults()              {}
 func (*Ruled) PackRoot() packschema.Root { return packschema.Root{} }
 func (*Ruled) Meta() sdk.Meta {
-	return sdk.Meta{Name: "ruled", Version: "1", Artifact: "oci://packs/ruled", Dir: "/nonexistent"}
+	return sdk.Meta{Name: "ruled", Version: "1", Dir: "/nonexistent"}
 }
 func (*Ruled) PackRules() map[string][]packschema.Rule {
 	return map[string][]packschema.Rule{
@@ -330,7 +330,7 @@ type Held struct {
 func (*Held) SetDefaults()              {}
 func (*Held) PackRoot() packschema.Root { return packschema.Root{} }
 func (*Held) Meta() sdk.Meta {
-	return sdk.Meta{Name: "held", Version: "1", Artifact: "oci://packs/held", Dir: "/nonexistent"}
+	return sdk.Meta{Name: "held", Version: "1", Dir: "/nonexistent"}
 }
 func (*Held) PackRules() map[string][]packschema.Rule {
 	return map[string][]packschema.Rule{
@@ -345,7 +345,7 @@ type Holder struct {
 func (*Holder) SetDefaults()              {}
 func (*Holder) PackRoot() packschema.Root { return packschema.Root{} }
 func (*Holder) Meta() sdk.Meta {
-	return sdk.Meta{Name: "holder", Version: "1", Artifact: "oci://packs/holder", Dir: "/nonexistent"}
+	return sdk.Meta{Name: "holder", Version: "1", Dir: "/nonexistent"}
 }
 
 // A pack the release does not install has no rules to break; once it is
@@ -374,7 +374,7 @@ type Sized struct {
 func (*Sized) SetDefaults()              {}
 func (*Sized) PackRoot() packschema.Root { return packschema.Root{} }
 func (*Sized) Meta() sdk.Meta {
-	return sdk.Meta{Name: "sized", Version: "1", Artifact: "oci://packs/sized", Dir: "/nonexistent"}
+	return sdk.Meta{Name: "sized", Version: "1", Dir: "/nonexistent"}
 }
 func (*Sized) PackRules() map[string][]packschema.Rule {
 	return map[string][]packschema.Rule{
@@ -413,7 +413,7 @@ type GhostRule struct {
 func (*GhostRule) SetDefaults()              {}
 func (*GhostRule) PackRoot() packschema.Root { return packschema.Root{} }
 func (*GhostRule) Meta() sdk.Meta {
-	return sdk.Meta{Name: "ghostrule", Version: "1", Artifact: "oci://packs/ghostrule", Dir: "/nonexistent"}
+	return sdk.Meta{Name: "ghostrule", Version: "1", Dir: "/nonexistent"}
 }
 func (*GhostRule) PackRules() map[string][]packschema.Rule {
 	return map[string][]packschema.Rule{"/url": {{Rule: "has(pack.keys.ghost)"}}}
@@ -431,5 +431,31 @@ func TestARuleThatNamesNoKeyOfThePackIsReported(t *testing.T) {
 	}
 	if !found {
 		t.Fatalf("problems = %v", ps)
+	}
+}
+
+// HostCmd installs from OS packages, what its commands run being a value of the pack.
+type HostCmd struct {
+	Dir string `json:"dir,omitempty"`
+}
+
+func (*HostCmd) SetDefaults() {}
+func (*HostCmd) PackRoot() packschema.Root {
+	return packschema.Root{Packages: map[string]packschema.OSPackages{
+		"debian": {Names: []string{"app"}, Commands: [][]string{{"app-init", "{{ .dir }}"}}},
+	}}
+}
+func (*HostCmd) Meta() sdk.Meta {
+	return sdk.Meta{Name: "hostcmd", Version: "1", Dir: "/nonexistent"}
+}
+
+func TestACommandOfPackagesIsATemplate(t *testing.T) {
+	rel, err := renderPack(loadPack(t, &HostCmd{}), map[string]any{"dir": "/data"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := rel.Units[0].Packages["debian"].Commands
+	if len(got) != 1 || got[0][1] != "/data" {
+		t.Errorf("commands: %v", got)
 	}
 }

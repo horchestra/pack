@@ -48,12 +48,29 @@ each from its source into `.pack/bin/pack-target-<name>`, and writes the SHA-256
 
 A source is:
 
-|                                            |                                                                                                                                                                                                                          |
-|--------------------------------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| `https://…/pack-target-docker_{os}_{arch}` | the program itself                                                                                                                                                                                                       |
-| `https://…/….tar.gz`, `….tgz`, `….zip`     | an archive that holds `pack-target-<name>`, wherever in it                                                                                                                                                               |
-| `oci://host/repo:tag`                      | an OCI artifact with the file `pack-target-<name>` ([registry.md](registry.md#publishing-a-target)); the registry's credentials are `PACK_REGISTRY_USER` / `PACK_REGISTRY_PASSWORD`, `registry.plain_http` in `env.yaml` |
-| `http://…`                                 | the same, in the clear — a mirror inside                                                                                                                                                                                 |
+|                                            |                                                                                                                                                  |
+|--------------------------------------------|--------------------------------------------------------------------------------------------------------------------------------------------------|
+| `https://…/pack-target-docker_{os}_{arch}` | the program itself                                                                                                                               |
+| `https://…/….tar.gz`, `….tgz`, `….zip`     | an archive that holds `pack-target-<name>`, wherever in it                                                                                       |
+| `oci://host/repo:tag`                      | an OCI artifact with the file `pack-target-<name>` ([registry.md](registry.md#publishing-a-target)); its options are beside the `url`, see below |
+| `http://…`                                 | the same, in the clear — a mirror inside                                                                                                         |
+
+A source is the URL alone, or the URL with its options, each target's for itself:
+
+```yaml
+# release.yaml
+targets:
+  docker:
+    url: oci://localhost:5001/targets/docker:0.1.0-{os}-{arch}
+    plain_http: true                 # the registry speaks http, not https
+  k8s:
+    url: oci://private.example/targets/k8s:0.1.0-{os}-{arch}
+    username_env: PRIVATE_USER       # the variables that hold the credentials, never the credentials
+    password_env: PRIVATE_TOKEN
+  ansible: oci://registry.example/targets/ansible:0.1.0-{os}-{arch}
+```
+
+A source that names no variables is read anonymously: the credentials of one never reach another's registry.
 
 `{os}` and `{arch}` stand for GOOS and GOARCH of the machine pack runs on, so one line serves a team with both. A
 program

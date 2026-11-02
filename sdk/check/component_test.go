@@ -32,9 +32,10 @@ func has(ps []Problem, path, fragment string) bool {
 const base = `{
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "type": "object", "additionalProperties": false,
-  "x-pack": {"ports": {"main": 80}, "readiness": {"tcp": "main"}, "hooks": HOOKS},
+  "x-pack": {"ports": {"main": 80}, "readiness": {"tcp": "main"}, "hooks": HOOKS,
+    "content": [{"path": "/etc/c/c.properties", "values": "conf", "format": "properties"}]},
   "properties": {
-    "conf": {"type": "object", "x-pack-file": {"path": "/etc/c/c.properties", "format": "properties"},
+    "conf": {"type": "object",
              "properties": PROPS}
   }
 }`
@@ -107,10 +108,15 @@ func TestInstallHooks(t *testing.T) {
 func TestSecretFiles(t *testing.T) {
 	// secret files are leaves of their own, beside the config subtree
 	s := strings.Replace(with("[]", `{"m": {"type": "integer", "default": 1}}`), `"conf": {`, `
-	  "keytab":    {"type": "string", "format": "password", "x-pack-file": {"path": "/etc/security/keytabs/hdfs.keytab", "format": "secret", "mode": "0400"}},
-	  "notsecret": {"type": "string", "x-pack-file": {"path": "/etc/x/plain", "format": "secret"}},
-	  "tmpl":      {"type": "string", "format": "password", "x-pack-file": {"path": "/etc/x/t", "format": "secret", "template": "t.tmpl", "parseAs": "text"}},
+	  "keytab":    {"type": "string", "format": "password"},
+	  "notsecret": {"type": "string"},
+	  "parsed":    {"type": "string", "format": "password"},
 	  "conf": {`, 1)
+	s = strings.Replace(s, `"content": [`, `"content": [
+	  {"path": "/etc/security/keytabs/hdfs.keytab", "values": "keytab", "format": "secret", "mode": "0400"},
+	  {"path": "/etc/x/plain", "values": "notsecret", "format": "secret"},
+	  {"path": "/etc/x/t", "values": "parsed", "format": "secret", "parseAs": "text"},
+	  `, 1)
 	ps := run(t, s)
 	if has(ps, "/keytab", "") {
 		t.Errorf("a well-formed secret file is refused: %v", ps)
@@ -118,8 +124,8 @@ func TestSecretFiles(t *testing.T) {
 	if !has(ps, "/notsecret", "must be format: password") {
 		t.Errorf("secret file on a plain leaf must be refused: %v", ps)
 	}
-	if !has(ps, "/tmpl", "no template or parseAs") {
-		t.Errorf("secret file with a template must be refused: %v", ps)
+	if !has(ps, "/parsed", "no parseAs") {
+		t.Errorf("secret file with parseAs must be refused: %v", ps)
 	}
 
 	s = strings.Replace(with("[]", `{"m": {"type": "integer", "default": 1}}`), `"x-pack": {`, `"x-pack": {"restartPolicy": "Sometimes", `, 1)
@@ -129,6 +135,24 @@ func TestSecretFiles(t *testing.T) {
 }
 
 // The ports and volumes are the pack's own words (x-pack), and what refers to them must exist.
+// A file of Content comes from one place, and that place exists.
+func TestContent(t *testing.T) {
+	for name, tc := range map[string]struct{ file, ptr, want string }{
+		"from nowhere":    {`{"path": "/etc/x"}`, "/x-pack/content/1", "comes from nowhere"},
+		"no such field":   {`{"path": "/etc/x.json", "values": "nope"}`, "/x-pack/content/1", "no such field"},
+		"two sources":     {`{"path": "/etc/x", "source": "a", "template": "b"}`, "/x-pack/content/1", "no template, values, format or parseAs"},
+		"template format": {`{"path": "/etc/x", "template": "b", "format": "json"}`, "/x-pack/content/1", "a template has no format"},
+		"unknown parse":   {`{"path": "/etc/x", "template": "b", "parseAs": "nope"}`, "/x-pack/content/1", "not a parseable format"},
+		"same path":       {`{"path": "/etc/c/c.properties", "source": "a"}`, "/x-pack/content/1", "also declared"},
+	} {
+		s := strings.Replace(with("[]", `{"m": {"type": "integer", "default": 1}}`), `"content": [{"path": "/etc/c/c.properties", "values": "conf", "format": "properties"}]`,
+			`"content": [{"path": "/etc/c/c.properties", "values": "conf", "format": "properties"}, `+tc.file+`]`, 1)
+		if ps := run(t, s); !has(ps, tc.ptr, tc.want) {
+			t.Errorf("%s: %v", name, ps)
+		}
+	}
+}
+
 func TestPortsAndVolumes(t *testing.T) {
 	ok := with("[]", `{"m": {"type": "integer", "default": 1}}`)
 	if ps := run(t, ok); len(ps) != 0 {

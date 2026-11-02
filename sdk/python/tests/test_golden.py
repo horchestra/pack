@@ -86,9 +86,9 @@ class Refusals(unittest.TestCase):
 
         @dataclass
         class Lost(Pack):
-            f: str = field("", omitempty=True, file="/etc/x.conf", template="lost.ptmpl")
+            f: str = field("", omitempty=True)
             def meta(self): return Meta(name="lost", version="1", dir=str(HERE))
-            def pack_root(self): return Root()
+            def pack_root(self): return Root(content=[packsdk.File(path="/etc/x.conf", template="lost.ptmpl")])
 
         with self.assertRaisesRegex(packsdk.SchemaError, "lost.ptmpl"):
             packsdk.pack_file(Lost())

@@ -14,4 +14,5 @@ items:
   type: application/vnd.pack.schema.v1+json
 - from: dir://templates/
   type: application/vnd.pack.template.v1
+repository: packs/tembo:0.2.0
 type: application/vnd.pack.pack.v1+json

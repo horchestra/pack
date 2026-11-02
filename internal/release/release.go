@@ -17,12 +17,17 @@
 package release
 
 import (
+	"bytes"
+	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 	"slices"
 
 	"sigs.k8s.io/yaml"
+
+	"github.com/horchestra/pack/internal/oci"
 )
 
 // File is the optional file that names the release's pack and how it is kept.
@@ -38,12 +43,62 @@ type Release struct {
 	// no file to keep it in, so it is written here.
 	ID string `json:"id,omitempty"`
 	// Targets say where `pack init` downloads the programs of the targets the environment uses from, by the
-	// target's name: an http(s) URL of the program or of an archive that holds it, or oci://host/repo:tag. {os}
-	// and {arch} stand for the machine's.
-	Targets map[string]string `json:"targets,omitempty"`
+	// target's name.
+	Targets map[string]TargetSource `json:"targets,omitempty"`
+	// Registry is how the pack is read from a registry; a target's source says it for itself.
+	Registry Registry `json:"registry,omitempty"`
 
 	values []string
 	env    string // the environment file, "" — none
+}
+
+// Registry is how a registry is read: the one of the pack, or of a target's source. The file names the variables the
+// credentials are in, never the credentials; a registry that names none is read anonymously, so credentials reach
+// only the registry they were written for.
+type Registry struct {
+	PlainHTTP   bool   `json:"plain_http,omitempty"` // the registry speaks http, not https
+	UsernameEnv string `json:"username_env,omitempty"`
+	PasswordEnv string `json:"password_env,omitempty"`
+}
+
+// Options reads the credentials from the environment. It is called when the registry is about to be read: a release
+// that never goes to it needs no variables.
+func (r Registry) Options() (oci.Options, error) {
+	o := oci.Options{PlainHTTP: r.PlainHTTP}
+	if len(r.UsernameEnv) == 0 && len(r.PasswordEnv) == 0 {
+		return o, nil
+	}
+	if len(r.UsernameEnv) == 0 || len(r.PasswordEnv) == 0 {
+		return o, errors.New("username_env and password_env go together")
+	}
+	o.User, o.Password = os.Getenv(r.UsernameEnv), os.Getenv(r.PasswordEnv)
+	if len(o.User) == 0 {
+		return o, fmt.Errorf("username_env: %s is not set", r.UsernameEnv)
+	}
+	if len(o.Password) == 0 {
+		return o, fmt.Errorf("password_env: %s is not set", r.PasswordEnv)
+	}
+	return o, nil
+}
+
+// TargetSource is where the program of a target comes from: the URL alone (docker: oci://…), or the URL with its
+// options (docker: {url: oci://…, plain_http: true, username_env: …, password_env: …}).
+type TargetSource struct {
+	// URL is an http(s) URL of the program or of an archive that holds it, or oci://host/repo:tag. {os} and {arch}
+	// stand for the machine's.
+	URL string `json:"url"`
+	// Registry is how the registry of an oci:// URL is read.
+	Registry
+}
+
+func (s *TargetSource) UnmarshalJSON(raw []byte) error {
+	if json.Unmarshal(raw, &s.URL) == nil {
+		return nil
+	}
+	type plain TargetSource
+	dec := json.NewDecoder(bytes.NewReader(raw))
+	dec.DisallowUnknownFields() // the strictness of the file does not reach through this method
+	return dec.Decode((*plain)(s))
 }
 
 // Load reads the release in dir. envName picks env.<envName>.yaml.

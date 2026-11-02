@@ -2,7 +2,7 @@
 
 from dataclasses import dataclass
 
-from packsdk import Meta, Pack, Readiness, Root, Secret, Volume, field
+from packsdk import File, Meta, Pack, Readiness, Root, Secret, Volume, field
 
 
 @dataclass
@@ -24,8 +24,7 @@ class Tembo(Pack):
     pg_port: int = field(0, env="TEMBO_PG_PORT", omitempty=True)
     pg_password: Secret = field(factory=Secret, env="TEMBO_PG_PASSWORD", omitempty=True)
     config: str = field("", env="TEMBO_CONFIG", omitempty=True)
-    node: Node = field(factory=Node, omitempty=True, file="/etc/tembo/tembo.env", template="tembo.env.ptmpl",
-                       parse_as="text", mode="0640")
+    node: Node = field(factory=Node, omitempty=True)
 
     def set_defaults(self):
         self.listen = ":5432"
@@ -38,11 +37,12 @@ class Tembo(Pack):
 
     def meta(self):
         return Meta(name="tembo", version="0.2.0", description="PostgreSQL with raft", license="Apache-2.0",
-                    source="https://example.org/tembo", image="oci://images/tembo:0.2.0", artifact="oci://packs/tembo")
+                    source="https://example.org/tembo", image="images/tembo:0.2.0")
 
     def pack_root(self):
         return Root(
             ports={"api": 8001, "pg": 5432, "pg-ro": 5434},
+            content=[File(path="/etc/tembo/tembo.env", template="tembo.env.ptmpl", values="node", parse_as="text", mode="0640")],
             data={"data": Volume(mount_path="/var/lib/postgresql", size="10Gi")},
             minimum={"memory": "1Gi"},
             command=["tembo", "run"],

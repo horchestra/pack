@@ -181,7 +181,7 @@ func TestNoDriftWhereTheTargetDoesNotTell(t *testing.T) {
 
 // OpenBaoNext is the next version of the pack: another image, and a hook that migrates before it is applied.
 type openbaoNext struct {
-	Bao      openbao.Config `json:"openbao" file:"/etc/openbao/config.json"`
+	Bao      openbao.Config `json:"openbao"`
 	Postgres *tembo.Config  `json:"postgres,omitempty"`
 }
 
@@ -193,7 +193,7 @@ func (*openbaoNext) PackRules() map[string][]packschema.Rule { return (&openbao.
 
 func (*openbaoNext) Meta() sdk.Meta {
 	m := (&openbao.OpenBao{}).Meta()
-	m.Version, m.Image = "2.2.0", "oci://images/openbao:2.2.0"
+	m.Version, m.Image = "2.2.0", "images/openbao:2.2.0"
 	return m
 }
 

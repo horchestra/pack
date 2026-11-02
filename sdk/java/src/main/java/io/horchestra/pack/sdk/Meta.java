@@ -15,8 +15,7 @@ public final class Meta {
     public String vendor = "";
     public String authors = "";
     public String created = ""; // RFC 3339; empty - not written, so that the artifact is the same byte for byte
-    public String image = "";    // oci://repo:tag the application runs; "" - the pack runs nothing itself
-    public String artifact = ""; // oci://repo where the pack is published: what a pack that holds it mounts it from
+    public String image = "";    // repo:tag the application runs, a repository of the registry the pack is pushed to; "" - the pack runs nothing itself
     public final Map<String, String> annotations = new TreeMap<>();
     public String dir = "";      // the pack's directory, whose content/ holds its files; "" - the working directory
 
@@ -34,7 +33,6 @@ public final class Meta {
     public Meta authors(String v) { authors = v; return this; }
     public Meta created(String v) { created = v; return this; }
     public Meta image(String v) { image = v; return this; }
-    public Meta artifact(String v) { artifact = v; return this; }
     public Meta dir(String v) { dir = v; return this; }
     public Meta annotation(String k, String v) { annotations.put(k, v); return this; }
 }

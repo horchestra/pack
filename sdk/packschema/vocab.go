@@ -17,6 +17,12 @@ type Root struct {
 	Ports map[string]int `json:"ports,omitempty"`
 	// Data are the volumes that outlive an instance, by name.
 	Data map[string]Volume `json:"data,omitempty"`
+	// Content are the files of the component: each is written from one of the pack's content/ files or from a
+	// subtree of its values.
+	Content []File `json:"content,omitempty"`
+	// Packages is how a target that installs OS packages runs the component instead of the image, by OS: the key is the
+	// target's to match, "debian-13", "debian", a family, any OS at all — none of them is known here.
+	Packages map[string]OSPackages `json:"packages,omitempty"`
 	// Minimum is the least the component can run on: a lower bound for the resource requests the environment
 	// gives it (cpu, memory).
 	Minimum   map[string]string `json:"minimum,omitempty"`
@@ -83,11 +89,38 @@ type Rollout struct {
 	MaxUnavailable int `json:"maxUnavailable,omitempty"`
 }
 
-// File is `x-pack-file` on a subtree: the subtree, whole, becomes one file.
+// OSPackages is the installation on one OS, in this order: Prepare installed, Repo delivered, Names installed, Commands
+// run, Content delivered, Services started. Each OS has its own files and units: the same application reads another
+// path there, and versions differ between OSes and from the image's, so a name says its version in the OS's own words
+// ("postgresql-16=16.4-1.pgdg12+1"), Meta.Version says nothing of it. A name, a command or the URL of a file is a template too, so
+// that where the packages come from can be a value of the pack: upstream by default, a mirror (oci-packer proxy) when
+// the operator says. The target resolves ${os:codename}, ${os:version} and ${os:arch} in what it delivers and installs.
+type OSPackages struct {
+	Prepare  []string   `json:"prepare,omitempty"`
+	Repo     []File     `json:"repo,omitempty"`
+	Names    []string   `json:"names" jsonschema:"required,minItems=1"`
+	Commands [][]string `json:"commands,omitempty"`
+	Content  []File     `json:"content,omitempty"`
+	Services []string   `json:"services,omitempty"`
+}
+
+// File is one file in the component's containers, at Path. It comes from exactly one of:
+//
+//	Source    a file of the pack's content/, byte for byte: whatever {{ }} it holds is not pack's to read
+//	Template  a file of content/, a template over the values the pack sees: its own and those of the packs it holds,
+//	          by their fields, without their passwords; pack is the context. With Values, it is written only when
+//	          that value is there
+//	URL       downloaded where it lands; only in Packages
+//	Values    a field's subtree (a pointer without the leading /: "conf", "tls/key"), written in Format, the name of
+//	          Path saying it when there is no Format; format secret mounts a password leaf's key untouched
 type File struct {
-	Path        string `json:"path" jsonschema:"required,pattern=^/"`
-	Format      string `json:"format" jsonschema:"required,enum=json,enum=yaml,enum=properties,enum=env,enum=shell,enum=ini,enum=flagfile,enum=lines,enum=hadoop-xml,enum=toml,enum=text,enum=template,enum=secret"`
-	Template    string `json:"template,omitempty"`
+	Path     string `json:"path" jsonschema:"required,pattern=^/"`
+	Source   string `json:"source,omitempty"`
+	Template string `json:"template,omitempty"`
+	URL      string `json:"url,omitempty"`
+	Values   string `json:"values,omitempty"`
+	Format   string `json:"format,omitempty" jsonschema:"enum=json,enum=yaml,enum=properties,enum=env,enum=shell,enum=ini,enum=flagfile,enum=lines,enum=hadoop-xml,enum=toml,enum=text,enum=secret"`
+	// ParseAs is what a template's output is checked to be, when it is a format that can be checked.
 	ParseAs     string `json:"parseAs,omitempty"`
 	Mode        string `json:"mode,omitempty" jsonschema:"pattern=^0?[0-7]{3}$"`
 	PerInstance bool   `json:"perInstance,omitempty"`
@@ -102,13 +135,9 @@ type Arg struct {
 }
 
 // Formats every emitter knows, in the order the spec lists them.
-var Formats = []string{"json", "yaml", "properties", "env", "shell", "ini", "flagfile", "lines", "hadoop-xml", "toml", "text", "template", FormatRaw}
+var Formats = []string{"json", "yaml", "properties", "env", "shell", "ini", "flagfile", "lines", "hadoop-xml", "toml", "text"}
 
-// FormatRaw is a file of the component's, verbatim: the template it names,
-// byte for byte, no template language — a script, a dump, an archive.
-const FormatRaw = "raw"
-
-// FormatSecret is `x-pack-file` on a password leaf: not an emitter — the
+// FormatSecret is a File of a password leaf: not an emitter — the
 // referenced secret's key is mounted at the path, bytes untouched (a keytab, a
 // keystore, a certificate).
 const FormatSecret = "secret"

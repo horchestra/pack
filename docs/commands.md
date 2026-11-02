@@ -5,7 +5,7 @@ pack [-C dir] [--env name] <command>
 ```
 
 `-C` runs in another directory; `--env x` reads `env.x.yaml` instead of `env.yaml` (`PACK_ENV`). Registries:
-`PACK_REGISTRY_USER` and `PACK_REGISTRY_PASSWORD`.
+Registry credentials are in the variables `release.yaml` names (`username_env`, `password_env`, see [release.md](release.md)).
 
 | command                                     |                                                                                                                                                                                                                                                                 |
 |---------------------------------------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|

@@ -11,7 +11,7 @@ import (
 
 // OpenBao is the pack: the application's configuration, and the pack it may be installed with.
 type OpenBao struct {
-	Bao      Config        `json:"openbao" file:"/etc/openbao/config.json"`
+	Bao      Config        `json:"openbao"`
 	Postgres *tembo.Config `json:"postgres,omitempty"`
 }
 
@@ -56,7 +56,7 @@ func (o *OpenBao) PackRules() map[string][]packschema2.Rule {
 // Version and Image are what the pack is of; a program that publishes the pack for a real image sets them first.
 var (
 	Version = "2.1.0"
-	Image   = "oci://images/openbao:2.1.0"
+	Image   = "images/openbao:2.1.0"
 )
 
 func (*OpenBao) Meta() sdk.Meta {
@@ -66,7 +66,6 @@ func (*OpenBao) Meta() sdk.Meta {
 		Description: "secrets",
 		License:     "MPL-2.0",
 		Image:       Image,
-		Artifact:    "oci://packs/openbao",
 		Annotations: map[string]string{"example.org/tier": "core"},
 	}
 }
@@ -74,6 +73,7 @@ func (*OpenBao) Meta() sdk.Meta {
 func (o *OpenBao) PackRoot() packschema2.Root {
 	return packschema2.Root{
 		Ports:      map[string]int{"api": 8200},
+		Content:    []packschema2.File{{Path: "/etc/openbao/config.json", Values: "openbao"}},
 		Readiness:  &packschema2.Readiness{HTTP: "api/v1/sys/health"},
 		Savepoints: []string{packschema2.Dotted(o, &o.Postgres)},
 	}

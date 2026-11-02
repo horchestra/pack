@@ -13,8 +13,6 @@ from ._vocab import FORMATS, FORMAT_SECRET, PACK_SCHEME, Secret
 
 SCHEMA = "https://json-schema.org/draft/2020-12/schema"
 
-_EXT = {".json": "json", ".yaml": "yaml", ".yml": "yaml", ".properties": "properties", ".toml": "toml",
-        ".ini": "ini", ".cnf": "ini", ".env": "env"}
 
 
 class SchemaError(Exception):
@@ -22,7 +20,7 @@ class SchemaError(Exception):
 
 
 def tags(f: dataclasses.Field) -> dict:
-    t = {"json": None, "env": None, "file": None, "template": None, "format": None, "mode": None, "parse_as": None,
+    t = {"json": None, "env": None, "read_only": False,
          "omitempty": False, "skip": False}
     t.update(f.metadata.get("pack", {}))
     return t
@@ -174,42 +172,6 @@ def type_schema(tp: Any) -> dict:
     raise SchemaError(f"no JSON Schema for the type {tp!r}")
 
 
-# ---- files
-
-def file_of(f: dataclasses.Field) -> dict | None:
-    t = tags(f)
-    dst = t["file"]
-    if not dst:
-        for k in ("template", "format", "mode", "parse_as"):
-            if t[k]:
-                raise SchemaError(f"{f.name}: a {k} argument, but no file to say where")
-        return None
-    file = {"path": dst, "format": t["format"] or "", "template": t["template"] or "", "parseAs": t["parse_as"] or "",
-            "mode": t["mode"] or ""}
-    if not file["format"] and file["template"]:
-        file["format"] = "template"
-    elif not file["format"]:
-        file["format"] = _EXT.get(_ext(dst).lower(), "")
-    if not file["format"]:
-        raise SchemaError(f"{f.name}: format of {dst} is not known by its name: say it with the format argument")
-    if file["format"] not in FORMATS and file["format"] != FORMAT_SECRET:
-        raise SchemaError(f'{f.name}: format "{file["format"]}" is not one of {list(FORMATS)}')
-    fmt, tmpl = file["format"], file["template"]
-    if fmt == "template":
-        if not tmpl.endswith(".ptmpl"):
-            raise SchemaError(f'{f.name}: a rendered file (format template) is a *.ptmpl file of content/: "{tmpl}"')
-    elif fmt == "raw":
-        if not tmpl or tmpl.endswith(".ptmpl"):
-            raise SchemaError(f'{f.name}: a file shipped as it is (format raw) names a content/ file that is not *.ptmpl: "{tmpl}"')
-    elif tmpl:
-        raise SchemaError(f'{f.name}: template "{tmpl}", but the format is {fmt}: only template and raw files come from content/')
-    return {k: v for k, v in file.items() if v}
-
-
-def _ext(path: str) -> str:
-    base = path.rsplit("/", 1)[-1]
-    i = base.rfind(".")
-    return base[i:] if i > 0 else ""
 
 
 # ---- the schema
@@ -262,12 +224,8 @@ def _annotate(node: dict, tp: type, value: Any, path: str) -> None:
         prop = node["properties"][name]
         if leaf_with_default(fv):
             prop["default"] = to_json(fv)
-        try:
-            file = file_of(f)
-        except SchemaError as e:
-            raise SchemaError(f"{path}/{name}: {e}") from None
-        if file:
-            prop["x-pack-file"] = file
+        if tags(f)["read_only"]:
+            prop["readOnly"] = True
         env = tags(f)["env"]
         if env and env != "-":
             prop["x-pack-env"] = env

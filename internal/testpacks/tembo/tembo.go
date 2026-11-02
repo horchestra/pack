@@ -27,7 +27,7 @@ type Config struct {
 
 	// Config is the file of the node's tags, below: loaded before the other sources, the environment wins over it.
 	Config string `json:"config,omitempty" env:"TEMBO_CONFIG"`
-	Node   Node   `json:"node,omitempty" file:"/etc/tembo/tembo.env" template:"tembo.env.ptmpl" parseAs:"text" mode:"0640"`
+	Node   Node   `json:"node,omitempty"`
 }
 
 // Node is the node's tags and the log it keeps.
@@ -52,9 +52,8 @@ func (c *Config) SetDefaults() {
 func (*Config) Meta() sdk.Meta {
 	return sdk.Meta{
 		Name: "tembo", Version: "0.2.0", Description: "PostgreSQL with raft", License: "Apache-2.0",
-		Source:   "https://example.org/tembo",
-		Image:    "oci://images/tembo:0.2.0",
-		Artifact: "oci://packs/tembo",
+		Source: "https://example.org/tembo",
+		Image:  "images/tembo:0.2.0",
 	}
 }
 
@@ -63,6 +62,7 @@ func (*Config) PackRoot() packschema.Root {
 		// the API listens on the port of the node's own peers address (8001 throughout the documentation); the
 		// proxies are --listen and --listen-ro
 		Ports:   map[string]int{"api": 8001, "pg": 5432, "pg-ro": 5434},
+		Content: []packschema.File{{Path: "/etc/tembo/tembo.env", Template: "tembo.env.ptmpl", Values: "node", ParseAs: "text", Mode: "0640"}},
 		Data:    map[string]packschema.Volume{"data": {MountPath: "/var/lib/postgresql", Size: "10Gi"}},
 		Minimum: map[string]string{"memory": "1Gi"},
 		// the image's entrypoint is `tembo`; the agent starts with `run`

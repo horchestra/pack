@@ -10,11 +10,11 @@ public class OpenBao extends Pack {
         @Setting(json = "api_addr") public String apiAddr = "";                 // required: no omitempty
         @Setting(json = "log_level", omitempty = true) public String logLevel = "";
     }
-    @Setting(json = "openbao", file = "/etc/openbao/config.json") public Config bao = new Config();
+    @Setting(json = "openbao") public Config bao = new Config();
     @Setting(omitempty = true) public Tembo postgres;                            // a pack of its own; optional: null
 
     @Override public void setDefaults() { bao.logLevel = "info"; }
-    @Override public Meta meta() { return new Meta("openbao", "2.1.0").image("oci://images/openbao:2.1.0").artifact("oci://packs/openbao"); }
+    @Override public Meta meta() { return new Meta("openbao", "2.1.0").image("images/openbao:2.1.0"); }
     @Override public Root packRoot() {
         return new Root().port("api", 8200).readiness(Root.Readiness.http("api/v1/sys/health"))
                 .savepoint(Paths.dotted(OpenBao.class, "postgres"));
@@ -28,9 +28,9 @@ PackSdk.generate(Path.of("out"), new OpenBao());   // out/openbao/…, out/tembo
 // or: System.exit(PackSdk.main(args, new OpenBao()));   generate [-o dir] | schema <name>
 ```
 
-- `@Setting` takes the Go tags: `json`, `env`, `file`, `template`, `format`, `mode`, `parseAs`, `omitempty` (without it
+- `@Setting` takes the Go tags: `json`, `env`, `readOnly`, `omitempty` (without it
   the field is required), `skip`. A pack class needs a no-argument constructor; `setDefaults` sets the defaults.
-- The files a pack ships are in `content/` under `Meta.dir(…)` (the working directory by default); `template` names one.
+- The files a pack ships are in `content/` under `Meta.dir(…)` (the working directory by default); `Root.content(new Root.File(path)…)` says which go where.
 - **The names of fields in formulas and rules are not written by hand**: `Paths.pointer(OpenBao.class, "bao", "storage")`
   is `/openbao/storage`, `Paths.dotted(OpenBao.class, "postgres")` is `postgres`. The arguments are the Java fields'
   names, the result is the schema's; a field that is not there is a `SchemaException`.

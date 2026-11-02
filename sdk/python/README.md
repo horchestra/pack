@@ -15,12 +15,11 @@ class Config:
 
 @dataclass
 class OpenBao(Pack):
-    bao: Config = field(factory=Config, json="openbao", file="/etc/openbao/config.json")
+    bao: Config = field(factory=Config, json="openbao")
     postgres: Optional[Tembo] = field(None, omitempty=True)    # a pack of its own; Optional makes it optional
 
     def set_defaults(self):  self.bao.log_level = "info"
-    def meta(self):          return Meta(name="openbao", version="2.1.0", image="oci://images/openbao:2.1.0",
-                                         artifact="oci://packs/openbao")
+    def meta(self):          return Meta(name="openbao", version="2.1.0", image="images/openbao:2.1.0")
     def pack_root(self):     return Root(ports={"api": 8200}, readiness=Readiness(http="api/v1/sys/health"),
                                          savepoints=[dotted(self, lambda o: o.postgres)])
     def pack_compute(self):  return {pointer(self, lambda o: o.bao.storage): "…CEL…"}
@@ -28,9 +27,9 @@ class OpenBao(Pack):
 generate("out", OpenBao())     # out/openbao/…, out/tembo/…
 ```
 
-- `field()` takes the Go tags as arguments: `json`, `env`, `file`, `template`, `format`, `mode`, `parse_as`,
+- `field()` takes the Go tags as arguments: `json`, `env`, `read_only`,
   `omitempty` (without it the field is required), `skip`. The default is the zero value; `set_defaults` sets the rest.
-- The files a pack ships are in `content/` next to the class's source; `template=` names one.
+- The files a pack ships are in `content/` next to the class's source; `Root(content=[File(…)])` says which go where.
 - **The names of fields in formulas and rules are not written by hand**: `pointer(self, lambda o: o.bao.storage)` is
   `/openbao/storage` (the key of `pack_compute`/`pack_rules`), `dotted(self, lambda o: o.postgres)` is `postgres`
   (`pack.values.postgres`, `pack.keys.postgres.service`). A field that is not there is a `SchemaError`.

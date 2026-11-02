@@ -8,12 +8,12 @@ import (
 const kafka = `{
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "type": "object", "additionalProperties": false,
-  "x-pack": {"readiness": {"tcp": "broker"}, "ports": {"broker": 9092, "internal": 9093}},
+  "x-pack": {"readiness": {"tcp": "broker"}, "ports": {"broker": 9092, "internal": 9093},
+    "content": [{"path": "/opt/kafka/config/server.properties", "values": "conf"}, {"path": "/opt/kafka/config/kafka_jaas.conf", "template": "jaas.tmpl", "values": "jaas", "parseAs": "properties", "mode": "0400"}]},
   "properties": {
     "jdk": {"$ref": "pack://jdk#", "x-pack-mount": "/opt/java"},
     "conf": {
       "type": "object", "additionalProperties": false,
-      "x-pack-file": {"path": "/opt/kafka/config/server.properties", "format": "properties"},
       "properties": {
         "log.dirs": {"type": "string", "default": "/var/lib/kafka/data"},
         "min.insync.replicas": {"type": "integer", "minimum": 1, "default": 1, "x-pack-arg": {"flag": "--override", "prefix": "min.insync.replicas="}},
@@ -22,7 +22,6 @@ const kafka = `{
     },
     "jaas": {
       "type": "object", "required": ["password"],
-      "x-pack-file": {"path": "/opt/kafka/config/kafka_jaas.conf", "format": "template", "template": "jaas.tmpl", "parseAs": "properties", "mode": "0400"},
       "properties": {
         "mechanism": {"type": "string", "enum": ["SCRAM-SHA-512", "PLAIN"], "default": "SCRAM-SHA-512"},
         "password": {"type": "string", "format": "password"}
@@ -57,7 +56,7 @@ func TestParse_AnnotationsAndOrder(t *testing.T) {
 	}
 	conf := s.Root.Properties["conf"]
 	if conf.File == nil || conf.File.Path != "/opt/kafka/config/server.properties" || conf.File.Format != "properties" {
-		t.Fatalf("x-pack-file not read: %+v", conf.File)
+		t.Fatalf("the file of its values is not on the node: %+v", conf.File)
 	}
 	if a := conf.Properties["min.insync.replicas"].Arg; a == nil || a.Flag != "--override" || a.Prefix != "min.insync.replicas=" {
 		t.Fatalf("x-pack-arg not read: %+v", a)
@@ -78,7 +77,7 @@ func TestParse_AnnotationsAndOrder(t *testing.T) {
 }
 
 func TestParse_UnknownAnnotationKeyIsRefused(t *testing.T) {
-	_, err := Parse([]byte(`{"type":"object","properties":{"c":{"x-pack-file":{"path":"/a","format":"json","fromat":"x"}}}}`))
+	_, err := Parse([]byte(`{"type":"object","properties":{"c":{"x-pack-arg":{"flag":"--a","fromat":"x"}}}}`))
 	if err == nil {
 		t.Fatal("expected refusal of unknown key")
 	}

@@ -12,7 +12,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "sdk" / "python"))
 
-from packsdk import (Hook, Meta, Pack, Readiness, Root, Secret, Step, Upgrade, Volume, When, field, main,
+from packsdk import (OSPackages, File, Hook, Meta, Pack, Readiness, Root, Secret, Step, Upgrade, Volume, When, field, main,
                      pointer)
 
 
@@ -32,28 +32,57 @@ class Conf:
 
 @dataclass
 class Postgres(Pack):
-    database: str = field("")  # required: no omitempty
+    database: str = field("", env="POSTGRES_DB")  # required: no omitempty
     superuser: Superuser = field(factory=Superuser)
-    # postgresql.conf, written from the subtree as properties
-    conf: Conf = field(factory=Conf, file="/etc/postgresql/postgresql.conf", format="properties")
-    # the scripts the hooks run are files of content/, shipped as they are
-    init_extensions: str = field("", omitempty=True, file="/opt/pack/init-extensions.sh",
-                                 template="init-extensions.sh", format="raw", mode="0755")
-    restore_15: str = field("", omitempty=True, file="/opt/pack/restore-15.sh",
-                            template="restore-15.sh", format="raw", mode="0755")
+    # postgresql.conf
+    conf: Conf = field(factory=Conf)
+    # where the packages of PGDG come from on a host: upstream by default, a mirror (oci-proxy of the ansible target)
+    # when the hosts do not reach it
+    pgdg: str = field("", omitempty=True)
+    pgdg_key: str = field("", omitempty=True)
+    # the extensions every database gets
+    init_extensions: list[str] = field(factory=list, omitempty=True)
 
     def set_defaults(self):
         self.superuser.name = "postgres"
         self.conf.max_connections = 100
         self.conf.listen_addresses = "*"
         self.conf.port = 5432
+        self.pgdg = "https://apt.postgresql.org/pub/repos/apt"
+        self.pgdg_key = "https://www.postgresql.org/media/keys/ACCC4CF8.asc"
+        self.init_extensions = ["pg_stat_statements", "pgcrypto"]
 
     def meta(self):
         return Meta(name="postgres", version="16.4", description="PostgreSQL", license="PostgreSQL",
-                    image="oci://images/postgres:16.4", artifact="oci://packs/postgres")
+                    image="images/postgres:16.4")
 
     def pack_root(self):
         return Root(
+            packages={
+                # On a host the same application lives elsewhere, by OS; the version is the OS's, not Meta's
+                "debian": OSPackages(
+                    prepare=["ca-certificates"],
+                    repo=[File(path="/etc/apt/keyrings/pgdg.asc", url="{{ .pgdg_key }}", mode="0644"),
+                          File(path="/etc/apt/sources.list.d/pgdg.sources", template="host-pgdg.sources", mode="0644")],
+                    names=["postgresql-16"],
+                    content=[File(path="/etc/postgresql/16/main/conf.d/pack.conf", template="host-postgresql.conf", mode="0644"),
+                             File(path="/etc/postgresql/16/main/pg_hba.conf", source="host-pg_hba.conf", mode="0640"),
+                             File(path="/opt/pack/init-extensions.sh", template="host-init.sh", mode="0700")],
+                    services=["postgresql@16-main"]),
+                "fedora": OSPackages(
+                    names=["postgresql-server", "postgresql-contrib"],
+                    commands=[["sh", "-c", "test -f /var/lib/pgsql/data/PG_VERSION || postgresql-setup --initdb"]],
+                    content=[File(path="/var/lib/pgsql/data/postgresql.auto.conf", template="host-postgresql.conf", mode="0644"),
+                             File(path="/var/lib/pgsql/data/pg_hba.conf", source="host-pg_hba.conf", mode="0644"),
+                             File(path="/opt/pack/init-extensions.sh", template="host-init.sh", mode="0700")],
+                    services=["postgresql"]),
+            },
+            content=[
+                # the script of the install hook is rendered: a hook is a container of its own and is told where the server is
+                File(path="/etc/postgresql/postgresql.conf", values="conf", format="properties"),
+                File(path="/opt/pack/init-extensions.sh", template="init-extensions.sh", mode="0755"),
+                File(path="/opt/pack/restore-15.sh", source="restore-15.sh", mode="0755"),
+            ],
             ports={"pg": 5432},
             data={"data": Volume(mount_path="/var/lib/postgresql/data", size="10Gi")},
             minimum={"cpu": "500m", "memory": "512Mi"},

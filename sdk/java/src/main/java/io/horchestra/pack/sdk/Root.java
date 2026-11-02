@@ -10,6 +10,8 @@ import java.util.TreeMap;
 public final class Root {
     public final Map<String, Integer> ports = new TreeMap<>();
     public final Map<String, Volume> data = new TreeMap<>();
+    public final List<File> content = new ArrayList<>();
+    public final Map<String, OSPackages> packages = new TreeMap<>(); // by OS: the key is the target's to match
     public final Map<String, String> minimum = new TreeMap<>();
     public Readiness readiness;
     public Upgrade upgrade;
@@ -21,6 +23,8 @@ public final class Root {
 
     public Root port(String name, int port) { ports.put(name, port); return this; }
     public Root data(String name, Volume v) { data.put(name, v); return this; }
+    public Root content(File f) { content.add(f); return this; }
+    public Root packages(String os, OSPackages p) { packages.put(os, p); return this; }
     public Root minimum(String resource, String quantity) { minimum.put(resource, quantity); return this; }
     public Root readiness(Readiness r) { readiness = r; return this; }
     public Root upgrade(Upgrade u) { upgrade = u; return this; }
@@ -37,6 +41,16 @@ public final class Root {
             Map<String, Object> d = new TreeMap<>();
             data.forEach((k, v) -> d.put(k, v.toJson()));
             out.put("data", d);
+        }
+        if (!content.isEmpty()) {
+            List<Object> fs = new ArrayList<>();
+            for (File f : content) fs.add(f.toJson());
+            out.put("content", fs);
+        }
+        if (!packages.isEmpty()) {
+            Map<String, Object> ps = new TreeMap<>();
+            packages.forEach((k, v) -> ps.put(k, v.toJson()));
+            out.put("packages", ps);
         }
         if (!minimum.isEmpty()) out.put("minimum", new TreeMap<>(minimum));
         if (readiness != null) out.put("readiness", readiness.toJson());
@@ -66,6 +80,73 @@ public final class Root {
             Map<String, Object> out = new LinkedHashMap<>();
             out.put("mountPath", mountPath);
             if (!size.isEmpty()) out.put("size", size);
+            return out;
+        }
+    }
+
+    /** A file in the component's containers: from source (a file of content/, byte for byte), template (a file of
+     *  content/ rendered over the values the pack sees; with values, only when that value is there), or values (a
+     *  field's subtree, "conf", written in format, the name of the path saying it when there is none). */
+    public static final class File {
+        public final String path;
+        public String source = "", template = "", url = "", values = "", format = "", parseAs = "", mode = "";
+        public boolean perInstance;
+
+        public File(String path) { this.path = path; }
+
+        public File source(String s) { source = s; return this; }
+        public File template(String t) { template = t; return this; }
+        public File url(String u) { url = u; return this; }
+        public File values(String v) { values = v; return this; }
+        public File format(String f) { format = f; return this; }
+        public File parseAs(String p) { parseAs = p; return this; }
+        public File mode(String m) { mode = m; return this; }
+        public File perInstance() { perInstance = true; return this; }
+
+        Map<String, Object> toJson() {
+            Map<String, Object> out = new LinkedHashMap<>();
+            out.put("path", path);
+            if (!source.isEmpty()) out.put("source", source);
+            if (!template.isEmpty()) out.put("template", template);
+            if (!url.isEmpty()) out.put("url", url);
+            if (!values.isEmpty()) out.put("values", values);
+            if (!format.isEmpty()) out.put("format", format);
+            if (!parseAs.isEmpty()) out.put("parseAs", parseAs);
+            if (!mode.isEmpty()) out.put("mode", mode);
+            if (perInstance) out.put("perInstance", true);
+            return out;
+        }
+    }
+
+    /** The installation on one OS, in this order: prepare installed, repo delivered, names installed, commands run,
+     *  content delivered, services started. A name or the url of a file is a template too; the target resolves
+     *  ${os:codename}, ${os:version} and ${os:arch}. */
+    public static final class OSPackages {
+        public final List<String> prepare = new ArrayList<>(), names = new ArrayList<>(), services = new ArrayList<>();
+        public final List<File> repo = new ArrayList<>(), content = new ArrayList<>();
+        public final List<List<String>> commands = new ArrayList<>();
+
+        public OSPackages names(String... v) { names.addAll(List.of(v)); return this; }
+        public OSPackages prepare(String... v) { prepare.addAll(List.of(v)); return this; }
+        public OSPackages repo(File f) { repo.add(f); return this; }
+        public OSPackages command(String... argv) { commands.add(List.of(argv)); return this; }
+        public OSPackages content(File f) { content.add(f); return this; }
+        public OSPackages services(String... v) { services.addAll(List.of(v)); return this; }
+
+        private static List<Object> json(List<File> fs) {
+            List<Object> out = new ArrayList<>();
+            for (File f : fs) out.add(f.toJson());
+            return out;
+        }
+
+        Map<String, Object> toJson() {
+            Map<String, Object> out = new LinkedHashMap<>();
+            if (!prepare.isEmpty()) out.put("prepare", new ArrayList<>(prepare));
+            if (!repo.isEmpty()) out.put("repo", json(repo));
+            out.put("names", new ArrayList<>(names));
+            if (!commands.isEmpty()) out.put("commands", new ArrayList<>(commands));
+            if (!content.isEmpty()) out.put("content", json(content));
+            if (!services.isEmpty()) out.put("services", new ArrayList<>(services));
             return out;
         }
     }

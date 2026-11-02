@@ -7,14 +7,14 @@ artifacts, byte for byte (`sdk/testdata/golden` is the proof the tests compare w
 | method          |                                                                                                                                         |
 |-----------------|-----------------------------------------------------------------------------------------------------------------------------------------|
 | `SetDefaults()` | what a zero value cannot say. It sets, never adds: it may run twice. A field that is not zero afterwards is a setting with that default |
-| `Meta()`        | the identity: `Name`, `Version` (required), `Description`, `License`, `Source`, `Image`, `Artifact`, `Annotations` …                    |
+| `Meta()`        | the identity: `Name`, `Version` (required), `Description`, `License`, `Source`, `Image`, `Annotations` …                    |
 | `PackRoot()`    | how it runs, upgrades and rolls back (below)                                                                                            |
 | `PackCompute()` | optional: `{pointer: CEL formula}` that fills a value the operator did not write                                                        |
 | `PackRules()`   | optional: `{pointer: [rule, …]}` that the values must satisfy                                                                           |
 
 ```go
 type OpenBao struct {
-Bao      Config        `json:"openbao" file:"/etc/openbao/config.json"`
+Bao      Config        `json:"openbao"`
 Postgres *tembo.Config `json:"postgres,omitempty"` // a pack of its own; a pointer makes it optional
 }
 ```
@@ -27,11 +27,7 @@ name), **a field without `omitempty` is required**. Other tags:
 | tag                  |                                                                                                                                                                                                                        |
 |----------------------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | `env:"NAME"`         | the field is the environment variable `NAME`                                                                                                                                                                           |
-| `file:"/path"`       | the field — a leaf or a whole subtree — becomes the file `/path` in the container                                                                                                                                      |
-| `template:"x.ptmpl"` | …rendered from `content/x.ptmpl`, a template over the values; with `format:"raw"` the file `content/x` is shipped as it is                                                                                             |
-| `format:"json"`      | …or the subtree written in that format: json, yaml, properties, env, ini, toml, shell, flagfile, lines, hadoop-xml, text; `secret` mounts a secret's key untouched. The name's extension says it when the tag does not |
-| `mode:"0640"`        | the file's mode                                                                                                                                                                                                        |
-| `parseAs:"text"`     | how a template's output is parsed back                                                                                                                                                                                 |
+| `jsonschema:"readOnly=true"` | the operator does not set it: a value written for it is refused |
 
 `sdk.Secret` is a credential leaf: the operator gives a reference (`secretRef: {name, key}`), never a value.
 
@@ -80,15 +76,62 @@ an expression cannot select (a dash, a dot).
 
 ## Files
 
-A pack's files are in `content/`, next to the source (Go: the file that defines `Meta`; Python: the class's file; Java:
-`Meta.dir`). They are read from disk, never embedded. Every file a `template` tag names must be there; the files go into
-the artifact as `templates/`.
+The files a component gets are the `Content` of `PackRoot`, not tags of the fields:
+
+```go
+Content: []packschema.File{
+    {Path: "/etc/postgresql/postgresql.conf", Values: "conf", Format: "properties"}, // a subtree of the values
+    {Path: "/opt/pack/init-extensions.sh", Template: "init-extensions.sh", Mode: "0755"}, // rendered
+    {Path: "/opt/pack/restore-15.sh", Source: "restore-15.sh", Mode: "0755"},             // byte for byte
+},
+```
+
+| from       |                                                                                                                                  |
+|------------|----------------------------------------------------------------------------------------------------------------------------------|
+| `Source`   | a file of `content/`, byte for byte, whatever `{{ }}` it holds: a script, a dump, an archive, a template of the application's own |
+| `Template` | a file of `content/`, rendered, [emitters.md](emitters.md#template-data); with `Values`, written only when that value is there; `ParseAs` checks the result |
+| `Values`   | a field's subtree (`conf`, `tls/key`) in `Format`, the name of `Path` saying it when there is none; `secret` mounts a password leaf's key |
+
+`Mode` is the file's mode. The files themselves are in `content/`, next to the source (Go: the file that defines `Meta`;
+Python: the class's file; Java: `Meta.dir`), read from disk, never embedded. Every file `Content` names must be there;
+all of `content/` goes into the artifact as `templates/`.
+
+## Installing from OS packages
+
+A target that runs no image (`ansible`) installs what `Packages` of `PackRoot` says instead of `Image` and `Content`:
+
+```go
+Packages: map[string]packschema.OSPackages{
+    "debian": {
+        Prepare:  []string{"ca-certificates"},
+        Repo:     []packschema.File{
+            {Path: "/etc/apt/keyrings/docker.asc", URL: "{{ .mirror }}/debian/gpg", Mode: "0644"},
+            {Path: "/etc/apt/sources.list.d/docker.sources", Template: "docker.sources", Mode: "0644"},
+        },
+        Names:    []string{"docker-ce", "docker-ce-cli", "containerd.io"},
+        Content:  []packschema.File{{Path: "/etc/docker/daemon.json", Values: "daemon", Format: "json"}},
+        Services: []string{"docker"},
+    },
+},
+```
+
+- **The key is any OS.** It is a string, not a field: nothing in pack or the SDK lists the OSes. The target takes the most
+  exact one a host goes by (`debian-13`, `debian`, the family). The operator adds an OS the pack does not know, or other
+  names, in `keys.<key>.packages` of `env.yaml`, without touching the pack.
+- **Each OS has its own everything.** The same application reads another path and runs another unit there: the order is
+  `Prepare` installed, `Repo` delivered, `Names` installed, `Commands` run, `Content` delivered, `Services` started.
+- **The version is the OS's.** `Meta.Version` says nothing of a package; a name says its own in the OS's words
+  (`postgresql-16=16.4-1.pgdg13+1`), or the name is a URL of a package file.
+- **Where packages come from is a value.** A name and a file's `URL` are templates too: a field of the pack, upstream by
+  default, lets the operator point at a mirror (`oci-proxy` of the ansible target serves a repository kept in the registry). `${os:codename}`, `${os:version}`, `${os:arch}`, `${os:id}` are the target's
+  to resolve, on each host.
+- **The hooks are `Hooks` of the root,** so a script a hook runs is at one path, with its own content per OS.
+- **The host is taken to be empty:** nothing conflicting is looked for or removed.
 
 ## A pack that holds a pack
 
 A field whose type is a pack holds it: the settings of the two join in one schema (the held one as `pack://name#`), a
-held pack is installed **before** the pack that holds it, and the held pack's `Meta` needs an `Artifact`
-(`oci://repo`) for the holder to mount it from. A pointer (Go), `Optional` (Python) or `null` (Java) makes it optional.
+held pack is installed **before** the pack that holds it. A pointer (Go), `Optional` (Python) or `null` (Java) makes it optional.
 A pack that holds itself, however far down, is refused.
 
 ## Generating

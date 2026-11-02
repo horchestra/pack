@@ -62,7 +62,6 @@ release gives the same result whatever the tag becomes. With an argument, releas
 		if err != nil {
 			return err
 		}
-		o := oci.FromEnv(env.Registry.PlainHTTP)
 		lock, err := release.ReadLock(fresh.Dir)
 		if err != nil {
 			return err
@@ -73,7 +72,7 @@ release gives the same result whatever the tag becomes. With an argument, releas
 		before := *lock
 		before.Targets = maps.Clone(lock.Targets)
 
-		if err := bringTargets(ctx, fresh, env, lock, o); err != nil {
+		if err := bringTargets(ctx, fresh, env, lock); err != nil {
 			return err
 		}
 
@@ -84,6 +83,10 @@ release gives the same result whatever the tag becomes. With an argument, releas
 		if !oci.IsRef(ref) {
 			fmt.Printf("%s is a directory: nothing to bring\n", ref)
 		} else {
+			o, err := fresh.Registry.Options()
+			if err != nil {
+				return fmt.Errorf("registry: %w", err)
+			}
 			var pin string
 			if lock.Pack == ref && !initUpgrade {
 				pin, err = oci.WithDigest(ref, lock.Digest)
@@ -111,7 +114,7 @@ release gives the same result whatever the tag becomes. With an argument, releas
 // release.yaml names for it, into .pack/bin; the lock keeps the checksum of what came. A program that is there with
 // the checksum the lock has is not downloaded again; one that comes with another is refused unless --upgrade says the
 // source moved.
-func bringTargets(ctx context.Context, rel *release.Release, env *environment.Environment, lock *release.Lock, o oci.Options) error {
+func bringTargets(ctx context.Context, rel *release.Release, env *environment.Environment, lock *release.Lock) error {
 	used := map[string]bool{}
 	if len(env.Target) > 0 {
 		used[env.Target] = true
@@ -128,7 +131,8 @@ func bringTargets(ctx context.Context, rel *release.Release, env *environment.En
 			continue
 		}
 		file := filepath.Join(bin, targets.Binary(name))
-		source := rel.Targets[name]
+		from := rel.Targets[name]
+		source := from.URL
 		if len(source) == 0 {
 			if _, err := os.Stat(file); err != nil {
 				return fmt.Errorf("target %s: no source for it in release.yaml (targets: {%s: https://… or oci://…}) and %s is not there", name, name, file)
@@ -143,6 +147,10 @@ func bringTargets(ctx context.Context, rel *release.Release, env *environment.En
 				fmt.Printf("target %s: up to date (sha256 %s)\n", name, sum)
 				continue
 			}
+		}
+		o, err := from.Options()
+		if err != nil {
+			return fmt.Errorf("targets.%s: %w", name, err)
 		}
 		sum, err := targets.Fetch(ctx, name, source, bin, o)
 		if err != nil {

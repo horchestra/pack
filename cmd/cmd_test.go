@@ -19,7 +19,6 @@ import (
 	"github.com/horchestra/pack/sdk"
 	"sigs.k8s.io/yaml"
 
-	"github.com/horchestra/pack/internal/oci"
 	"github.com/horchestra/pack/internal/release"
 	"github.com/horchestra/pack/internal/testpacks/openbao"
 	"github.com/horchestra/pack/internal/testpacks/regserver"
@@ -161,7 +160,8 @@ func TestLogPrune(t *testing.T) {
 func TestInitFromARegistry(t *testing.T) {
 	host := regserver.Serve(t, &openbao.OpenBao{})
 	ref := "oci://" + host + "/packs/openbao:2.1.0"
-	d := releaseOf(t, ref, map[string]any{"registry": map[string]any{"plain_http": true}})
+	d := releaseOf(t, ref, nil)
+	write(t, d, "release.yaml", map[string]any{"pack": ref, "registry": map[string]any{"plain_http": true}})
 
 	out := pack(t, d, "init")
 	if !strings.Contains(out, "locked at sha256:") {
@@ -255,7 +255,7 @@ func TestInitBringsTheTargets(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := bringTargets(context.Background(), rel, env, lock, oci.Options{}); err == nil || !strings.Contains(err.Error(), "--upgrade") {
+	if err := bringTargets(context.Background(), rel, env, lock); err == nil || !strings.Contains(err.Error(), "--upgrade") {
 		t.Fatalf("a program that is not the locked one: %v", err)
 	}
 	if _, err := os.Stat(file); err == nil {
@@ -272,7 +272,7 @@ func TestInitBringsTheTargets(t *testing.T) {
 	d2 := releaseOf(t, packDir, map[string]any{"target": "nowhere"})
 	rel2, _ := release.Load(d2, "")
 	env2, _ := environment.Load(context.Background(), rel2.Config(), nil)
-	if err := bringTargets(context.Background(), rel2, env2, &release.Lock{}, oci.Options{}); err == nil || !strings.Contains(err.Error(), "no source") {
+	if err := bringTargets(context.Background(), rel2, env2, &release.Lock{}); err == nil || !strings.Contains(err.Error(), "no source") {
 		t.Errorf("no source, no program: %v", err)
 	}
 }

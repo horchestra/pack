@@ -8,7 +8,7 @@ import java.util.regex.Pattern;
 
 /** The little YAML pack.yaml needs: maps (keys sorted), lists, strings. */
 final class Yaml {
-    private static final Pattern PLAIN = Pattern.compile("^[A-Za-z0-9_./@+][A-Za-z0-9_./:@+ -]*$");
+    private static final Pattern PLAIN = Pattern.compile("^[A-Za-z0-9_./@+][A-Za-z0-9_./:@+ ,-]*$"); // a comma is plain in block context
     private static final Pattern RESERVED = Pattern.compile("^(true|false|null|yes|no|on|off|y|n|~)$", Pattern.CASE_INSENSITIVE);
     private static final Pattern NUMBER = Pattern.compile("^[-+]?(\\d[\\d_]*)?\\.?\\d*([eE][-+]?\\d+)?$|^0[xob][0-9a-fA-F_]+$");
 

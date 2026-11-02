@@ -1,6 +1,6 @@
 # Emitters: the formats of a file
 
-An emitter turns a values subtree into the bytes of a file (`file:"/path" format:"…"`). Every format but `template` is
+An emitter turns a values subtree into the bytes of a file (`{Path: "/path", Values: "conf", Format: "…"}` in `Content`). Every format is
 serialisation — it cannot produce a malformed file; keys are sorted; nothing depends on the clock. Rendering the same
 subtree twice gives the same bytes, which is what lets a Secret be named by its content.
 
@@ -17,21 +17,23 @@ subtree twice gives the same bytes, which is what lets a Secret be named by its 
 | `hadoop-xml` | `<configuration><property><name/><value/></property>…`, one level, XML-escaped                                                                                                                    | HDFS, Hive, HBase              |
 | `toml`       | tables for nested objects, sorted keys, whole numbers as integers; null is refused                                                                                                                | `[db]\nhost = 'pg'`            |
 | `text`       | a string leaf as is, newline-terminated                                                                                                                                                           | `myid`                         |
-| `template`   | Go `text/template` with sprig and Helm's functions; the result is parsed back as `parseAs`                                                                                                        | JAAS, log4j, `config.hcl`      |
-| `raw`        | the pack's `content/<template>`, byte for byte: no template language — a script, a dump, an archive                                                                                               | `entrypoint.sh`                |
 | `secret`     | on a password leaf: the referenced Secret's key is mounted at the path, bytes untouched — a keytab, a keystore, a certificate. Nothing is rendered                                                | —                              |
 
 The format is the extension's when no `format` tag says it: `.json`, `.yaml`/`.yml`, `.properties`, `.toml`,
-`.ini`/`.cnf`, `.env`. A file with a `template` tag and no format is `template`.
+`.ini`/`.cnf`, `.env`.
+
+A `Template` of `Content` is Go `text/template` with sprig and Helm's functions, its result checked as `ParseAs` when
+named: the one way to a file that can come out malformed. A `Source` is no one's to read: byte for byte. In `Packages` a file may also be a `URL`, downloaded where it lands.
 
 ## Template data
 
-For a file whose node is an object, the object's fields are the top-level data; for a scalar node, it is under `value`.
-In both cases `values` (the whole document) and `pack` (the context of [values.md](values.md)) are available:
+A template sees what its pack can see, in the words of the release's contract: its own values at the top, the values of
+the packs it holds under the fields that hold them, without their passwords, and `pack`, the context of
+[values.md](values.md). It does not see the pack that holds it: openbao sees postgres, postgres does not see openbao.
 
 ```
-username="{{ .username }}"            a field of the subtree
-{{ .values.openbao.api_addr }}        any value of the document
+username="{{ .username }}"            a value of the pack
+{{ .postgres.database }}              a value of a pack it holds
 {{ .pack.installation }}              the context
 ```
 

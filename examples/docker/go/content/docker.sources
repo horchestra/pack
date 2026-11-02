@@ -1,0 +1,5 @@
+Types: deb
+URIs: {{ .mirror }}/debian
+Suites: ${os:codename}
+Components: stable
+Signed-By: /etc/apt/keyrings/docker.asc

@@ -32,6 +32,8 @@ public final class PackSdk {
     public static final String ANNOTATION_IMAGE = "pack.image";
     public static final String SCHEMA_FILE = "schema.json";
     public static final String PACK_FILE = "pack.yaml";
+    /** The prefix of the repositories packs are published under: repo/name:version. */
+    public static final String DEFAULT_REPO = "packs";
     public static final String TEMPLATES_DIR = "templates";
     public static final String CONTENT_DIR = "content";
 
@@ -123,37 +125,40 @@ public final class PackSdk {
                 throw new UncheckedIOException(e);
             }
         }
-        checkNamed(p.getClass(), out);
+        checkNamed(p, out);
         return out;
     }
 
-    private static void checkNamed(Class<?> pack, Map<String, byte[]> have) {
+    private static void checkNamed(Pack p, Map<String, byte[]> have) {
         Set<String> missing = new TreeSet<>();
-        collectMissing(pack, have, missing);
+        Root root = p.packRoot();
+        List<Root.File> files = new ArrayList<>(root.content);
+        for (Root.OSPackages os : root.packages.values()) {
+            files.addAll(os.repo);
+            files.addAll(os.content);
+        }
+        for (Root.File f : files) {
+            for (String name : List.of(f.source, f.template)) {
+                if (!name.isEmpty() && !have.containsKey(name)) missing.add(f.path + ": " + name);
+            }
+        }
         if (!missing.isEmpty()) throw new SchemaException("not in " + CONTENT_DIR + "/: " + String.join(", ", missing));
     }
 
-    private static void collectMissing(Class<?> c, Map<String, byte[]> have, Set<String> missing) {
-        for (Field f : c.getDeclaredFields()) {
-            Setting s = f.getAnnotation(Setting.class);
-            if (s != null && !s.template().isEmpty() && !have.containsKey(s.template())) {
-                missing.add(c.getSimpleName() + "." + f.getName() + ": " + s.template());
-            }
-            Class<?> t = f.getType();
-            if (Pack.class.isAssignableFrom(t)) continue; // a held pack has its own content
-            if (Reflect.isStruct(t)) collectMissing(t, have, missing);
-        }
-    }
+    static Map<String, Object> packFile(Pack p) { return packFile(p, DEFAULT_REPO); }
 
-    static Map<String, Object> packFile(Pack p) {
+    static Map<String, Object> packFile(Pack p, String repo) {
         Meta m = p.meta();
         if (m.name == null || m.name.isEmpty() || m.version == null || m.version.isEmpty()) {
             throw new SchemaException(p.getClass().getSimpleName() + ": meta needs a name and a version");
         }
         List<Object> items = new ArrayList<>();
+        if (m.image.contains("://")) {
+            throw new SchemaException(m.name + ": image \"" + m.image + "\": a repository of the registry the pack is pushed to, repo:tag, no scheme");
+        }
         if (!m.image.isEmpty()) {
             Map<String, Object> image = new LinkedHashMap<>();
-            image.put("from", m.image);
+            image.put("from", "oci://" + m.image);
             image.put("annotations", new TreeMap<>(Map.of(ANNOTATION_IMAGE, "true")));
             items.add(image);
         }
@@ -162,13 +167,11 @@ public final class PackSdk {
         List<Pack> all = packs(p);
         for (Pack sub : all.subList(1, all.size())) {
             Meta sm = sub.meta();
-            if (sm.artifact.isEmpty()) {
-                throw new SchemaException(m.name + " holds " + sm.name + ", which has no artifact (oci://repo) to mount it from");
-            }
             if (sm.version.isEmpty()) throw new SchemaException(sm.name + ": meta needs a version");
-            items.add(item(sm.artifact + ":" + sm.version, null));
+            items.add(item("oci://" + repo + "/" + sm.name + ":" + sm.version, null));
         }
         Map<String, Object> out = new LinkedHashMap<>();
+        out.put("repository", repo + "/" + m.name + ":" + m.version);
         out.put("type", ARTIFACT_PACK);
         out.put("annotations", annotations(m));
         out.put("items", items);
@@ -187,6 +190,10 @@ public final class PackSdk {
         return Yaml.dump(packFile(p));
     }
 
+    public static String packFileYaml(Pack p, String repo) {
+        return Yaml.dump(packFile(p, repo));
+    }
+
     /** Write every pack's directory under dir: name/schema.json, name/pack.yaml, name/templates/*. The packs a pack
      *  holds are written too, so one call writes the whole tree oci-packer packs. */
     public static void generate(Path dir, Pack... roots) {
@@ -194,19 +201,25 @@ public final class PackSdk {
         for (Pack r : roots) {
             for (Pack p : packs(r)) all.putIfAbsent(p.meta().name, p);
         }
+        generateIn(dir, DEFAULT_REPO, all.values().toArray(new Pack[0]));
+    }
+
+    /** Write the directories of these packs and of no other, published under repo. A pack is generated and published
+     *  on its own, the packs it holds first. */
+    public static void generateIn(Path dir, String repo, Pack... packs) {
         try {
-            for (Map.Entry<String, Pack> e : all.entrySet()) {
-                Pack p = e.getValue();
-                Path out = dir.resolve(e.getKey());
+            for (Pack p : packs) {
+                String name = p.meta().name;
+                Path out = dir.resolve(name);
                 Files.createDirectories(out);
                 String schema;
                 try {
                     schema = schema(p);
                 } catch (SchemaException ex) {
-                    throw new SchemaException(e.getKey() + ": " + ex.getMessage());
+                    throw new SchemaException(name + ": " + ex.getMessage());
                 }
                 Files.write(out.resolve(SCHEMA_FILE), schema.getBytes(StandardCharsets.UTF_8));
-                Files.write(out.resolve(PACK_FILE), packFileYaml(p).getBytes(StandardCharsets.UTF_8));
+                Files.write(out.resolve(PACK_FILE), packFileYaml(p, repo).getBytes(StandardCharsets.UTF_8));
                 for (Map.Entry<String, byte[]> c : content(p).entrySet()) {
                     Path dst = out.resolve(TEMPLATES_DIR).resolve(c.getKey());
                     Files.createDirectories(dst.getParent());
@@ -223,7 +236,7 @@ public final class PackSdk {
     /**
      * A ready generator CLI of an author's main:
      * <pre>
-     * generate [-o dir]   write every pack's directory (default .)
+     * generate [-o dir] [--repo packs]   write the pack's directory, not of the packs it holds (default .)
      * schema &lt;name&gt;       print one pack's schema.json
      * </pre>
      * The author checks run on the generated directory: {@code pack check <dir>}. Returns the exit code.
@@ -237,12 +250,14 @@ public final class PackSdk {
             }
             if (args.length >= 1 && args[0].equals("generate")) {
                 Path out = Path.of(".");
+                String repo = DEFAULT_REPO;
                 for (int i = 1; i < args.length; i++) {
                     if ((args[i].equals("-o") || args[i].equals("--output")) && i + 1 < args.length) out = Path.of(args[++i]);
+                    else if (args[i].equals("--repo") && i + 1 < args.length) repo = args[++i];
                     else throw new SchemaException("unknown argument " + args[i]);
                 }
-                generate(out, roots);
-                for (String n : byName.keySet()) System.out.println("wrote " + out.resolve(n));
+                generateIn(out, repo, roots);
+                for (Pack r : roots) System.out.println("wrote " + out.resolve(r.meta().name));
                 return 0;
             }
             if (args.length == 2 && args[0].equals("schema")) {
@@ -253,7 +268,7 @@ public final class PackSdk {
                 System.out.print(schema(p));
                 return 0;
             }
-            throw new SchemaException("usage: " + prog + " generate [-o dir] | schema <name>");
+            throw new SchemaException("usage: " + prog + " generate [-o dir] [--repo packs] | schema <name>");
         } catch (SchemaException | UncheckedIOException e) {
             System.err.println(prog + ": " + e.getMessage());
             return 1;

@@ -16,15 +16,16 @@ import (
 
 // Db is a pack with a file of content/; Shop holds one. Neither runs an image: the registry is theirs alone.
 type Db struct {
-	Port int    `json:"port,omitempty"`
-	Conf string `json:"conf,omitempty" file:"/etc/db.conf" template:"db.ptmpl" parseAs:"text"`
+	Port int `json:"port,omitempty"`
 }
 
 func (*Db) SetDefaults() {}
 func (*Db) Meta() sdk.Meta {
-	return sdk.Meta{Name: "db", Version: "1.0.0", Artifact: "oci://packs/db", Dir: "testdata/db"}
+	return sdk.Meta{Name: "db", Version: "1.0.0", Dir: "testdata/db"}
 }
-func (*Db) PackRoot() packschema.Root { return packschema.Root{Ports: map[string]int{"sql": 5432}} }
+func (*Db) PackRoot() packschema.Root {
+	return packschema.Root{Ports: map[string]int{"sql": 5432}, Content: []packschema.File{{Path: "/etc/db.conf", Template: "db.ptmpl", ParseAs: "text"}}}
+}
 
 type Shop struct {
 	Title string `json:"title,omitempty"`
@@ -33,7 +34,7 @@ type Shop struct {
 
 func (*Shop) SetDefaults() {}
 func (*Shop) Meta() sdk.Meta {
-	return sdk.Meta{Name: "shop", Version: "2.0.0", Artifact: "oci://packs/shop", Dir: "testdata/shop"}
+	return sdk.Meta{Name: "shop", Version: "2.0.0", Dir: "testdata/shop"}
 }
 func (*Shop) PackRoot() packschema.Root { return packschema.Root{} }
 
@@ -98,15 +99,15 @@ func TestIsRef(t *testing.T) {
 }
 
 // Prog is an artifact that carries a program, the way a target is published: a file named pack-target-<name>.
-type Prog struct {
-	Bin string `json:"bin,omitempty" file:"/pack-target-fake" template:"pack-target-fake" format:"raw" mode:"0755"`
-}
+type Prog struct{}
 
 func (*Prog) SetDefaults() {}
 func (*Prog) Meta() sdk.Meta {
-	return sdk.Meta{Name: "fake", Version: "0.1.0", Artifact: "oci://targets/fake", Dir: "testdata/prog"}
+	return sdk.Meta{Name: "fake", Version: "0.1.0", Dir: "testdata/prog"}
 }
-func (*Prog) PackRoot() packschema.Root { return packschema.Root{} }
+func (*Prog) PackRoot() packschema.Root {
+	return packschema.Root{Content: []packschema.File{{Path: "/pack-target-fake", Source: "pack-target-fake", Mode: "0755"}}}
+}
 
 // PullFile reads a file of an artifact that is no pack, by its name, wherever the artifact put it.
 func TestPullFile(t *testing.T) {

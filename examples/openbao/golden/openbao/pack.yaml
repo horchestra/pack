@@ -1,0 +1,16 @@
+annotations:
+  org.opencontainers.image.description: manage, store and distribute sensitive data
+  org.opencontainers.image.licenses: MPL-2.0
+  org.opencontainers.image.title: openbao
+  org.opencontainers.image.version: 2.6.5
+  pack.name: openbao
+  pack.version: 2.6.5
+items:
+- annotations:
+    pack.image: "true"
+  from: oci://images/openbao:2.6.5
+- from: file://schema.json
+  type: application/vnd.pack.schema.v1+json
+- from: oci://packs/postgres:16.4
+repository: packs/openbao:2.6.5
+type: application/vnd.pack.pack.v1+json

@@ -13,7 +13,7 @@ PROTO_OUT := pkg/target/remote/remotepb
 PROTOS    := $(wildcard $(PROTO_DIR)/*.proto)
 
 .DEFAULT_GOAL := help
-.PHONY: help proto build test test-core test-sdk golden vet fmt clean
+.PHONY: help proto build test test-core test-sdk test-e2e golden vet fmt clean
 
 help: ## list the targets
 	@grep -E '^[a-zA-Z_-]+:.*## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*## "}; {printf "  %-14s %s\n", $$1, $$2}'
@@ -39,22 +39,32 @@ test-core: ## the core, its SDK and the Go example
 test-sdk: ## the Python and Java SDKs and examples against the golden files
 	cd sdk/python && python3 -I -m unittest discover -s tests
 	cd examples/postgres/python && python3 -m unittest test_postgres
+	cd examples/openbao/python && python3 -m unittest test_openbao
+	cd examples/docker/python && python3 -m unittest test_docker
 	@set -e; out=$$(mktemp -d); \
 	javac --release 21 -d $$out/sdk $$(find sdk/java/src/main -name '*.java'); \
 	javac --release 21 -cp $$out/sdk -d $$out/sdk-test $$(find sdk/java/src/test -name '*.java'); \
 	(cd sdk/java && java -cp $$out/sdk:$$out/sdk-test io.horchestra.pack.sdk.GoldenTest); \
 	javac --release 21 -d $$out/ex $$(find sdk/java/src/main -name '*.java') examples/postgres/java/*.java; \
 	(cd examples/postgres/java && java -cp $$out/ex PostgresTest); \
+	javac --release 21 -d $$out/bao $$(find sdk/java/src/main -name '*.java') examples/postgres/java/Postgres.java examples/openbao/java/*.java; \
+	(cd examples/openbao/java && java -cp $$out/bao OpenBaoTest); \
+	javac --release 21 -d $$out/dock $$(find sdk/java/src/main -name '*.java') examples/docker/java/*.java; \
+	(cd examples/docker/java && java -cp $$out/dock DockerTest); \
 	rm -rf $$out
 
-golden: ## rewrite the golden files the SDKs and examples are compared with (after a deliberate change of the format)
-	UPDATE_GOLDEN=1 $(GO) test ./sdk ./examples/postgres/go -run 'Golden'
+test-e2e: ## openbao from a registry on a real Docker engine (dev, raft, postgres): needs Docker and targets/
+	cd tests/e2e && $(GO) test -count=1 -timeout 20m ./...
 
-vet: ## go vet of the core
+golden: ## rewrite the golden files the SDKs and examples are compared with (after a deliberate change of the format)
+	UPDATE_GOLDEN=1 $(GO) test ./sdk ./examples/postgres/go ./examples/openbao/go ./examples/docker/go -run 'Golden'
+
+vet: ## go vet of the core and of tests/e2e, a module of its own
 	$(GO) vet ./pkg/... ./internal/... ./cmd/... ./sdk/... ./examples/...
+	cd tests/e2e && $(GO) vet ./...
 
 fmt: ## gofmt of the core
-	gofmt -l -w pkg internal cmd sdk examples emit secretstore
+	gofmt -l -w cmd examples internal pkg sdk
 
 clean: ## remove bin/
 	rm -rf $(BIN)

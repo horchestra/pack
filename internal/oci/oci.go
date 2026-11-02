@@ -25,11 +25,6 @@ type Options struct {
 	User, Password string
 }
 
-// FromEnv takes the credentials from PACK_REGISTRY_USER and PACK_REGISTRY_PASSWORD.
-func FromEnv(plainHTTP bool) Options {
-	return Options{PlainHTTP: plainHTTP, User: os.Getenv("PACK_REGISTRY_USER"), Password: os.Getenv("PACK_REGISTRY_PASSWORD")}
-}
-
 // IsRef reports whether s names a pack in a registry.
 func IsRef(s string) bool { return reference.OciScheme.IsPrefix(s) && reference.IsRemote(s) }
 
@@ -125,8 +120,9 @@ func Pull(ctx context.Context, ref, packs string, o Options) (Pulled, error) {
 		return Pulled{}, err
 	}
 	defer func() { _ = os.RemoveAll(tmp) }()
+	// Repo with the host: a mounted member's ref names where it pulls from — the target adds no host of its own
 	dir, err := extract.Extract(ctx, c, reference.Reference{Ref: d.String()}, tmp,
-		extract.Options{Repo: parsed.Path, NameBy: format.AnnotationName, ImageConfig: true})
+		extract.Options{Repo: parsed.Host + "/" + parsed.Path, NameBy: format.AnnotationName, ImageConfig: true})
 	if err != nil {
 		return Pulled{}, fmt.Errorf("%s: %w", ref, err)
 	}

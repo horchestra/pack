@@ -6,7 +6,7 @@ import json
 import re
 from typing import Any
 
-_PLAIN = re.compile(r"^[A-Za-z0-9_./@+][A-Za-z0-9_./:@+ -]*$")
+_PLAIN = re.compile(r"^[A-Za-z0-9_./@+][A-Za-z0-9_./:@+ ,-]*$") # a comma is plain in block context
 _RESERVED = re.compile(r"^(true|false|null|yes|no|on|off|y|n|~)$", re.I)
 _NUMBER = re.compile(r"^[-+]?(\d[\d_]*)?\.?\d*([eE][-+]?\d+)?$|^0[xob][0-9a-fA-F_]+$")
 

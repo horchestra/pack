@@ -20,8 +20,6 @@ import java.util.TreeMap;
 final class Reflect {
     static final String SCHEMA = "https://json-schema.org/draft/2020-12/schema";
     static final String PACK_SCHEME = "pack://";
-    static final Set<String> FORMATS = Set.of("json", "yaml", "properties", "env", "shell", "ini", "flagfile", "lines",
-            "hadoop-xml", "toml", "text", "template", "raw");
 
     private Reflect() {
     }
@@ -174,8 +172,9 @@ final class Reflect {
             if (value == Object.class) {
                 out.put("type", "object");
             } else {
-                out.put("type", "object");
+                // a typed map is the Go schema's map: its keys marshal sorted
                 out.put("additionalProperties", typeSchema(value));
+                out.put("type", "object");
             }
         } else if (isStruct(c)) {
             Map<String, Object> props = new LinkedHashMap<>();
@@ -194,66 +193,6 @@ final class Reflect {
         return out;
     }
 
-    // ---- files
-
-    static Map<String, Object> fileOf(Prop p) {
-        Setting s = p.tags();
-        if (s == null || s.file().isEmpty()) {
-            if (s != null && (!s.template().isEmpty() || !s.format().isEmpty() || !s.mode().isEmpty() || !s.parseAs().isEmpty())) {
-                throw new SchemaException(p.field().getName() + ": a template, format, mode or parseAs, but no file to say where");
-            }
-            return null;
-        }
-        String name = p.field().getName(), dst = s.file(), fmt = s.format(), tmpl = s.template();
-        if (fmt.isEmpty() && !tmpl.isEmpty()) fmt = "template";
-        else if (fmt.isEmpty()) fmt = formatOf(dst);
-        if (fmt.isEmpty()) {
-            throw new SchemaException(name + ": format of " + dst + " is not known by its name: say it with the format argument");
-        }
-        if (!FORMATS.contains(fmt) && !fmt.equals("secret")) {
-            throw new SchemaException(name + ": format \"" + fmt + "\" is not one of " + FORMATS);
-        }
-        switch (fmt) {
-            case "template" -> {
-                if (!tmpl.endsWith(".ptmpl")) {
-                    throw new SchemaException(name + ": a rendered file (format template) is a *.ptmpl file of content/: \"" + tmpl + "\"");
-                }
-            }
-            case "raw" -> {
-                if (tmpl.isEmpty() || tmpl.endsWith(".ptmpl")) {
-                    throw new SchemaException(name + ": a file shipped as it is (format raw) names a content/ file that is not *.ptmpl: \"" + tmpl + "\"");
-                }
-            }
-            default -> {
-                if (!tmpl.isEmpty()) {
-                    throw new SchemaException(name + ": template \"" + tmpl + "\", but the format is " + fmt + ": only template and raw files come from content/");
-                }
-            }
-        }
-        Map<String, Object> out = new LinkedHashMap<>();
-        out.put("path", dst);
-        out.put("format", fmt);
-        if (!tmpl.isEmpty()) out.put("template", tmpl);
-        if (!s.parseAs().isEmpty()) out.put("parseAs", s.parseAs());
-        if (!s.mode().isEmpty()) out.put("mode", s.mode());
-        return out;
-    }
-
-    private static String formatOf(String dst) {
-        String base = dst.substring(dst.lastIndexOf('/') + 1);
-        int i = base.lastIndexOf('.');
-        String ext = i > 0 ? base.substring(i).toLowerCase() : "";
-        return switch (ext) {
-            case ".json" -> "json";
-            case ".yaml", ".yml" -> "yaml";
-            case ".properties" -> "properties";
-            case ".toml" -> "toml";
-            case ".ini", ".cnf" -> "ini";
-            case ".env" -> "env";
-            default -> "";
-        };
-    }
-
     // ---- the schema
 
     static Map<String, Object> schema(Pack p) {
@@ -264,14 +203,25 @@ final class Reflect {
         annotate(s, p.getClass(), p, "");
         s.put("x-pack", p.packRoot().toJson());
         for (Map.Entry<String, String> e : new TreeMap<>(p.packCompute()).entrySet()) {
-            lookup(s, e.getKey(), "x-pack-compute").put("x-pack-compute", e.getValue());
+            Map<String, Object> node = lookup(s, e.getKey(), "x-pack-compute");
+            node.put("x-pack-compute", e.getValue());
+            sortExtensions(node);
         }
         for (Map.Entry<String, List<Rule>> e : new TreeMap<>(p.packRules()).entrySet()) {
             List<Object> rules = new ArrayList<>();
             for (Rule r : e.getValue()) rules.add(r.toJson());
-            lookup(s, e.getKey(), "x-pack-rules").put("x-pack-rules", rules);
+            Map<String, Object> node = lookup(s, e.getKey(), "x-pack-rules");
+            node.put("x-pack-rules", rules);
+            sortExtensions(node);
         }
         return s;
+    }
+
+    /** The x- keys of a node come after the others and in order, as the Go sdk writes them: a leaf may hold several. */
+    private static void sortExtensions(Map<String, Object> node) {
+        for (String k : new TreeMap<>(node).keySet()) {
+            if (k.startsWith("x-")) node.put(k, node.remove(k));
+        }
     }
 
     /** Defaults, files and environment variables onto the node of a struct. A struct that is not set (null) has
@@ -296,13 +246,7 @@ final class Reflect {
             }
             Map<String, Object> prop = (Map<String, Object>) properties.get(p.name());
             if (leafWithDefault(fv)) prop.put("default", toJson(fv));
-            Map<String, Object> file;
-            try {
-                file = fileOf(p);
-            } catch (SchemaException e) {
-                throw new SchemaException(path + "/" + p.name() + ": " + e.getMessage());
-            }
-            if (file != null) prop.put("x-pack-file", file);
+            if (p.tags() != null && p.tags().readOnly()) prop.put("readOnly", true);
             if (p.tags() != null && !p.tags().env().isEmpty() && !p.tags().env().equals("-")) {
                 prop.put("x-pack-env", p.tags().env());
             }

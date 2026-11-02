@@ -30,13 +30,13 @@ public class OpenBao extends Pack {
         public List<StorageBlock> storage = new ArrayList<>();
     }
 
-    @Setting(json = "openbao", file = "/etc/openbao/config.json")
+    @Setting(json = "openbao")
     public Config bao = new Config();
     @Setting(omitempty = true)
     public Tembo postgres;
 
     public static String version = "2.1.0";
-    public static String image = "oci://images/openbao:2.1.0";
+    public static String image = "images/openbao:2.1.0";
 
     @Override
     public void setDefaults() {
@@ -64,13 +64,12 @@ public class OpenBao extends Pack {
 
     @Override
     public Meta meta() {
-        return new Meta("openbao", version).description("secrets").license("MPL-2.0").image(image)
-                .artifact("oci://packs/openbao").annotation("example.org/tier", "core");
+        return new Meta("openbao", version).description("secrets").license("MPL-2.0").image(image).annotation("example.org/tier", "core");
     }
 
     @Override
     public Root packRoot() {
-        return new Root().port("api", 8200).readiness(Root.Readiness.http("api/v1/sys/health"))
+        return new Root().content(new Root.File("/etc/openbao/config.json").values("openbao")).port("api", 8200).readiness(Root.Readiness.http("api/v1/sys/health"))
                 .savepoint(Paths.dotted(OpenBao.class, "postgres"));
     }
 }

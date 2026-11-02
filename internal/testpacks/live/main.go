@@ -9,6 +9,6 @@ import (
 
 func main() {
 	openbao.Version = "2.6.5"
-	openbao.Image = "oci://images/openbao:2.6.5"
+	openbao.Image = "images/openbao:2.6.5"
 	sdk.Run(&openbao.OpenBao{})
 }

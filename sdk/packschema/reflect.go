@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"path/filepath"
 	"reflect"
-	"slices"
 	"strings"
 
 	"github.com/invopop/jsonschema"
@@ -46,13 +45,6 @@ type Options struct {
 // The tags a field may carry besides json:
 //
 //	env:"NAME"        the field is the environment variable NAME
-//	file:"/dst/path"  the field — a leaf or a whole subtree — becomes the file /dst/path in the container
-//	template:"src"    ... rendered from the pack's content/src, a template over the values (src is *.ptmpl), or,
-//	                  with format:"raw", shipped as it is
-//	format:"json"     ... or the subtree written in that format (json, yaml, properties, env, ini, toml, …); a
-//	                  secret's key is mounted untouched with format:"secret"
-//	mode:"0400"       the file's mode
-//	parseAs:"text"    how a template's output is parsed back, where it is
 //
 // A field whose type is a pack becomes a reference to its schema, and its settings join the parent's. The ports
 // and volumes the application has, and how it starts, upgrades and rolls back, are not the struct's: PackRoot
@@ -147,10 +139,8 @@ func annotate(s *jsonschema.Schema, v reflect.Value, path string, o Options) err
 		if leafWithDefault(fv) {
 			prop.Default = fv.Interface()
 		}
-		if file, err := fileOf(f); err != nil {
+		if err := refuseFileTags(f); err != nil {
 			return fmt.Errorf("%s/%s: %w", path, name, err)
-		} else if file != nil {
-			extras(prop)["x-pack-file"] = file
 		}
 		if env := f.Tag.Get("env"); len(env) > 0 && env != "-" {
 			extras(prop)["x-pack-env"] = env
@@ -262,49 +252,18 @@ func (Secret) JSONSchema() *jsonschema.Schema {
 	return &jsonschema.Schema{Type: "string", Format: "password"}
 }
 
-// fileOf reads the file tags of a field: nil when it has no file.
-func fileOf(f reflect.StructField) (*File, error) {
-	dst := f.Tag.Get("file")
-	if len(dst) == 0 {
-		for _, t := range []string{"template", "format", "mode", "parseAs"} {
-			if len(f.Tag.Get(t)) > 0 {
-				return nil, fmt.Errorf("%s: a %s tag, but no file tag to say where", f.Name, t)
-			}
-		}
-		return nil, nil
-	}
-	file := &File{Path: dst, Template: f.Tag.Get("template"), Format: f.Tag.Get("format"), Mode: f.Tag.Get("mode"), ParseAs: f.Tag.Get("parseAs")}
-	switch {
-	case len(file.Format) == 0 && len(file.Template) > 0:
-		file.Format = "template"
-	case len(file.Format) == 0:
-		file.Format = formatOf(dst)
-	}
-	if len(file.Format) == 0 {
-		return nil, fmt.Errorf("%s: format of %s is not known by its name: say it with a format tag", f.Name, dst)
-	}
-	if !slices.Contains(Formats, file.Format) && file.Format != FormatSecret {
-		return nil, fmt.Errorf("%s: format %q is not one of %v", f.Name, file.Format, Formats)
-	}
-	switch file.Format {
-	case "template":
-		if !strings.HasSuffix(file.Template, ".ptmpl") {
-			return nil, fmt.Errorf("%s: a rendered file (format template) is a *.ptmpl file of content/: %q", f.Name, file.Template)
-		}
-	case FormatRaw:
-		if len(file.Template) == 0 || strings.HasSuffix(file.Template, ".ptmpl") {
-			return nil, fmt.Errorf("%s: a file shipped as it is (format raw) names a content/ file that is not *.ptmpl: %q", f.Name, file.Template)
-		}
-	default:
-		if len(file.Template) > 0 {
-			return nil, fmt.Errorf("%s: template %q, but the format is %s: only template and raw files come from content/", f.Name, file.Template, file.Format)
+// refuseFileTags: the files of a pack are in PackRoot, a tag left over from before says nothing.
+func refuseFileTags(f reflect.StructField) error {
+	for _, t := range []string{"file", "template", "format", "mode", "parseAs"} {
+		if len(f.Tag.Get(t)) > 0 {
+			return fmt.Errorf("%s: a %s tag: the files of a pack are in the Content of PackRoot", f.Name, t)
 		}
 	}
-	return file, nil
+	return nil
 }
 
-// formatOf is the format a file's name says: .json, .yaml, .properties …
-func formatOf(dst string) string {
+// FormatOf is the format a file's name says: .json, .yaml, .properties …
+func FormatOf(dst string) string {
 	switch strings.ToLower(filepath.Ext(dst)) {
 	case ".json":
 		return "json"

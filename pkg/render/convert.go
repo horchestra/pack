@@ -38,7 +38,7 @@ func (r *render) convert(v Values) (*Release, error) {
 	return out, nil
 }
 
-// file is one x-pack-file found under a key, with the node it hangs on.
+// file is one file of Root.Content written from a subtree, with the node it hangs on.
 type file struct {
 	ptr    string
 	node   *schema.Node
@@ -149,10 +149,13 @@ func (r *render) unit(key string) (*Unit, error) {
 	if u.Files, err = r.files(key, comp, km, files); err != nil {
 		return nil, err
 	}
+	if u.Packages, err = r.packages(key, comp, km); err != nil {
+		return nil, err
+	}
 	return u, nil
 }
 
-// files renders every x-pack-file of the unit but those of format secret,
+// files renders every file of the unit but those of format secret,
 // per replica when the file is per-instance. A section nobody filled is a
 // file that does not exist.
 func (r *render) files(key string, comp *bundle.Pack, km map[string]any, files []file) ([]File, error) {
@@ -168,69 +171,36 @@ func (r *render) files(key string, comp *bundle.Pack, km map[string]any, files [
 			return nil, err
 		}
 		rf.Mode = mode
-		templates := comp.Templates
 		renderOne := func(doc map[string]any, instance map[string]any) ([]byte, error) {
-			if f.node.File.Format == packschema.FormatRaw { // shipped as it is: nothing in the values asks for it
-				tmpl, ok := templates[f.node.File.Template]
-				if !ok {
-					return nil, fmt.Errorf("%s: file %q not found", f.ptr, f.node.File.Template)
-				}
-				return tmpl, nil
-			}
 			sub, ok := get(doc, rel)
 			if !ok || sub == nil {
 				return nil, nil
 			}
 			sub = schema.DeepCopy(sub)
 			rf.Secrets = union(rf.Secrets, placeholders(sub))
-			var b []byte
-			var err error
-			if f.node.File.Format == "template" {
-				tmpl, ok := templates[f.node.File.Template]
-				if !ok {
-					return nil, fmt.Errorf("%s: template %q not found", f.ptr, f.node.File.Template)
-				}
-				data := map[string]any{"values": doc, "pack": r.packContext(key, instance)}
-				if m, ok := sub.(map[string]any); ok {
-					maps.Copy(data, m)
-				} else {
-					data["value"] = sub
-				}
-				b, err = emit.Template(f.node.File.Template, tmpl, data, f.node.File.ParseAs)
-			} else {
-				b, err = emit.Emit(f.node.File.Format, sub)
-			}
+			b, err := emit.Emit(f.node.File.Format, sub)
 			if err != nil {
 				return nil, fmt.Errorf("%s: %w", f.ptr, err)
 			}
 			return b, nil
 		}
-		if f.node.File.PerInstance {
-			n := max(r.replicas(key), 1)
-			rf.Instances = make([][]byte, n)
-			some := false
-			for i := range n {
-				doc, err := r.instanceDoc(key, i)
-				if err != nil {
-					return nil, err
-				}
-				if rf.Instances[i], err = renderOne(doc, r.instanceVars(key, i)); err != nil {
-					return nil, err
-				}
-				some = some || rf.Instances[i] != nil
-			}
-			if !some {
-				continue
-			}
-		} else {
-			if rf.Content, err = renderOne(km, nil); err != nil {
-				return nil, err
-			}
-			if rf.Content == nil {
-				continue
-			}
+		if ok, err := r.fill(&rf, key, km, f.node.File.PerInstance, renderOne); err != nil {
+			return nil, err
+		} else if ok {
+			out = append(out, rf)
 		}
-		out = append(out, rf)
+	}
+	for _, f := range comp.Root.Content {
+		if len(f.Source) == 0 && len(f.Template) == 0 {
+			continue // written from a subtree: it hangs on its node, above
+		}
+		rf, ok, err := r.contentFile(key, comp, km, f)
+		if err != nil {
+			return nil, err
+		}
+		if ok {
+			out = append(out, rf)
+		}
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].Path < out[j].Path })
 	for i := 1; i < len(out); i++ {
@@ -241,19 +211,201 @@ func (r *render) files(key string, comp *bundle.Pack, km map[string]any, files [
 	return out, nil
 }
 
-func fileMode(f file) (*fs.FileMode, error) {
-	if len(f.node.File.Mode) == 0 {
-		return nil, nil
+// fill gives a file its bytes, one per replica when it differs per replica; false: it does not exist.
+func (r *render) fill(rf *File, key string, km map[string]any, perInstance bool, one func(doc, instance map[string]any) ([]byte, error)) (bool, error) {
+	if !perInstance {
+		var err error
+		rf.Content, err = one(km, nil)
+		return rf.Content != nil, err
 	}
-	m, err := strconv.ParseUint(f.node.File.Mode, 8, 32)
-	if err != nil {
-		return nil, fmt.Errorf("%s: mode %q: %w", f.ptr, f.node.File.Mode, err)
+	n := max(r.replicas(key), 1)
+	rf.Instances = make([][]byte, n)
+	some := false
+	for i := range n {
+		doc, err := r.instanceDoc(key, i)
+		if err != nil {
+			return false, err
+		}
+		if rf.Instances[i], err = one(doc, r.instanceVars(key, i)); err != nil {
+			return false, err
+		}
+		some = some || rf.Instances[i] != nil
 	}
-	mode := fs.FileMode(m)
-	return &mode, nil
+	return some, nil
 }
 
-// secretFiles: every x-pack-file of format secret, as the reference its leaf
+// packages renders the installation from OS packages of every OS the pack names: which one is a host's, the target knows.
+func (r *render) packages(key string, comp *bundle.Pack, km map[string]any) (map[string]Packages, error) {
+	if len(comp.Root.Packages) == 0 {
+		return nil, nil
+	}
+	out := map[string]Packages{}
+	for name, p := range comp.Root.Packages {
+		text := func(what, s string) (string, error) {
+			if !strings.Contains(s, "{{") {
+				return s, nil
+			}
+			data := r.templateData(key, km)
+			data["pack"] = r.packContext(key, nil)
+			b, err := emit.Template(what, []byte(s), data, "")
+			if err != nil {
+				return "", fmt.Errorf("/%s/x-pack/packages/%s: %w", key, name, err)
+			}
+			return string(b), nil
+		}
+		texts := func(what string, in []string) ([]string, error) {
+			res := make([]string, len(in))
+			for i, s := range in {
+				var err error
+				if res[i], err = text(what, s); err != nil {
+					return nil, err
+				}
+			}
+			return res, nil
+		}
+		fileList := func(in []packschema.File) ([]File, error) {
+			var res []File
+			for _, f := range in {
+				if len(f.URL) > 0 {
+					url, err := text(f.Path, f.URL)
+					if err != nil {
+						return nil, err
+					}
+					mode, err := parseMode(f.Path, f.Mode)
+					if err != nil {
+						return nil, err
+					}
+					res = append(res, File{Path: f.Path, Mode: mode, URL: url})
+					continue
+				}
+				rf, ok, err := r.contentFile(key, comp, km, f)
+				if err != nil {
+					return nil, err
+				}
+				if ok {
+					res = append(res, rf)
+				}
+			}
+			return res, nil
+		}
+		var u Packages
+		var err error
+		if u.Prepare, err = texts("prepare", p.Prepare); err != nil {
+			return nil, err
+		}
+		if u.Repo, err = fileList(p.Repo); err != nil {
+			return nil, err
+		}
+		if u.Names, err = texts("names", p.Names); err != nil {
+			return nil, err
+		}
+		if u.Files, err = fileList(p.Content); err != nil {
+			return nil, err
+		}
+		for _, c := range p.Commands {
+			cmd, err := texts("commands", c)
+			if err != nil {
+				return nil, err
+			}
+			u.Commands = append(u.Commands, cmd)
+		}
+		u.Services = p.Services
+		out[name] = u
+	}
+	return out, nil
+}
+
+// contentFile is a file a list of the pack names: from content/, or written from a subtree of the values.
+func (r *render) contentFile(key string, comp *bundle.Pack, km map[string]any, f packschema.File) (File, bool, error) {
+	ptr := fmt.Sprintf("/%s/x-pack/content %s", key, f.Path)
+	rf := File{Path: f.Path}
+	mode, err := parseMode(ptr, f.Mode)
+	if err != nil {
+		return File{}, false, err
+	}
+	rf.Mode = mode
+	if len(f.Source) == 0 && len(f.Template) == 0 { // a subtree, in its format
+		sub, ok := get(km, "/"+f.Values)
+		if !ok || sub == nil {
+			return File{}, false, nil
+		}
+		sub = schema.DeepCopy(sub)
+		rf.Secrets = placeholders(sub)
+		format := f.Format
+		if len(format) == 0 {
+			format = packschema.FormatOf(f.Path)
+		}
+		if rf.Content, err = emit.Emit(format, sub); err != nil {
+			return File{}, false, fmt.Errorf("%s: %w", ptr, err)
+		}
+		return rf, true, nil
+	}
+	name := f.Source + f.Template
+	body, ok := comp.Templates[name]
+	if !ok {
+		return File{}, false, fmt.Errorf("%s: file %q not found", ptr, name)
+	}
+	if len(f.Source) > 0 { // shipped as it is: nothing in the values asks for it
+		rf.Content = body
+		return rf, true, nil
+	}
+	if len(f.Values) > 0 { // written only when that value is there
+		if sub, ok := get(km, "/"+f.Values); !ok || sub == nil {
+			return File{}, false, nil
+		}
+	}
+	ok, err = r.fill(&rf, key, km, f.PerInstance, func(doc, instance map[string]any) ([]byte, error) {
+		data := r.templateData(key, doc)
+		rf.Secrets = union(rf.Secrets, placeholders(data))
+		data["pack"] = r.packContext(key, instance)
+		b, err := emit.Template(name, body, data, f.ParseAs)
+		if err != nil {
+			return nil, fmt.Errorf("%s: %w", ptr, err)
+		}
+		return b, nil
+	})
+	return rf, ok, err
+}
+
+// templateData is what a template of a pack sees: its own values, and those of the packs it holds under the fields
+// that hold them, as the operator of the release writes them. Not the pack that holds it, and no password of another.
+func (r *render) templateData(key string, doc map[string]any) map[string]any {
+	data, _ := schema.DeepCopy(doc).(map[string]any)
+	if data == nil {
+		data = map[string]any{}
+	}
+	maps.Copy(data, r.heldData(key))
+	return data
+}
+
+// heldData is what a held pack passes up of the packs it holds in turn.
+func (r *render) heldData(key string) map[string]any {
+	out := map[string]any{}
+	for _, child := range r.keys {
+		if in := r.b.Instances[child]; in.Parent == key {
+			held := r.neighbourValues(child, r.doc)
+			maps.Copy(held, r.heldData(child))
+			out[in.Field] = held
+		}
+	}
+	return out
+}
+
+func fileMode(f file) (*fs.FileMode, error) { return parseMode(f.ptr, f.node.File.Mode) }
+
+func parseMode(ptr, mode string) (*fs.FileMode, error) {
+	if len(mode) == 0 {
+		return nil, nil
+	}
+	m, err := strconv.ParseUint(mode, 8, 32)
+	if err != nil {
+		return nil, fmt.Errorf("%s: mode %q: %w", ptr, mode, err)
+	}
+	fm := fs.FileMode(m)
+	return &fm, nil
+}
+
+// secretFiles: every file of format secret, as the reference its leaf
 // holds — the bytes are the secret's, so a keytab or a keystore arrives as it
 // was stored.
 func (r *render) secretFiles(key string, km map[string]any, files []file) ([]SecretFile, error) {

@@ -6,6 +6,7 @@ import io.horchestra.pack.sdk.Root;
 import io.horchestra.pack.sdk.Secret;
 import io.horchestra.pack.sdk.Setting;
 
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -37,16 +38,19 @@ public class Postgres extends Pack {
         public int port;
     }
 
+    @Setting(env = "POSTGRES_DB")
     public String database = ""; // required: no omitempty
     public Superuser superuser = new Superuser();
-    /** postgresql.conf, written from the subtree as properties. */
-    @Setting(file = "/etc/postgresql/postgresql.conf", format = "properties")
+    /** postgresql.conf. */
     public Conf conf = new Conf();
-    /** The scripts the hooks run are files of content/, shipped as they are. */
-    @Setting(json = "init_extensions", omitempty = true, file = "/opt/pack/init-extensions.sh", template = "init-extensions.sh", format = "raw", mode = "0755")
-    public String initExtensions = "";
-    @Setting(json = "restore_15", omitempty = true, file = "/opt/pack/restore-15.sh", template = "restore-15.sh", format = "raw", mode = "0755")
-    public String restore15 = "";
+    /** Where the packages of PGDG come from on a host: upstream by default, a mirror (oci-proxy of the ansible target) when the hosts do not reach it. */
+    @Setting(omitempty = true)
+    public String pgdg = "";
+    @Setting(json = "pgdg_key", omitempty = true)
+    public String pgdgKey = "";
+    /** The extensions every database gets. */
+    @Setting(json = "init_extensions", omitempty = true)
+    public List<String> initExtensions = List.of();
 
     @Override
     public void setDefaults() {
@@ -54,19 +58,43 @@ public class Postgres extends Pack {
         conf.maxConnections = 100;
         conf.listenAddresses = "*";
         conf.port = 5432;
+        pgdg = "https://apt.postgresql.org/pub/repos/apt";
+        pgdgKey = "https://www.postgresql.org/media/keys/ACCC4CF8.asc";
+        initExtensions = List.of("pg_stat_statements", "pgcrypto");
     }
 
     @Override
     public Meta meta() {
         // the directory whose content/ holds the files: where the program is run from, unless -Dpack.dir says
         return new Meta("postgres", "16.4").description("PostgreSQL").license("PostgreSQL")
-                .image("oci://images/postgres:16.4").artifact("oci://packs/postgres")
+                .image("images/postgres:16.4")
                 .dir(System.getProperty("pack.dir", "."));
     }
 
     @Override
     public Root packRoot() {
         return new Root()
+                // On a host the same application lives elsewhere, by OS; the version is the OS's, not Meta's
+                .packages("debian", new Root.OSPackages()
+                        .prepare("ca-certificates")
+                        .repo(new Root.File("/etc/apt/keyrings/pgdg.asc").url("{{ .pgdg_key }}").mode("0644"))
+                        .repo(new Root.File("/etc/apt/sources.list.d/pgdg.sources").template("host-pgdg.sources").mode("0644"))
+                        .names("postgresql-16")
+                        .content(new Root.File("/etc/postgresql/16/main/conf.d/pack.conf").template("host-postgresql.conf").mode("0644"))
+                        .content(new Root.File("/etc/postgresql/16/main/pg_hba.conf").source("host-pg_hba.conf").mode("0640"))
+                        .content(new Root.File("/opt/pack/init-extensions.sh").template("host-init.sh").mode("0700"))
+                        .services("postgresql@16-main"))
+                .packages("fedora", new Root.OSPackages()
+                        .names("postgresql-server", "postgresql-contrib")
+                        .command("sh", "-c", "test -f /var/lib/pgsql/data/PG_VERSION || postgresql-setup --initdb")
+                        .content(new Root.File("/var/lib/pgsql/data/postgresql.auto.conf").template("host-postgresql.conf").mode("0644"))
+                        .content(new Root.File("/var/lib/pgsql/data/pg_hba.conf").source("host-pg_hba.conf").mode("0644"))
+                        .content(new Root.File("/opt/pack/init-extensions.sh").template("host-init.sh").mode("0700"))
+                        .services("postgresql"))
+                // the script of the install hook is rendered: a hook is a container of its own and is told where the server is
+                .content(new Root.File("/etc/postgresql/postgresql.conf").values("conf").format("properties"))
+                .content(new Root.File("/opt/pack/init-extensions.sh").template("init-extensions.sh").mode("0755"))
+                .content(new Root.File("/opt/pack/restore-15.sh").source("restore-15.sh").mode("0755"))
                 .port("pg", 5432)
                 .data("data", new Root.Volume("/var/lib/postgresql/data").size("10Gi"))
                 .minimum("cpu", "500m").minimum("memory", "512Mi")

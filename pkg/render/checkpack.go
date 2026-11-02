@@ -47,12 +47,21 @@ func CheckBundle(b *bundle.Bundle) ([]check.Problem, error) {
 	// files: one path, one owner within an instance
 	for _, key := range b.Keys {
 		owners := map[string]string{}
+		for i, f := range b.Packs[b.KeyPack[key]].Root.Content {
+			if len(f.Values) == 0 || len(f.Template) > 0 {
+				ptr := fmt.Sprintf("/%s/x-pack/content/%d", key, i)
+				if prev, dup := owners[f.Path]; dup {
+					add(ptr, "file path %q is also written by %s", f.Path, prev)
+				}
+				owners[f.Path] = ptr
+			}
+		}
 		err := b.Composition.Visit(func(ptr string, _ *schemaT, n *schemaNode) error {
 			if !strings.HasPrefix(ptr, "/"+key+"/") || n.File == nil {
 				return nil
 			}
 			if prev, dup := owners[n.File.Path]; dup {
-				add(ptr, "x-pack-file.path %q is also written by %s", n.File.Path, prev)
+				add(ptr, "file path %q is also written by %s", n.File.Path, prev)
 			}
 			owners[n.File.Path] = ptr
 			return nil

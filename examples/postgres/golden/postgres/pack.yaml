@@ -13,4 +13,5 @@ items:
   type: application/vnd.pack.schema.v1+json
 - from: dir://templates/
   type: application/vnd.pack.template.v1
+repository: packs/postgres:16.4
 type: application/vnd.pack.pack.v1+json

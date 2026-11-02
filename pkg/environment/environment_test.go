@@ -141,6 +141,42 @@ targets:
 	}
 }
 
+// target: names an entry of targets: the entry is the default target, and a key naming it runs on the default one.
+func TestLoad_DefaultTargetFromAnEntry(t *testing.T) {
+	file := write(t, "env.yaml", `
+target: main
+targets:
+  main:
+    target: docker
+    network: main
+  edge:
+    target: k8s
+keys:
+  pg:
+    target: main
+  web:
+    target: edge
+`)
+	env, err := Load(context.Background(), file, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := map[string]string{"target": "docker", "network": "main"}; env.Target != "docker" || !reflect.DeepEqual(env.Settings, want) {
+		t.Errorf("default target = %s %v", env.Target, env.Settings)
+	}
+	if len(env.Targets) != 1 || env.Targets["edge"] == nil {
+		t.Errorf("the other targets: %+v", env.Targets)
+	}
+	if env.Keys["pg"].Target != "" || env.Keys["web"].Target != "edge" {
+		t.Errorf("keys = %+v", env.Keys)
+	}
+
+	beside := write(t, "beside.yaml", "target: main\nnetwork: top\ntargets:\n  main:\n    target: docker\n")
+	if _, err := Load(context.Background(), beside, nil); err == nil || !strings.Contains(err.Error(), "network") {
+		t.Errorf("a setting beside the entry: %v", err)
+	}
+}
+
 func TestLoad_Store(t *testing.T) {
 	file := write(t, "env.yaml", `
 target: docker
@@ -174,7 +210,7 @@ targets:
 func TestPacksOwnSectionsAreNotTheTargets(t *testing.T) {
 	dir := t.TempDir()
 	f := filepath.Join(dir, "env.yaml")
-	body := "target: docker\nnamespace: data\nrun_as_user: app\nregistry_auth: basic\nregistry:\n  plain_http: true\nrun:\n  jobs: 4\n  strict: true\n  no_rollback: true\n  keep: [pg, hive]\n  journal_keep: 7\nsecrets:\n  provider: generate\n  provision: [/a/pass, /b/pass]\n"
+	body := "target: docker\nnamespace: data\nrun_as_user: app\nregistry_auth: basic\nrun:\n  jobs: 4\n  strict: true\n  no_rollback: true\n  keep: [pg, hive]\n  journal_keep: 7\nsecrets:\n  provider: generate\n  provision: [/a/pass, /b/pass]\n"
 	if err := os.WriteFile(f, []byte(body), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -182,7 +218,7 @@ func TestPacksOwnSectionsAreNotTheTargets(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !env.Registry.PlainHTTP || env.Run.Jobs != 4 || !env.Run.Strict || !env.Run.NoRollback ||
+	if env.Run.Jobs != 4 || !env.Run.Strict || !env.Run.NoRollback ||
 		env.Secrets.Provider != "generate" || len(env.Secrets.Provision) != 2 || len(env.Run.Keep) != 2 || env.Run.JournalKeep != 7 {
 		t.Fatalf("env = %+v", env)
 	}
@@ -316,14 +352,14 @@ func TestFlatKeysAreRefused(t *testing.T) {
 	}
 }
 
-// ownSettings is kept by hand: it must be exactly the fields of the four sections, or a new setting of a section
+// ownSettings is kept by hand: it must be exactly the fields of the three sections, or a new setting of a section
 // leaks into a target's set (or a target's setting goes missing).
 func TestOwnSettingsAreTheSectionsFields(t *testing.T) {
 	want := map[string]bool{}
 	et := reflect.TypeFor[Environment]()
 	for sec := range et.Fields() {
 		switch sec.Type {
-		case reflect.TypeFor[Store](), reflect.TypeFor[Registry](), reflect.TypeFor[Run](), reflect.TypeFor[Secrets]():
+		case reflect.TypeFor[Store](), reflect.TypeFor[Run](), reflect.TypeFor[Secrets]():
 		default:
 			continue
 		}

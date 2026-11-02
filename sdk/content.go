@@ -9,6 +9,8 @@ import (
 	"runtime"
 	"sort"
 	"strings"
+
+	"github.com/horchestra/pack/sdk/packschema"
 )
 
 // ContentDir is the directory of a pack's files.
@@ -100,34 +102,23 @@ func content(p Pack) (map[string][]byte, error) {
 	return out, checkNamed(p, out)
 }
 
-// checkNamed: every file a template tag names is in content/.
+// checkNamed: every file the Content of the pack names is in content/.
 func checkNamed(p Pack, have map[string][]byte) error {
 	var missing []string
-	var walk func(t reflect.Type)
-	walk = func(t reflect.Type) {
-		for t.Kind() == reflect.Pointer {
-			t = t.Elem()
-		}
-		if t.Kind() != reflect.Struct {
-			return
-		}
-		for f := range t.Fields() {
-			if name := f.Tag.Get("template"); len(name) > 0 {
-				if _, ok := have[name]; !ok {
-					missing = append(missing, fmt.Sprintf("%s.%s: %s", t.Name(), f.Name, name))
+	root := p.PackRoot()
+	lists := [][]packschema.File{root.Content}
+	for _, os := range root.Packages {
+		lists = append(lists, os.Repo, os.Content)
+	}
+	for _, list := range lists {
+		for _, f := range list {
+			for _, name := range []string{f.Source, f.Template} {
+				if _, ok := have[name]; len(name) > 0 && !ok {
+					missing = append(missing, fmt.Sprintf("%s: %s", f.Path, name))
 				}
 			}
-			ft := f.Type
-			for ft.Kind() == reflect.Pointer {
-				ft = ft.Elem()
-			}
-			if _, isPack := reflect.New(ft).Interface().(Pack); isPack && ft.Kind() == reflect.Struct {
-				continue // its own content
-			}
-			walk(f.Type)
 		}
 	}
-	walk(reflect.TypeOf(p))
 	if len(missing) > 0 {
 		sort.Strings(missing)
 		return fmt.Errorf("not in %s/: %s", ContentDir, strings.Join(missing, ", "))

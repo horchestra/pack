@@ -19,7 +19,7 @@ var rootCmd = &cobra.Command{
 	Long: `pack checks, renders, plans and installs a pack — from a directory or a registry
 — on a target, through the target's provider.
 
-Registries: PACK_REGISTRY_USER / PACK_REGISTRY_PASSWORD in the environment for credentials.`,
+Registries: release.yaml names the variables that hold the credentials (username_env, password_env).`,
 	// A command that fails says why and exits (see run): its error is not a misuse, and no usage follows it.
 	// What cobra itself refuses — an unknown flag or command, arguments that are not expected — keeps its usage.
 	SilenceErrors: true,

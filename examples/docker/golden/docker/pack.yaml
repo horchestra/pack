@@ -1,0 +1,14 @@
+annotations:
+  org.opencontainers.image.description: Docker Engine from OS packages
+  org.opencontainers.image.licenses: Apache-2.0
+  org.opencontainers.image.title: docker
+  org.opencontainers.image.version: 1.0.0
+  pack.name: docker
+  pack.version: 1.0.0
+items:
+- from: file://schema.json
+  type: application/vnd.pack.schema.v1+json
+- from: dir://templates/
+  type: application/vnd.pack.template.v1
+repository: packs/docker:1.0.0
+type: application/vnd.pack.pack.v1+json

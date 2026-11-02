@@ -1,9 +1,10 @@
-package main
+package postgres
 
 import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"reflect"
 	"slices"
 	"strings"
 	"testing"
@@ -37,7 +38,7 @@ func TestDefaults(t *testing.T) {
 func TestMeta(t *testing.T) {
 	m := (&Postgres{}).Meta()
 	if m.Name != "postgres" || m.Version != "16.4" || m.Description != "PostgreSQL" || m.License != "PostgreSQL" ||
-		m.Image != "oci://images/postgres:16.4" || m.Artifact != "oci://packs/postgres" {
+		m.Image != "images/postgres:16.4" {
 		t.Errorf("meta = %+v", m)
 	}
 	if len(m.Annotations) > 0 || len(m.Created) > 0 {
@@ -215,25 +216,23 @@ func TestSchema(t *testing.T) {
 	}
 
 	conf := props["conf"].(map[string]any)
-	file := conf["x-pack-file"].(map[string]any)
-	if file["path"] != "/etc/postgresql/postgresql.conf" || file["format"] != "properties" {
-		t.Errorf("conf file = %v", file)
+	content := s["x-pack"].(map[string]any)["content"].([]any)
+	if len(content) != 3 {
+		t.Fatalf("content = %v", content)
+	}
+	for i, want := range []map[string]any{
+		{"path": "/etc/postgresql/postgresql.conf", "values": "conf", "format": "properties"},
+		{"path": "/opt/pack/init-extensions.sh", "template": "init-extensions.sh", "mode": "0755"},
+		{"path": "/opt/pack/restore-15.sh", "source": "restore-15.sh", "mode": "0755"},
+	} {
+		if !reflect.DeepEqual(content[i], any(want)) {
+			t.Errorf("content[%d] = %v, want %v", i, content[i], want)
+		}
 	}
 	sb := conf["properties"].(map[string]any)["shared_buffers"].(map[string]any)
 	for _, expr := range (&Postgres{}).PackCompute() {
 		if sb["x-pack-compute"] != expr {
 			t.Errorf("shared_buffers compute = %v, want %q", sb["x-pack-compute"], expr)
-		}
-	}
-
-	// the scripts ship as they are, executable
-	for name, tmpl := range map[string]string{"init_extensions": "init-extensions.sh", "restore_15": "restore-15.sh"} {
-		f := props[name].(map[string]any)["x-pack-file"].(map[string]any)
-		if f["format"] != "raw" || f["template"] != tmpl || f["mode"] != "0755" {
-			t.Errorf("%s file = %v", name, f)
-		}
-		if !strings.HasSuffix(f["path"].(string), "/"+tmpl) {
-			t.Errorf("%s path = %v", name, f["path"])
 		}
 	}
 
@@ -304,6 +303,21 @@ func fileOf(t *testing.T, rel *render.Release, path string) render.File {
 	return render.File{}
 }
 
+// A file of content/ is not pack's to read: a template of the application itself lands with its {{ }} untouched,
+// whatever they would mean to pack's own templates.
+func TestAFileIsNotRendered(t *testing.T) {
+	b := loadPostgres(t)
+	app := "{{ with secret \"db\" }}{{ .Data.password }}{{ end }}\n"
+	b.Packs["postgres"].Templates["restore-15.sh"] = []byte(app)
+	rel, err := renderPostgres(t, b, values(""), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := string(fileOf(t, rel, "/opt/pack/restore-15.sh").Content); got != app {
+		t.Errorf("the application's template = %q, want it as it is", got)
+	}
+}
+
 // The whole link: values in, postgresql.conf out — with the formula's answer
 // in it, the operator's word above it, the scripts as shipped.
 func TestRender(t *testing.T) {
@@ -363,11 +377,15 @@ func TestRender(t *testing.T) {
 		t.Errorf("the password is a reference, never a value: %+v", pw)
 	}
 
-	// the scripts land as shipped, executable
+	// the hook's script is told where the server is, and lands executable
 	script := fileOf(t, rel, "/opt/pack/init-extensions.sh")
-	shipped, _ := os.ReadFile(filepath.Join("content", "init-extensions.sh"))
-	if string(script.Content) != string(shipped) {
-		t.Errorf("init-extensions.sh is not the shipped file")
+	if c := string(script.Content); !strings.Contains(c, "--host ") || !strings.Contains(c, "CREATE EXTENSION IF NOT EXISTS pgcrypto;") || strings.Contains(c, "{{") {
+		t.Errorf("init-extensions.sh does not name the server:\n%s", script.Content)
+	}
+	// the other is a file: no value asks for it, and it lands byte for byte
+	restore := fileOf(t, rel, "/opt/pack/restore-15.sh")
+	if shipped, _ := os.ReadFile(filepath.Join("content", "restore-15.sh")); string(restore.Content) != string(shipped) {
+		t.Errorf("restore-15.sh is not the shipped file:\n%s", restore.Content)
 	}
 	if script.Mode == nil || *script.Mode != 0o755 {
 		t.Errorf("mode = %v", script.Mode)

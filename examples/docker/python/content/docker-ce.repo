@@ -1,0 +1,6 @@
+[docker-ce-stable]
+name=Docker CE Stable - $basearch
+baseurl={{ .mirror }}/fedora/$releasever/$basearch/stable
+enabled=1
+gpgcheck=1
+gpgkey={{ .mirror }}/fedora/gpg

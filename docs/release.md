@@ -15,7 +15,14 @@ the same bare command gives the same result on a console and in CI. **The comman
 ```yaml
 # release.yaml
 pack: oci://registry.example/packs/openbao:2.6.5
+registry:
+  plain_http: false                  # how the pack is read from a registry; a target's source says it for itself
+  username_env: REGISTRY_USER        # the variables that hold the credentials, never the credentials
+  password_env: REGISTRY_TOKEN
 ```
+
+A registry that names no variables is read anonymously: credentials reach only the registry they are written for. A
+variable that is named and empty is an error when that registry is read.
 
 ## env.yaml
 
@@ -25,7 +32,6 @@ Where a pack is installed and how it runs, YAML or JSON. Nested keys flatten wit
 ```yaml
 target: k8s                          # the system a pack is installed on
 namespace: data                      # and anything else the target wants
-registry: { plain_http: false }       # packs are read from a registry
 run: # how a saga runs
   jobs: 4                            # keys at once; 0 — as many as CPUs, 1 — one by one
   strict: true                       # refuse a plan with an irreversible step
@@ -61,14 +67,14 @@ keys: # how the environment runs each key of the pack
   seen). `docker`, `ansible` and `k8s` are programs of their own that `pack init` downloads and pack starts,
   `pack-target-<name>`, see [targets.md](targets.md); each one's settings and the entries of `keys:` it reads are in its README.
 - The default target is the one the top-level keys describe; each entry of `targets` is a target of its own, none
-  inherited from the default one.
+  inherited from the default one. `target:` may name an entry instead (`target: main`, `targets: {main: {target: docker}}`):
+  that entry is the default target, and its settings are written there, not at the top.
 - `keys` is where placement lives: **values configure the application, the environment runs it.** `replicas` is how many
   instances run; `resources` are cgroup requests and limits (a pack's `Minimum` is their lower bound); `env` is added to
   the component's own; the rest of an entry is whatever the key's target has words for.
 - From Vault (and from the overrides) `keys` comes as one field `keys` holding the document as text; it is merged over
   the file's entry by entry, field by field.
-- The store's token comes from `PACK_STORE_TOKEN`, else `VAULT_TOKEN`; registry credentials from `PACK_REGISTRY_USER`
-  and `PACK_REGISTRY_PASSWORD`.
+- The store's token comes from `PACK_STORE_TOKEN`, else `VAULT_TOKEN`.
 
 ## The state
 

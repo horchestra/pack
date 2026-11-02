@@ -29,13 +29,14 @@ type Node struct {
 	Const                any
 	HasConst             bool
 	Format               string
+	ReadOnly             bool // the operator does not write it
 	Enum                 []any
 	Required             []string
 	AdditionalProperties *bool
 
 	Compute string
 	Rules   []packschema.Rule
-	File    *packschema.File
+	File    *packschema.File // the file of Root.Content written from this subtree, when there is one
 	Arg     *packschema.Arg
 	Env     string
 	Mount   string
@@ -94,7 +95,36 @@ func Parse(raw []byte) (*Schema, error) {
 			s.Defs[name] = n
 		}
 	}
+	if err := s.attachContent(); err != nil {
+		return nil, err
+	}
 	return s, nil
+}
+
+// attachContent hangs the files of x-pack written from a subtree on the subtree's node: what a field has to do with
+// a file is the same wherever the file is said. A pointer that leads nowhere is left to the check.
+func (s *Schema) attachContent() error {
+	if s.Root.XPack == nil {
+		return nil
+	}
+	var root struct {
+		Content []packschema.File `json:"content"`
+	}
+	if err := json.Unmarshal(s.Root.XPack, &root); err != nil {
+		return fmt.Errorf("x-pack: %w", err)
+	}
+	for _, f := range root.Content {
+		if len(f.Values) == 0 || len(f.Source) > 0 || len(f.Template) > 0 {
+			continue
+		}
+		if _, n, err := s.Lookup("/" + f.Values); err == nil && n != nil {
+			if len(f.Format) == 0 {
+				f.Format = packschema.FormatOf(f.Path)
+			}
+			n.File = &f
+		}
+	}
+	return nil
 }
 
 func parseNodeOrdered(m map[string]any, ptr string, orders map[string][]string) (*Node, error) {
@@ -117,6 +147,9 @@ func parseNodeOrdered(m map[string]any, ptr string, orders map[string][]string) 
 	}
 	if c, ok := m["const"]; ok {
 		n.Const, n.HasConst = c, true
+	}
+	if ro, ok := m["readOnly"].(bool); ok {
+		n.ReadOnly = ro
 	}
 	if f, ok := m["format"].(string); ok {
 		n.Format = f
@@ -195,12 +228,6 @@ func parseNodeOrdered(m map[string]any, ptr string, orders map[string][]string) 
 				return nil, fmt.Errorf("%s: x-pack-rules/%d: a rule without an expression", ptr, i)
 			}
 			n.Rules = append(n.Rules, rule)
-		}
-	}
-	if f, ok := m["x-pack-file"]; ok {
-		n.File = &packschema.File{}
-		if err := strict(f, n.File); err != nil {
-			return nil, fmt.Errorf("%s: x-pack-file: %w", ptr, err)
 		}
 	}
 	if a, ok := m["x-pack-arg"]; ok {

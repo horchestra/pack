@@ -9,7 +9,6 @@ import (
 	"github.com/horchestra/pack/internal/release"
 	"github.com/horchestra/pack/internal/workdir"
 	"github.com/horchestra/pack/pkg/bundle"
-	"github.com/horchestra/pack/pkg/environment"
 )
 
 // OpenPack loads a pack that is not the release's: a directory, or a pack in a registry, which is brought into the
@@ -18,11 +17,10 @@ func OpenPack(ctx context.Context, d *workdir.Dir, ref string) (*bundle.Bundle, 
 	if !oci.IsRef(ref) {
 		return bundle.Load(ref)
 	}
-	env, err := environment.Load(ctx, d.Release.Config(), nil)
+	o, err := d.Release.Registry.Options()
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("registry: %w", err)
 	}
-	o := oci.FromEnv(env.Registry.PlainHTTP)
 	pin, err := oci.Pin(ctx, ref, o)
 	if err != nil {
 		return nil, err
@@ -77,5 +75,9 @@ func (s *Session) pull(ctx context.Context, ref string) (oci.Pulled, error) {
 	if err != nil {
 		return oci.Pulled{}, err
 	}
-	return oci.Pull(ctx, pin, s.Dir.PacksPath(), oci.FromEnv(s.Env.Registry.PlainHTTP))
+	o, err := s.Dir.Release.Registry.Options()
+	if err != nil {
+		return oci.Pulled{}, fmt.Errorf("registry: %w", err)
+	}
+	return oci.Pull(ctx, pin, s.Dir.PacksPath(), o)
 }

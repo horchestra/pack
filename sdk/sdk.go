@@ -4,12 +4,12 @@
 // schema, and the order they are installed in is the order of the fields' containment.
 //
 //	type OpenBao struct {
-//	    Bao      Config        `json:"openbao" file:"/etc/openbao/config.json"`
+//	    Bao      Config        `json:"openbao"`
 //	    Postgres *tembo.Config `json:"postgres,omitempty"` // a pack of its own; optional: a pointer
 //	}
 //
 //	func (*OpenBao) SetDefaults()            {}
-//	func (*OpenBao) Meta() sdk.Meta           { return sdk.Meta{Name: "openbao", Version: "2.1.0", Image: "oci://images/openbao:2.1.0"} }
+//	func (*OpenBao) Meta() sdk.Meta           { return sdk.Meta{Name: "openbao", Version: "2.1.0", Image: "images/openbao:2.1.0"} }
 //	func (*OpenBao) PackRoot() packschema.Root { return packschema.Root{Ports: …, Readiness: …} }
 //
 // The files a pack ships are in its content/ directory, next to the source; fields name them with the template tag
@@ -54,9 +54,7 @@ type Meta struct {
 	Authors       string
 	Created       string // RFC 3339; empty — not written, so that the artifact is the same byte for byte
 
-	Image string // oci://repo:tag the application runs — a repository of the registry the pack is pushed to, no host; "" — the pack runs nothing itself
-	// Artifact is oci://repo where the pack is published (no tag, no host): what a pack that holds it mounts it from.
-	Artifact string
+	Image string // repo:tag the application runs — a repository of the registry the pack is pushed to, no host; "" — the pack runs nothing itself
 	// Annotations are any more; a name the sdk writes itself is refused.
 	Annotations map[string]string
 	// Dir is the pack's directory, whose content/ holds its files. Empty — the directory of the source file
@@ -164,9 +162,15 @@ func holds(p Pack) []Pack {
 	return out
 }
 
-// PackFile is the artifact's pack file as oci-packer's own type: the pack's image (a mount), its schema, its
-// templates, and the artifact of every pack it holds.
-func PackFile(p Pack) (*packer.Pack, error) {
+// DefaultRepo is the prefix of the repositories packs are published under: <repo>/<name>:<version>.
+const DefaultRepo = "packs"
+
+// PackFile is PackFileIn the DefaultRepo.
+func PackFile(p Pack) (*packer.Pack, error) { return PackFileIn(p, DefaultRepo) }
+
+// PackFileIn is the artifact's pack file as oci-packer's own type: where it is published, the pack's image (a mount),
+// its schema, its templates, and every pack it holds, which are published before it under the same repo.
+func PackFileIn(p Pack, repo string) (*packer.Pack, error) {
 	m := p.Meta()
 	if len(m.Name) == 0 || len(m.Version) == 0 {
 		return nil, fmt.Errorf("%T: Meta needs Name and Version", p)
@@ -176,8 +180,12 @@ func PackFile(p Pack) (*packer.Pack, error) {
 		return nil, fmt.Errorf("%s: %w", m.Name, err)
 	}
 	pf := &packer.Pack{Type: format.ArtifactPack, Annotations: ann}
+	pf.Repository = repo + "/" + m.Name + ":" + m.Version
+	if strings.Contains(m.Image, "://") {
+		return nil, fmt.Errorf("%s: Image %q: a repository of the registry the pack is pushed to, repo:tag, no scheme", m.Name, m.Image)
+	}
 	if len(m.Image) > 0 {
-		pf.Items = append(pf.Items, packer.Descriptor{From: m.Image, Annotations: map[string]string{format.AnnotationImage: "true"}})
+		pf.Items = append(pf.Items, packer.Descriptor{From: "oci://" + m.Image, Annotations: map[string]string{format.AnnotationImage: "true"}})
 	}
 	pf.Items = append(pf.Items, packer.Descriptor{From: "file://" + format.SchemaFile, Type: format.ArtifactSchema})
 	if n, err := content(p); err != nil {
@@ -192,20 +200,19 @@ func PackFile(p Pack) (*packer.Pack, error) {
 	}
 	for _, sub := range all[1:] {
 		sm := sub.Meta()
-		if len(sm.Artifact) == 0 {
-			return nil, fmt.Errorf("%s holds %s, which has no Artifact (oci://repo) to mount it from", m.Name, sm.Name)
-		}
 		if len(sm.Version) == 0 {
 			return nil, fmt.Errorf("%s: Meta needs a Version", sm.Name)
 		}
-		pf.Items = append(pf.Items, packer.Descriptor{From: sm.Artifact + ":" + sm.Version})
+		pf.Items = append(pf.Items, packer.Descriptor{From: "oci://" + repo + "/" + sm.Name + ":" + sm.Version})
 	}
 	return pf, nil
 }
 
 // PackFileYAML is PackFile as the bytes of pack.yaml.
-func PackFileYAML(p Pack) ([]byte, error) {
-	pf, err := PackFile(p)
+func PackFileYAML(p Pack) ([]byte, error) { return packFileYAML(p, DefaultRepo) }
+
+func packFileYAML(p Pack, repo string) ([]byte, error) {
+	pf, err := PackFileIn(p, repo)
 	if err != nil {
 		return nil, err
 	}
@@ -230,7 +237,13 @@ func Generate(dir string, roots ...Pack) error {
 		}
 	}
 	sort.Slice(all, func(i, j int) bool { return all[i].Meta().Name < all[j].Meta().Name })
-	for _, p := range all {
+	return GenerateIn(dir, DefaultRepo, all...)
+}
+
+// GenerateIn writes the directories of these packs and of no other: <name>/schema.json, <name>/pack.yaml and
+// <name>/templates/*, published under repo. A pack is generated and published on its own, the packs it holds first.
+func GenerateIn(dir, repo string, packs ...Pack) error {
+	for _, p := range packs {
 		m := p.Meta()
 		out := filepath.Join(dir, m.Name)
 		if err := os.MkdirAll(out, 0o755); err != nil {
@@ -243,7 +256,7 @@ func Generate(dir string, roots ...Pack) error {
 		if err = os.WriteFile(filepath.Join(out, format.SchemaFile), s, 0o644); err != nil {
 			return err
 		}
-		pf, err := PackFileYAML(p)
+		pf, err := packFileYAML(p, repo)
 		if err != nil {
 			return err
 		}
@@ -333,23 +346,24 @@ func Command(roots ...Pack) *cobra.Command {
 		return nil
 	}
 
-	var out string
+	var out, repo string
 	generate := &cobra.Command{
-		Use: "generate", Short: "write every pack's directory: schema.json, pack.yaml, templates/", Args: cobra.NoArgs,
+		Use: "generate", Short: "write the pack's directory, not of the packs it holds: schema.json, pack.yaml, templates/", Args: cobra.NoArgs,
 		Run: run(func(*cobra.Command, []string) error {
 			if err := load(); err != nil {
 				return err
 			}
-			if err := Generate(out, roots...); err != nil {
+			if err := GenerateIn(out, repo, roots...); err != nil {
 				return err
 			}
-			for _, n := range names {
-				fmt.Println("wrote", filepath.Join(out, n))
+			for _, r := range roots {
+				fmt.Println("wrote", filepath.Join(out, r.Meta().Name))
 			}
 			return nil
 		}),
 	}
 	generate.Flags().StringVarP(&out, "output", "o", ".", "directory to write the artifacts under")
+	generate.Flags().StringVar(&repo, "repo", DefaultRepo, "the prefix of the repositories the pack and the packs it holds are published under")
 
 	checkCmd := &cobra.Command{
 		Use: "check", Short: "run the author checks on every pack", Args: cobra.NoArgs,

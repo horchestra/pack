@@ -58,14 +58,15 @@ const EnvVaultToken = "VAULT_TOKEN"
 // Environment is one environment: what pack itself reads of the set, and
 // the set.
 type Environment struct {
+	// Target is the default target: a target's name, or the name of an entry of targets, which then is the default
+	// one (Target its target, Settings its set).
 	Target string `env:"TARGET"`
 	Vault  Vault  `envPrefix:"VAULT_"`
 	Store  Store  `envPrefix:"STORE_"`
-	// Registry, Run and Secrets are pack's own sections: how it reads a pack, how it runs a saga, where it gets
-	// the passwords it creates. They are not a target's, and no provider sees them.
-	Registry Registry `envPrefix:"REGISTRY_"`
-	Run      Run      `envPrefix:"RUN_"`
-	Secrets  Secrets  `envPrefix:"SECRETS_"`
+	// Run and Secrets are pack's own sections: how it runs a saga, where it gets the passwords it creates. They are
+	// not a target's, and no provider sees them.
+	Run     Run     `envPrefix:"RUN_"`
+	Secrets Secrets `envPrefix:"SECRETS_"`
 	// Keys is how the environment runs each key of the pack, by the key's name (the section `keys`).
 	Keys map[string]Key `env:"-"`
 	// Settings is the whole set, keys in lower case: what the provider gets — the default target's, without the
@@ -88,11 +89,6 @@ type Store struct {
 	Mount    string `env:"MOUNT"`
 	Prefix   string `env:"PREFIX"`
 	CACert   string `env:"CACERT"`
-}
-
-// Registry is how packs are read from a registry.
-type Registry struct {
-	PlainHTTP bool `env:"PLAIN_HTTP"` // the registry speaks http, not https
 }
 
 // Run is how a saga runs.
@@ -259,12 +255,11 @@ func Load(ctx context.Context, file string, overrides map[string]string) (*Envir
 	return env, nil
 }
 
-// ownSettings are the keys of the sections that are not a target's set: exactly the fields of Store, Registry, Run
-// and Secrets. A key that only begins like one (run_as_user, registry_auth) is its target's.
+// ownSettings are the keys of the sections that are not a target's set: exactly the fields of Store, Run and
+// Secrets. A key that only begins like one (run_as_user, registry_auth) is its target's.
 var ownSettings = map[string]bool{
 	"store_provider": true, "store_addr": true, "store_mount": true, "store_prefix": true, "store_cacert": true,
-	"registry_plain_http": true,
-	"run_jobs":            true, "run_strict": true, "run_no_rollback": true, "run_keep": true, "run_journal_keep": true,
+	"run_jobs": true, "run_strict": true, "run_no_rollback": true, "run_keep": true, "run_journal_keep": true,
 	"secrets_provider": true, "secrets_provision": true,
 }
 
@@ -297,6 +292,35 @@ func splitTargets(file string, env *Environment) error {
 		t.Target = t.Settings["target"]
 		if len(t.Target) == 0 {
 			return fmt.Errorf("%s: targets.%s: say which target it is (target: docker, k8s …)", file, name)
+		}
+	}
+	return defaultFromEntry(file, env)
+}
+
+// defaultFromEntry makes the entry of targets that `target:` names the default target. Its settings are all in the
+// entry: one written beside it, at the top, is refused rather than dropped or mixed in.
+func defaultFromEntry(file string, env *Environment) error {
+	name := env.Target
+	t, ok := env.Targets[name]
+	if !ok {
+		return nil
+	}
+	settings := maps.Clone(t.Settings)
+	for k, v := range env.Settings {
+		switch k {
+		case "target":
+		case "vault_addr", "vault_paths":
+			settings[k] = v
+		default:
+			return fmt.Errorf("%s: %s: target: %s names an entry of targets, its settings are written there", file, k, name)
+		}
+	}
+	env.Target, env.Settings = t.Target, settings
+	delete(env.Targets, name)
+	for key, k := range env.Keys {
+		if k.Target == name {
+			k.Target = ""
+			env.Keys[key] = k
 		}
 	}
 	return nil

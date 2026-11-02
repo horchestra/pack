@@ -15,9 +15,9 @@ The reference is in [docs/](docs/README.md). The targets (docker, ansible, k8s) 
 - **A pack may hold another pack** in a field; a pointer makes it optional. The packs' settings join in one JSON
   schema, and the order of installation follows the containment: a held pack is installed before the pack that
   holds it.
-- **Files** are fields tagged `file:"/path/in/container"`, with `template:"name"` for a template of `content/`
-  (read from disk next to the pack's source, never embedded), `format`, `mode`, `parseAs`; `env:"NAME"` makes an
-  environment variable. A field without `omitempty` is required.
+- **Files** are the `Content` of `PackRoot`: a file of `content/` as it is (`Source`) or rendered (`Template`), or a
+  subtree of the values in a format (`Values`, `Format`); `content/` is read from disk next to the pack's source, never
+  embedded. A field tagged `env:"NAME"` is an environment variable, one without `omitempty` is required.
 - **`sdk`** is the author's side (Go; Python and Java in `sdk/python`, `sdk/java` write the same artifacts):
   `sdk.Run(&Root{})` is a cobra command that generates the pack's directory (`schema.json`, `pack.yaml`, `templates/`)
   and checks it.

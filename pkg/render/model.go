@@ -61,6 +61,19 @@ type Unit struct {
 	Files []File
 	// SecretFiles are files whose bytes are a secret's value, untouched.
 	SecretFiles []SecretFile
+	// Packages is the installation from OS packages, by the OS the pack names, rendered: for a target that runs no
+	// image, instead of Image, Files and Services of its own.
+	Packages map[string]Packages `json:",omitempty"`
+}
+
+// Packages is a pack's installation on one OS, rendered; packschema.OSPackages says the order.
+type Packages struct {
+	Prepare  []string
+	Repo     []File
+	Names    []string
+	Commands [][]string
+	Files    []File
+	Services []string
 }
 
 type EnvVar struct {
@@ -114,6 +127,8 @@ type Claim struct {
 type File struct {
 	Path string
 	Mode *fs.FileMode
+	// URL is where the file is downloaded from where it lands, instead of Content.
+	URL string `json:",omitempty"`
 	// Content is the file of a unit; nil for a per-instance file.
 	Content []byte
 	// Instances are a per-instance file's bytes, replica i at i; nil where a

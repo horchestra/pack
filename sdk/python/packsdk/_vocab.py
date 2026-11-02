@@ -1,4 +1,4 @@
-"""The vocabulary a pack speaks on top of JSON Schema: x-pack (Root), x-pack-file (File), x-pack-rules (Rule), and
+"""The vocabulary a pack speaks on top of JSON Schema: x-pack (Root, its Content of File), x-pack-rules (Rule), and
 Meta, everything about a pack that goes into its OCI artifact. The same words as the Go sdk, one to one."""
 
 from __future__ import annotations
@@ -7,8 +7,7 @@ from dataclasses import dataclass, field as _field
 
 PHASES = ("preInstall", "postInstall", "preUpgrade", "postUpgrade", "preDowngrade", "postDowngrade")
 RULE_PHASES = ("preMutate", "postMutate")
-FORMATS = ("json", "yaml", "properties", "env", "shell", "ini", "flagfile", "lines", "hadoop-xml", "toml", "text",
-           "template", "raw")
+FORMATS = ("json", "yaml", "properties", "env", "shell", "ini", "flagfile", "lines", "hadoop-xml", "toml", "text")
 FORMAT_SECRET = "secret"
 PACK_SCHEME = "pack://"
 
@@ -98,10 +97,61 @@ class Rollout:
 
 
 @dataclass
+class File:
+    """A file in the component's containers, at path: from source (a file of content/, byte for byte), template (a file
+    of content/ rendered over the values the pack sees; with values, only when that value is there), or values (a
+    field's subtree, "conf", written in format, the name of path saying it when there is none)."""
+    path: str
+    source: str = ""
+    template: str = ""
+    url: str = ""
+    values: str = ""
+    format: str = ""
+    parse_as: str = ""
+    mode: str = ""
+    per_instance: bool = False
+
+    def to_json(self) -> dict:
+        return _drop({"path": self.path, "source": self.source, "template": self.template, "url": self.url, "values": self.values,
+                      "format": self.format, "parseAs": self.parse_as, "mode": self.mode,
+                      "perInstance": self.per_instance})
+
+
+@dataclass
+class OSPackages:
+    """The installation on one OS, in this order: prepare installed, repo delivered, names installed, commands run,
+    content delivered, services started. A name or the url of a file is a template too; the target resolves
+    ${os:codename}, ${os:version} and ${os:arch}."""
+    names: list[str]
+    prepare: list[str] = _field(default_factory=list)
+    repo: list[File] = _field(default_factory=list)
+    commands: list[list[str]] = _field(default_factory=list)
+    content: list[File] = _field(default_factory=list)
+    services: list[str] = _field(default_factory=list)
+
+    def to_json(self) -> dict:
+        out: dict = {}
+        if self.prepare:
+            out["prepare"] = list(self.prepare)
+        if self.repo:
+            out["repo"] = [f.to_json() for f in self.repo]
+        out["names"] = list(self.names)
+        if self.commands:
+            out["commands"] = [list(c) for c in self.commands]
+        if self.content:
+            out["content"] = [f.to_json() for f in self.content]
+        if self.services:
+            out["services"] = list(self.services)
+        return out
+
+
+@dataclass
 class Root:
     """x-pack on the root of a pack's schema: what the component is to the system around it."""
     ports: dict[str, int] = _field(default_factory=dict)
     data: dict[str, Volume] = _field(default_factory=dict)
+    content: list[File] = _field(default_factory=list)
+    packages: dict[str, OSPackages] = _field(default_factory=dict)  # by OS: the key is the target's to match
     minimum: dict[str, str] = _field(default_factory=dict)
     readiness: Readiness | None = None
     upgrade: Upgrade | None = None
@@ -117,6 +167,10 @@ class Root:
             out["ports"] = dict(self.ports)
         if self.data:
             out["data"] = {k: v.to_json() for k, v in self.data.items()}
+        if self.content:
+            out["content"] = [f.to_json() for f in self.content]
+        if self.packages:
+            out["packages"] = {k: self.packages[k].to_json() for k in sorted(self.packages)}
         if self.minimum:
             out["minimum"] = dict(self.minimum)
         if self.readiness is not None:
@@ -160,8 +214,7 @@ class Meta:
     vendor: str = ""
     authors: str = ""
     created: str = ""  # RFC 3339; empty — not written, so that the artifact is the same byte for byte
-    image: str = ""  # oci://repo:tag the application runs; "" — the pack runs nothing itself
-    artifact: str = ""  # oci://repo where the pack is published: what a pack that holds it mounts it from
+    image: str = ""  # repo:tag the application runs, a repository of the registry the pack is pushed to; "" — the pack runs nothing itself
     annotations: dict[str, str] = _field(default_factory=dict)
     dir: str = ""  # the pack's directory, whose content/ holds its files; "" — where the class is defined
 

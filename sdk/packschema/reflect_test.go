@@ -14,18 +14,17 @@ type listener struct {
 
 // cfg is a service's own configuration, the way an author writes it.
 type cfg struct {
-	Name    string   `json:"name"`                               // no omitempty: required
-	Port    int      `json:"port,omitempty" env:"PORT"`          // optional, an environment variable
-	Level   string   `json:"level,omitempty"`                    // set by SetDefaults
-	Listen  listener `json:"listen" file:"/etc/svc/listen.json"` // a subtree written as a file
-	Script  string   `json:"script,omitempty" file:"/opt/run.sh" template:"run.ptmpl" mode:"0500"`
-	Unit    string   `json:"unit,omitempty" file:"/opt/unit" template:"unit.sh" format:"raw"`
-	Key     Secret   `json:"key" file:"/secrets/key" format:"secret" mode:"0400"`
+	Name    string   `json:"name"`                      // no omitempty: required
+	Port    int      `json:"port,omitempty" env:"PORT"` // optional, an environment variable
+	Level   string   `json:"level,omitempty"`           // set by SetDefaults
+	Listen  listener `json:"listen"`
+	Key     Secret   `json:"key"`
+	Fixed   string   `json:"fixed,omitempty" jsonschema:"readOnly=true"`
 	Dep     *cfgDep  `json:"dep,omitempty"`
 	Skipped string   `json:"-"`
 	Props   struct {
 		A string `json:"a,omitempty"`
-	} `json:"props" file:"/etc/svc.properties"`
+	} `json:"props"`
 }
 
 type cfgDep struct {
@@ -113,46 +112,38 @@ func TestEnvAndDefaults(t *testing.T) {
 	}
 }
 
-func TestFileTags(t *testing.T) {
-	doc := reflectJSON(t, &cfg{}, Options{})
-	want := map[string]File{
-		"listen": {Path: "/etc/svc/listen.json", Format: "json"},
-		"script": {Path: "/opt/run.sh", Format: "template", Template: "run.ptmpl", Mode: "0500"},
-		"unit":   {Path: "/opt/unit", Format: "raw", Template: "unit.sh"},
-		"key":    {Path: "/secrets/key", Format: "secret", Mode: "0400"},
-		"props":  {Path: "/etc/svc.properties", Format: "properties"},
+// The files of a pack are in PackRoot: a tag left from before is refused, not ignored.
+func TestFileTagsAreRefused(t *testing.T) {
+	type file struct {
+		A string `json:"a" file:"/etc/x"`
 	}
-	for name, f := range want {
-		got, _ := prop(t, doc, name)["x-pack-file"].(map[string]any)
-		raw, _ := json.Marshal(f)
-		var exp map[string]any
-		_ = json.Unmarshal(raw, &exp)
-		if !reflect.DeepEqual(got, exp) {
-			t.Errorf("%s: x-pack-file = %v, want %v", name, got, exp)
+	type tmpl struct {
+		A string `json:"a" template:"x:/etc/x"`
+	}
+	type format struct {
+		A string `json:"a" format:"json"`
+	}
+	type mode struct {
+		A string `json:"a" mode:"0400"`
+	}
+	type parseAs struct {
+		A string `json:"a" parseAs:"text"`
+	}
+	for name, v := range map[string]any{"file": &file{}, "template": &tmpl{}, "format": &format{}, "mode": &mode{}, "parseAs": &parseAs{}} {
+		if _, err := Reflect(v, Options{}); err == nil || !strings.Contains(err.Error(), "Content of PackRoot") {
+			t.Errorf("%s: %v", name, err)
 		}
 	}
 }
 
-func TestFileTagMistakesAreRefused(t *testing.T) {
-	type noFile struct {
-		A string `json:"a" template:"x.ptmpl"`
+// What the operator must not set says so in the schema, in the tag of the field.
+func TestReadOnlyTag(t *testing.T) {
+	doc := reflectJSON(t, &cfg{}, Options{})
+	if prop(t, doc, "fixed")["readOnly"] != true {
+		t.Errorf("fixed = %v", prop(t, doc, "fixed"))
 	}
-	type badName struct {
-		A string `json:"a" file:"/etc/x" template:"x.sh"` // a template that is not *.ptmpl
-	}
-	type badRaw struct {
-		A string `json:"a" file:"/etc/x" template:"x.ptmpl" format:"raw"`
-	}
-	type noFormat struct {
-		A string `json:"a" file:"/etc/x"` // the name says nothing
-	}
-	type strayTemplate struct {
-		A string `json:"a" file:"/etc/x.json" template:"x.ptmpl" format:"json"`
-	}
-	for name, v := range map[string]any{"noFile": &noFile{}, "badName": &badName{}, "badRaw": &badRaw{}, "noFormat": &noFormat{}, "stray": &strayTemplate{}} {
-		if _, err := Reflect(v, Options{}); err == nil {
-			t.Errorf("%s: must be refused", name)
-		}
+	if _, ok := prop(t, doc, "level")["readOnly"]; ok {
+		t.Errorf("level = %v", prop(t, doc, "level"))
 	}
 }
 

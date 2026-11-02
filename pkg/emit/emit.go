@@ -56,7 +56,7 @@ func Emit(format string, v any) ([]byte, error) {
 	return nil, fmt.Errorf("format %q: no emitter", format)
 }
 
-// Template renders tmpl with data and checks the result parses as parseAs.
+// Template renders tmpl with data and checks the result parses as parseAs, when it is named.
 func Template(name string, tmpl []byte, data any, parseAs string) ([]byte, error) {
 	// a key the data has not is nil, so that `default` and `required` can speak for it as in Helm; one that reaches the
 	// result is an error (see below), not the text "<no value>"
@@ -71,6 +71,9 @@ func Template(name string, tmpl []byte, data any, parseAs string) ([]byte, error
 	}
 	if i := bytes.Index(buf.Bytes(), []byte("<no value>")); i >= 0 {
 		return nil, fmt.Errorf("template %s: line %d refers to a value the data does not have (<no value>)", name, 1+bytes.Count(buf.Bytes()[:i], []byte("\n")))
+	}
+	if len(parseAs) == 0 {
+		return buf.Bytes(), nil
 	}
 	if err := Parse(parseAs, buf.Bytes()); err != nil {
 		return nil, fmt.Errorf("template %s: the result is not %s: %w", name, parseAs, err)

@@ -10,21 +10,30 @@ links only its types. A registry holds three kinds of thing:
 
 ## Publishing
 
-1. **Generate** the pack's directory with the SDK (`generate`, see [authoring.md](authoring.md)): `<name>/schema.json`,
-   `<name>/pack.yaml`, `<name>/templates/`, for the pack and every pack it holds.
-2. **Put the images** into the registry the packs go to (`oci-packer copy` from where they are).
-3. **Push**, the packs a pack holds first, then the pack:
+A pack is generated and published on its own, the packs it holds first:
 
-   ```
-   (cd tembo   && oci-pack oci://registry.example/packs/tembo:0.2.0   -f pack.yaml)
-   (cd openbao && oci-pack oci://registry.example/packs/openbao:2.6.5 -f pack.yaml)
-   ```
+```
+go run ./postgres/cmd generate -o out
+oci-packer oci://registry.example -f out/postgres/pack.yaml
+
+go run ./openbao/cmd generate -o out
+oci-packer oci://registry.example -f out/openbao/pack.yaml
+```
+
+Before that, **put the images** into the registry the packs go to (`oci-packer copy` from where they are).
+
+`generate` writes the directory of the pack, not of the packs it holds: `<name>/schema.json`, `<name>/pack.yaml`,
+`<name>/templates/`. With one `-o` the directories lie side by side, which is what `pack check` reads.
+
+**Where a pack goes has one source.** `pack.yaml` says it, `repository: packs/openbao:2.6.5`, and the command names only
+the registry; a command that names another repository is refused. The repository is `<repo>/<Name>:<Version>`, `repo`
+being `packs` unless `generate --repo` says otherwise; the packs a pack holds are named under the same `repo`.
 
 The order is not a convention: an `oci://repo:tag` item of a pack file names **no registry**; it is mounted from the
 registry being pushed to, so the image and every held pack must already be there. `pack.yaml` is
-the pack file: `Meta` as annotations (`pack.name`, `pack.version` and the `org.opencontainers.image.*` ones), the image
-(marked `pack.image`), the schema, the templates (`dir://templates/`) and the artifact of each held pack (its
-`Meta.Artifact:Version`). When a pack is extracted, an index that mixes an image with built files is unpacked; an index
+the pack file: `repository`, `Meta` as annotations (`pack.name`, `pack.version` and the `org.opencontainers.image.*` ones),
+the image (marked `pack.image`), the schema, the templates (`dir://templates/`) and each held pack.
+When a pack is extracted, an index that mixes an image with built files is unpacked; an index
 of images with
 build attestations is an image, and stays a reference.
 
@@ -69,7 +78,8 @@ resolves the tag to a **digest** and extracts the pack, with the packs mounted i
 Every other command reads that directory and never the registry, so **a release gives the same result whatever the tag
 becomes**: commit the lock. `pack init` with a lock present reads the locked digest; `--upgrade` takes what the tag
 means now and rewrites the lock. A plain-HTTP registry (`localhost:5001`) needs `registry: {plain_http: true}` in
-`env.yaml`.
+`release.yaml`; a target from a plain-HTTP registry says so in its own source
+(`targets: {docker: {url: oci://…, plain_http: true}}`).
 
-The units of a release carry the images as the pack names them — `images/openbao:2.6.5`, no host; the target adds the
-registry's host when it deploys.
+The units of a release carry the images as full references — a mounted member is named by where it pulls from,
+`<host>/packs/openbao@sha256:…` — so the engine of any target takes them as they are.

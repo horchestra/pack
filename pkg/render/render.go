@@ -225,6 +225,11 @@ func (r *render) configure(v Values) error {
 		schema.Overlay(cur, schema.DeepCopy(own).(map[string]any))
 	}
 	r.doc = doc
+	for _, ptr := range slices.Sorted(maps.Keys(r.userSet)) {
+		if _, n, err := r.b.Composition.Lookup(ptr); err == nil && n != nil && n.ReadOnly {
+			return fmt.Errorf("%s is read-only: the pack's own, not the operator's to set", ptr)
+		}
+	}
 
 	// Selection: the root is always installed. A pack held in a field is installed when the field is there: the
 	// values name it (even as {}), the author gave it a default, or the field is not optional. Presence is the

@@ -3,7 +3,7 @@
 from dataclasses import dataclass
 from typing import Any, Optional
 
-from packsdk import Meta, Pack, Readiness, Root, Rule, dotted, field, pointer
+from packsdk import File, Meta, Pack, Readiness, Root, Rule, dotted, field, pointer
 
 from ..tembo.pack import Tembo
 
@@ -23,12 +23,12 @@ class Config:
 
 
 VERSION = "2.1.0"
-IMAGE = "oci://images/openbao:2.1.0"
+IMAGE = "images/openbao:2.1.0"
 
 
 @dataclass
 class OpenBao(Pack):
-    bao: Config = field(factory=Config, json="openbao", file="/etc/openbao/config.json")
+    bao: Config = field(factory=Config, json="openbao")
     postgres: Optional[Tembo] = field(None, omitempty=True)
 
     def set_defaults(self):
@@ -50,9 +50,8 @@ class OpenBao(Pack):
             message="storage is filled from the embedded postgres and must not be set")]}
 
     def meta(self):
-        return Meta(name="openbao", version=VERSION, description="secrets", license="MPL-2.0", image=IMAGE,
-                    artifact="oci://packs/openbao", annotations={"example.org/tier": "core"})
+        return Meta(name="openbao", version=VERSION, description="secrets", license="MPL-2.0", image=IMAGE, annotations={"example.org/tier": "core"})
 
     def pack_root(self):
-        return Root(ports={"api": 8200}, readiness=Readiness(http="api/v1/sys/health"),
+        return Root(ports={"api": 8200}, content=[File(path="/etc/openbao/config.json", values="openbao")], readiness=Readiness(http="api/v1/sys/health"),
                     savepoints=[dotted(self, lambda o: o.postgres)])

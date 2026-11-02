@@ -36,7 +36,7 @@ public class Tembo extends Pack {
     public Secret pgPassword = new Secret();
     @Setting(env = "TEMBO_CONFIG", omitempty = true)
     public String config = "";
-    @Setting(omitempty = true, file = "/etc/tembo/tembo.env", template = "tembo.env.ptmpl", parseAs = "text", mode = "0640")
+    @Setting(omitempty = true)
     public Node node = new Node();
 
     @Override
@@ -53,7 +53,7 @@ public class Tembo extends Pack {
     @Override
     public Meta meta() {
         return new Meta("tembo", "0.2.0").description("PostgreSQL with raft").license("Apache-2.0")
-                .source("https://example.org/tembo").image("oci://images/tembo:0.2.0").artifact("oci://packs/tembo")
+                .source("https://example.org/tembo").image("images/tembo:0.2.0")
                 .dir("src/test/packs/tembo");
     }
 
@@ -61,6 +61,7 @@ public class Tembo extends Pack {
     public Root packRoot() {
         return new Root()
                 .port("api", 8001).port("pg", 5432).port("pg-ro", 5434)
+                .content(new Root.File("/etc/tembo/tembo.env").template("tembo.env.ptmpl").values("node").parseAs("text").mode("0640"))
                 .data("data", new Root.Volume("/var/lib/postgresql").size("10Gi"))
                 .minimum("memory", "1Gi")
                 .command("tembo", "run")

@@ -33,7 +33,7 @@ type Mid struct {
 
 func (*Mid) SetDefaults() {}
 func (*Mid) Meta() sdk.Meta {
-	return sdk.Meta{Name: "mid", Version: "1", Artifact: "oci://packs/mid", Dir: "/nonexistent"}
+	return sdk.Meta{Name: "mid", Version: "1", Dir: "/nonexistent"}
 }
 func (*Mid) PackRoot() packschema.Root { return packschema.Root{} }
 
@@ -44,7 +44,7 @@ type Outer struct {
 
 func (*Outer) SetDefaults() {}
 func (*Outer) Meta() sdk.Meta {
-	return sdk.Meta{Name: "outer", Version: "1", Artifact: "oci://packs/outer", Dir: "/nonexistent"}
+	return sdk.Meta{Name: "outer", Version: "1", Dir: "/nonexistent"}
 }
 func (*Outer) PackRoot() packschema.Root { return packschema.Root{} }
 

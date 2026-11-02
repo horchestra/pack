@@ -16,6 +16,7 @@ from . import _yaml
 from ._reflect import SchemaError, hints, is_pack, json_name, reflect, tags, unwrap
 from ._vocab import Meta, Root, Rule
 
+DEFAULT_REPO = "packs"  # the prefix of the repositories packs are published under: <repo>/<name>:<version>
 ARTIFACT_PACK = "application/vnd.pack.pack.v1+json"
 ARTIFACT_SCHEMA = "application/vnd.pack.schema.v1+json"
 ARTIFACT_TEMPLATE = "application/vnd.pack.template.v1"
@@ -132,47 +133,36 @@ def content(p: Pack) -> dict[str, bytes]:
 
 
 def _check_named(tp: type, have: dict[str, bytes]) -> None:
-    missing: list[str] = []
-
-    def walk(t: Any) -> None:
-        t = unwrap(t)
-        if not (isinstance(t, type) and dataclasses.is_dataclass(t)):
-            return
-        h = hints(t)
-        for f in dataclasses.fields(t):
-            name = tags(f)["template"]
-            if name and name not in have:
-                missing.append(f"{t.__name__}.{f.name}: {name}")
-            if not is_pack(unwrap(h[f.name])):  # a held pack has its own content
-                walk(h[f.name])
-
-    walk(tp)
+    root = tp().pack_root()
+    files = list(root.content)
+    for os_packages in root.packages.values():
+        files += os_packages.repo + os_packages.content
+    missing = [f"{f.path}: {name}" for f in files for name in (f.source, f.template) if name and name not in have]
     if missing:
         raise SchemaError(f"not in {CONTENT_DIR}/: " + ", ".join(sorted(missing)))
 
-
-def pack_file(p: Pack) -> dict:
+def pack_file(p: Pack, repo: str = DEFAULT_REPO) -> dict:
     m = p.meta()
     if not m.name or not m.version:
         raise SchemaError(f"{type(p).__name__}: meta needs a name and a version")
     items: list[dict] = []
+    if "://" in m.image:
+        raise SchemaError(f'{m.name}: image "{m.image}": a repository of the registry the pack is pushed to, repo:tag, no scheme')
     if m.image:
-        items.append({"from": m.image, "annotations": {ANNOTATION_IMAGE: "true"}})
+        items.append({"from": "oci://" + m.image, "annotations": {ANNOTATION_IMAGE: "true"}})
     items.append({"from": "file://" + SCHEMA_FILE, "type": ARTIFACT_SCHEMA})
     if content(p):
         items.append({"from": f"dir://{TEMPLATES_DIR}/", "type": ARTIFACT_TEMPLATE})
     for sub in packs(p)[1:]:
         sm = sub.meta()
-        if not sm.artifact:
-            raise SchemaError(f"{m.name} holds {sm.name}, which has no artifact (oci://repo) to mount it from")
         if not sm.version:
             raise SchemaError(f"{sm.name}: meta needs a version")
-        items.append({"from": f"{sm.artifact}:{sm.version}"})
-    return {"type": ARTIFACT_PACK, "annotations": annotations(m), "items": items}
+        items.append({"from": f"oci://{repo}/{sm.name}:{sm.version}"})
+    return {"repository": f"{repo}/{m.name}:{m.version}", "type": ARTIFACT_PACK, "annotations": annotations(m), "items": items}
 
 
-def pack_file_yaml(p: Pack) -> bytes:
-    return _yaml.dump(pack_file(p)).encode()
+def pack_file_yaml(p: Pack, repo: str = DEFAULT_REPO) -> bytes:
+    return _yaml.dump(pack_file(p, repo)).encode()
 
 
 def generate(directory: str | os.PathLike, *roots: Pack) -> None:
@@ -182,15 +172,21 @@ def generate(directory: str | os.PathLike, *roots: Pack) -> None:
     for r in roots:
         for p in packs(r):
             seen.setdefault(p.meta().name, p)
-    for name in sorted(seen):
-        p = seen[name]
+    generate_in(directory, DEFAULT_REPO, *(seen[name] for name in sorted(seen)))
+
+
+def generate_in(directory: str | os.PathLike, repo: str, *pks: Pack) -> None:
+    """Write the directories of these packs and of no other, published under repo. A pack is generated and published on
+    its own, the packs it holds first."""
+    for p in pks:
+        name = p.meta().name
         out = Path(directory) / name
         out.mkdir(parents=True, exist_ok=True)
         try:
             (out / SCHEMA_FILE).write_bytes(schema(p))
         except SchemaError as e:
             raise SchemaError(f"{name}: {e}") from None
-        (out / PACK_FILE).write_bytes(pack_file_yaml(p))
+        (out / PACK_FILE).write_bytes(pack_file_yaml(p, repo))
         for rel, b in content(p).items():
             dst = out / TEMPLATES_DIR / rel
             dst.parent.mkdir(parents=True, exist_ok=True)
@@ -202,14 +198,15 @@ def generate(directory: str | os.PathLike, *roots: Pack) -> None:
 def main(*roots: Pack, argv: list[str] | None = None) -> int:
     """A ready generator CLI of an author's __main__:
 
-        generate [-o dir]   write every pack's directory (default .)
+        generate [-o dir] [--repo packs]   write the pack's directory, not of the packs it holds (default .)
         schema <name>       print one pack's schema.json
 
     The author checks run on the generated directory: `pack check <dir>`."""
     ap = argparse.ArgumentParser(prog=Path(sys.argv[0]).name, description="generate the artifacts of the packs")
     sub = ap.add_subparsers(dest="cmd", required=True)
-    g = sub.add_parser("generate", help="write every pack's directory: schema.json, pack.yaml, templates/")
+    g = sub.add_parser("generate", help="write the pack's directory, not of the packs it holds: schema.json, pack.yaml, templates/")
     g.add_argument("-o", "--output", default=".", help="directory to write the artifacts under")
+    g.add_argument("--repo", default=DEFAULT_REPO, help="the prefix of the repositories the pack and the packs it holds are published under")
     s = sub.add_parser("schema", help="print one pack's schema.json")
     s.add_argument("name")
     args = ap.parse_args(argv)
@@ -219,9 +216,9 @@ def main(*roots: Pack, argv: list[str] | None = None) -> int:
             for p in packs(r):
                 by_name.setdefault(p.meta().name, p)
         if args.cmd == "generate":
-            generate(args.output, *roots)
-            for n in sorted(by_name):
-                print("wrote", Path(args.output) / n)
+            generate_in(args.output, args.repo, *roots)
+            for r in roots:
+                print("wrote", Path(args.output) / r.meta().name)
         else:
             if args.name not in by_name:
                 raise SchemaError(f'no pack "{args.name}" (have {", ".join(sorted(by_name))})')

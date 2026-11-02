@@ -77,8 +77,8 @@ func TestSchemaJoinsThePacksSettings(t *testing.T) {
 		t.Fatalf("postgres = %v", props["postgres"])
 	}
 	bao := props["openbao"].(map[string]any)
-	if f := bao["x-pack-file"].(map[string]any); f["path"] != "/etc/openbao/config.json" || f["format"] != "json" {
-		t.Fatalf("the config is a json file: %v", f)
+	if f := s["x-pack"].(map[string]any)["content"].([]any)[0].(map[string]any); f["path"] != "/etc/openbao/config.json" || f["values"] != "openbao" {
+		t.Fatalf("the config is a file of its values: %v", f)
 	}
 	if bao["properties"].(map[string]any)["log_level"].(map[string]any)["default"] != "info" {
 		t.Fatal("SetDefaults is the default")
@@ -100,7 +100,7 @@ func TestSchemaJoinsThePacksSettings(t *testing.T) {
 	if tp["pg_port"].(map[string]any)["x-pack-env"] != "TEMBO_PG_PORT" || tp["pg_port"].(map[string]any)["default"].(float64) != 5433 {
 		t.Fatalf("pg_port = %v", tp["pg_port"])
 	}
-	if f := tp["node"].(map[string]any)["x-pack-file"].(map[string]any); f["template"] != "tembo.env.ptmpl" || f["parseAs"] != "text" || f["mode"] != "0640" {
+	if f := ts["x-pack"].(map[string]any)["content"].([]any)[0].(map[string]any); f["template"] != "tembo.env.ptmpl" || f["parseAs"] != "text" || f["mode"] != "0640" {
 		t.Fatalf("node = %v", f)
 	}
 }
@@ -178,13 +178,15 @@ func TestVerify(t *testing.T) {
 }
 
 type probe struct {
-	Name string `json:"name,omitempty" file:"/etc/p.conf" template:"p.ptmpl" parseAs:"text"`
+	Name string `json:"name,omitempty"`
 	meta sdk.Meta
 }
 
-func (*probe) SetDefaults()              {}
-func (p *probe) Meta() sdk.Meta          { return p.meta }
-func (*probe) PackRoot() packschema.Root { return packschema.Root{} }
+func (*probe) SetDefaults()     {}
+func (p *probe) Meta() sdk.Meta { return p.meta }
+func (*probe) PackRoot() packschema.Root {
+	return packschema.Root{Content: []packschema.File{{Path: "/etc/p.conf", Template: "p.ptmpl", ParseAs: "text"}}}
+}
 
 func TestContentIsAnOrdinaryDirectory(t *testing.T) {
 	dir := t.TempDir()
@@ -210,6 +212,42 @@ func TestContentIsAnOrdinaryDirectory(t *testing.T) {
 	want := []string{"probe/pack.yaml", "probe/schema.json", "probe/templates/p.ptmpl", "probe/templates/sub/dir/extra.sh"}
 	if got := tree(t, out); !slices.Equal(got, want) {
 		t.Fatalf("files:\n got %v\nwant %v", got, want)
+	}
+}
+
+// Image is a repository of the registry the pack is pushed to: the pack file says oci://, the author does not.
+func TestImageHasNoScheme(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(dir, "content"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "content", "p.ptmpl"), []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	pf, err := sdk.PackFile(&probe{meta: sdk.Meta{Name: "probe", Version: "1", Dir: dir, Image: "images/app:1"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if pf.Items[0].From != "oci://images/app:1" {
+		t.Errorf("the image in the pack file = %s", pf.Items[0].From)
+	}
+	if _, err := sdk.PackFile(&probe{meta: sdk.Meta{Name: "probe", Version: "1", Dir: dir, Image: "oci://images/app:1"}}); err == nil || !strings.Contains(err.Error(), "no scheme") {
+		t.Errorf("a scheme in Image: %v", err)
+	}
+}
+
+// The CLI's generate writes the pack alone, and its file says where it and the pack it holds are published.
+func TestGenerateInWritesThePackAlone(t *testing.T) {
+	dir := t.TempDir()
+	if err := sdk.GenerateIn(dir, "team", &openbao.OpenBao{}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "tembo")); err == nil {
+		t.Error("the pack it holds is generated on its own")
+	}
+	pf := string(read(t, dir, "openbao/pack.yaml"))
+	if !strings.Contains(pf, "repository: team/openbao:") || !strings.Contains(pf, "oci://team/tembo:") {
+		t.Errorf("pack.yaml:\n%s", pf)
 	}
 }
 
@@ -246,7 +284,7 @@ func TestCommand(t *testing.T) {
 	if err := cmd.Execute(); err != nil {
 		t.Fatal(err)
 	}
-	if got := tree(t, dir); !slices.Contains(got, "openbao/schema.json") || !slices.Contains(got, "tembo/pack.yaml") {
+	if got := tree(t, dir); !slices.Contains(got, "openbao/schema.json") || slices.Contains(got, "tembo/pack.yaml") {
 		t.Fatalf("files = %v", got)
 	}
 
@@ -273,7 +311,7 @@ type Twin struct {
 
 func (t *Twin) SetDefaults() { t.B = &tembo.Config{ID: "b"} }
 func (*Twin) Meta() sdk.Meta {
-	return sdk.Meta{Name: "twin", Version: "1", Artifact: "oci://packs/twin", Dir: "/nonexistent"}
+	return sdk.Meta{Name: "twin", Version: "1", Dir: "/nonexistent"}
 }
 func (*Twin) PackRoot() packschema.Root { return packschema.Root{} }
 

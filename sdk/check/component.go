@@ -91,7 +91,7 @@ func Run(c Component) ([]Problem, error) {
 	rules := map[string][]packschema.Rule{}
 
 	err = c.Schema.Visit(func(ptr string, s *schema.Schema, n *schema.Node) error {
-		// track "is this node under an x-pack-file subtree"
+		// track "is this node under a subtree that Content writes as a file"
 		for len(fileStack) > 0 && !strings.HasPrefix(ptr, fileStack[len(fileStack)-1].ptr+"/") && ptr != fileStack[len(fileStack)-1].ptr {
 			fileStack = fileStack[:len(fileStack)-1]
 		}
@@ -103,17 +103,17 @@ func Run(c Component) ([]Problem, error) {
 		}
 		if n.File != nil {
 			if len(fileStack) > 0 && fileStack[len(fileStack)-1].ptr != ptr {
-				add(ptr, "x-pack-file inside the file %s", fileStack[len(fileStack)-1].file.Path)
+				add(ptr, "a file inside the file %s", fileStack[len(fileStack)-1].file.Path)
 			}
 			files = append(files, fileAt{ptr, n.File})
 			fileStack = append(fileStack, fileAt{ptr, n.File})
 			insideFile[ptr] = ptr
 			if n.File.Format == packschema.FormatSecret {
 				if !n.IsPassword() {
-					add(ptr, "x-pack-file format secret mounts a secret's key as the file: the node must be format: password")
+					add(ptr, "a file of format secret mounts a secret's key as the file: the node must be format: password")
 				}
-				if len(n.File.Template) > 0 || len(n.File.ParseAs) > 0 {
-					add(ptr, "format secret has no template or parseAs: the bytes are the secret's")
+				if len(n.File.ParseAs) > 0 {
+					add(ptr, "format secret has no parseAs: the bytes are the secret's")
 				}
 			}
 		}
@@ -218,7 +218,7 @@ func Run(c Component) ([]Problem, error) {
 	}
 	for _, pw := range passwordLeaves {
 		if _, inFile := insideFile[pw]; !inFile && !envSet[pw] {
-			add(pw, "a password with nowhere to go: put it under an x-pack-file subtree or on an x-pack-env leaf")
+			add(pw, "a password with nowhere to go: put it under the values of a file of Content or on an x-pack-env leaf")
 		}
 	}
 
@@ -233,57 +233,120 @@ func Run(c Component) ([]Problem, error) {
 	for _, a := range argv {
 		if p, ok := strings.CutPrefix(a, "-flagfile="); ok {
 			if !flagfiles[p] {
-				add("", "argv names -flagfile=%s but no x-pack-file of format flagfile has that path", p)
+				add("", "argv names -flagfile=%s but no file of format flagfile has that path", p)
 			}
 		}
 		if p, ok := strings.CutPrefix(a, "--flagfile="); ok {
 			if !flagfiles[p] {
-				add("", "argv names --flagfile=%s but no x-pack-file of format flagfile has that path", p)
+				add("", "argv names --flagfile=%s but no file of format flagfile has that path", p)
 			}
 		}
 	}
 
 	// 6. files: path form, node-owned dirs, format, template, parseAs, perInstance
+	for i := range root.Content {
+		fp := &root.Content[i]
+		ptr := fmt.Sprintf("/x-pack/content/%d", i)
+		if len(fp.Values) > 0 {
+			if _, n, err := c.Schema.Lookup("/" + fp.Values); err != nil || n == nil {
+				add(ptr, "values %q: no such field", fp.Values)
+				continue
+			}
+		}
+		if len(fp.Values) == 0 || len(fp.Template) > 0 {
+			files = append(files, fileAt{ptr, fp}) // the others hang on their nodes
+		}
+	}
+	for os, p := range root.Packages {
+		if len(os) == 0 {
+			add("/x-pack/packages", "an OS with no name")
+		}
+		if len(p.Names) == 0 {
+			add("/x-pack/packages/"+os, "no names: which packages?")
+		}
+		seen := map[string]bool{}
+		for list, fs := range map[string][]packschema.File{"repo": p.Repo, "content": p.Content} {
+			for i := range fs {
+				f := &fs[i]
+				ptr := fmt.Sprintf("/x-pack/packages/%s/%s/%d", os, list, i)
+				if !path.IsAbs(f.Path) || path.Clean(f.Path) != f.Path {
+					add(ptr, "file path %q must be absolute and clean", f.Path)
+				}
+				if seen[f.Path] {
+					add(ptr, "file path %q is written twice", f.Path)
+				}
+				seen[f.Path] = true
+				from := 0
+				for _, v := range []string{f.Source, f.Template, f.URL} {
+					if len(v) > 0 {
+						from++
+					}
+				}
+				if len(f.Values) > 0 && len(f.Template) == 0 {
+					from++
+					if _, n, err := c.Schema.Lookup("/" + f.Values); err != nil || n == nil {
+						add(ptr, "values %q: no such field", f.Values)
+					}
+				}
+				if from != 1 {
+					add(ptr, "file %s comes from one place: source, template, url or values", f.Path)
+				}
+				for _, name := range []string{f.Source, f.Template} {
+					if _, ok := c.Templates[name]; len(name) > 0 && !ok && c.Templates != nil {
+						add(ptr, "%q is not among the component's files", name)
+					}
+				}
+				if len(f.Mode) > 0 && !validMode(f.Mode) {
+					add(ptr, "mode %q is not an octal file mode", f.Mode)
+				}
+			}
+		}
+	}
 	seenPaths := map[string]string{}
 	for _, f := range files {
 		fp := f.file
 		if !path.IsAbs(fp.Path) || path.Clean(fp.Path) != fp.Path || strings.Contains(fp.Path, "..") {
-			add(f.ptr, "x-pack-file.path %q must be absolute and clean", fp.Path)
+			add(f.ptr, "file path %q must be absolute and clean", fp.Path)
 		}
 		for _, owned := range nodeOwned {
 			if fp.Path == owned || strings.HasPrefix(fp.Path, owned+"/") {
-				add(f.ptr, "x-pack-file.path %q is owned by the node: the file would silently lose", fp.Path)
+				add(f.ptr, "file path %q is owned by the node: the file would silently lose", fp.Path)
 			}
 		}
 		if prev, dup := seenPaths[fp.Path]; dup {
-			add(f.ptr, "x-pack-file.path %q also declared at %s", fp.Path, prev)
+			add(f.ptr, "file path %q also declared at %s", fp.Path, prev)
 		}
 		seenPaths[fp.Path] = f.ptr
-		if !slices.Contains(packschema.Formats, fp.Format) && fp.Format != packschema.FormatSecret {
-			add(f.ptr, "x-pack-file.format %q is not an emitter (%s, %s)", fp.Format, strings.Join(packschema.Formats, ", "), packschema.FormatSecret)
+		named := func(what, name string) {
+			if _, ok := c.Templates[name]; !ok && c.Templates != nil {
+				add(f.ptr, "%s %q is not among the component's files (%s)", what, name, strings.Join(slices.Sorted(maps.Keys(c.Templates)), ", "))
+			}
 		}
-		if fp.Format == packschema.FormatRaw {
-			if len(fp.Template) == 0 {
-				add(f.ptr, "format raw needs a template name: the file it is")
-			} else if _, ok := c.Templates[fp.Template]; !ok && c.Templates != nil {
-				add(f.ptr, "template %q is not among the component's templates (%s)", fp.Template, strings.Join(slices.Sorted(maps.Keys(c.Templates)), ", "))
+		switch {
+		case len(fp.URL) > 0:
+			add(f.ptr, "a file downloaded where it lands is of Packages: an image has its files in it")
+		case len(fp.Source) > 0:
+			named("source", fp.Source)
+			if len(fp.Template) > 0 || len(fp.Values) > 0 || len(fp.Format) > 0 || len(fp.ParseAs) > 0 {
+				add(f.ptr, "a source is shipped as it is: no template, values, format or parseAs")
 			}
-			if len(fp.ParseAs) > 0 {
-				add(f.ptr, "parseAs only belongs to format template")
+		case len(fp.Template) > 0:
+			named("template", fp.Template)
+			if len(fp.Format) > 0 {
+				add(f.ptr, "a template has no format: parseAs says what its result is")
 			}
-		} else if fp.Format == "template" {
-			if len(fp.Template) == 0 {
-				add(f.ptr, "format template needs a template name")
-			} else if _, ok := c.Templates[fp.Template]; !ok && c.Templates != nil {
-				add(f.ptr, "template %q is not among the component's templates (%s)", fp.Template, strings.Join(slices.Sorted(maps.Keys(c.Templates)), ", "))
-			}
-			if len(fp.ParseAs) == 0 {
-				add(f.ptr, "format template must declare parseAs: a template is the one emitter that can produce garbage")
-			} else if !slices.Contains(packschema.Formats, fp.ParseAs) || fp.ParseAs == "template" {
+			if len(fp.ParseAs) > 0 && !slices.Contains(packschema.Formats, fp.ParseAs) {
 				add(f.ptr, "parseAs %q is not a parseable format", fp.ParseAs)
 			}
-		} else if len(fp.Template) > 0 || len(fp.ParseAs) > 0 {
-			add(f.ptr, "template/parseAs only belong to format template")
+		case len(fp.Values) > 0:
+			if !slices.Contains(packschema.Formats, fp.Format) && fp.Format != packschema.FormatSecret {
+				add(f.ptr, "format %q of %s is not an emitter (%s, %s)", fp.Format, fp.Path, strings.Join(packschema.Formats, ", "), packschema.FormatSecret)
+			}
+			if len(fp.ParseAs) > 0 {
+				add(f.ptr, "parseAs only belongs to a template")
+			}
+		default:
+			add(f.ptr, "file %s comes from nowhere: source, template or values", fp.Path)
 		}
 		if len(fp.Mode) > 0 && !validMode(fp.Mode) {
 			add(f.ptr, "mode %q is not an octal file mode", fp.Mode)
