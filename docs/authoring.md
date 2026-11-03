@@ -261,3 +261,53 @@ A pack that holds itself, however far down, is refused.
 The author checks run on the result with `pack check <dir>`. Python and
 Java: [../sdk/python/README.md](../sdk/python/README.md),
 [../sdk/java/README.md](../sdk/java/README.md).
+
+## Testing
+
+`pack test <generated pack> [scenario.yaml|dir]…` runs the pack's scenarios — `tests/*.yaml` of the current
+directory by default — each in a release of its own on the memory target, in the process: nothing is installed
+anywhere, and the same scenarios hold whichever language wrote the pack. A scenario says what goes in and what comes
+out; the paths in it are the scenario file's:
+
+```yaml
+name: postgres that cannot listen fails, is taken back, and is diagnosed a port conflict
+facts: fixtures/hosts.json     # pack discover --save-fixture; or {<target>: {hosts: …}} inline
+values:
+  database: app
+env:                           # env.yaml, over {target: memory}
+  keys:
+    postgres:
+      resources:
+        requests:
+          memory: 1Gi
+from:                          # a version installed first: the plan is from it
+  pack: ../v15                 # another generated pack (a directory); none — the pack under test
+  values:
+    database: app
+fail_at: postgres/wait         # <key>/<kind> (apply, wait, hook:<name> …): the step fails, its undoing does not
+fail_error: postgres is not ready
+logs:                          # what the target gives of the key's logs
+  postgres:
+    postgres-0:
+      - 'could not bind IPv4 address "0.0.0.0": Address already in use'
+expect:
+  suggest:                     # what pack fill offers, by pointer; null — nothing
+    /pg_port: 5434
+  problems:                    # what the values break: where, kind, rule, a part of the message; [] — nothing
+    - where: /openbao/storage
+      rule: storage-from-postgres
+  files: golden/basic          # the rendered files, as pack template -o writes them
+  plan: golden/upgrade.plan    # the plan's text
+  apply:                       # how the apply ends: installed or failed, the keys in effect after
+    state: failed
+    in_effect: []
+  diagnose:                    # what pack diagnose makes of it
+    class: port_conflict
+    remedies:
+      - command: pack discover
+```
+
+Every scenario's installation has the same id, so that what is rendered of it — the names of the credentials — is
+the same each run. `--update` (`UPDATE_GOLDEN=1`) writes `files` and `plan` from what the scenario gives. `--json`
+says the results as `{scenarios: [{name, file, ok, failures}]}`; a scenario that fails ends pack test with
+`test_failed`. `examples/postgres/tests` and `examples/openbao/tests` are scenarios of both kinds.

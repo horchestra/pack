@@ -1,0 +1,9 @@
+{
+  "disable_mlock": true,
+  "log_level": "info",
+  "storage": {
+    "postgresql": {
+      "connection_url": "postgres://postgres:${secret:00000000-0000-4000-8000-000000000000-postgres-superuser-password/password}@postgres.memory:5432/openbao"
+    }
+  }
+}

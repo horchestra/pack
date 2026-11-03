@@ -1,0 +1,20 @@
+name: postgres refuses less memory than it can run on
+values:
+  database: app
+  superuser:
+    password:
+      secretRef:
+        name: pg-admin
+        key: password
+env:
+  keys:
+    postgres:
+      resources:
+        requests:
+          cpu: 500m
+          memory: 256Mi
+expect:
+  problems:
+    - where: "environment: keys.postgres.resources.requests.memory"
+      kind: environment
+      message: below the minimum of postgres, 512Mi

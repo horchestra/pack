@@ -1,0 +1,6 @@
+postgres: 16.4 → 16.4 (upgrade)
+  1. postgres         apply config only
+  2. postgres         wait  ready (tcp:pg)
+     ── savepoint: postgres ──   unit 1–2
+rollback policy: auto, to last savepoint; irreversible: none
+plan sha256:c47f528d77a926c7

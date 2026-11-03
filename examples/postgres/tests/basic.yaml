@@ -1,0 +1,24 @@
+name: postgres installs with a database and a password of its own
+values:
+  database: app
+  superuser:
+    password:
+      secretRef:
+        name: pg-admin
+        key: password
+env:
+  keys:
+    postgres:
+      resources:
+        requests:
+          cpu: 500m
+          memory: 1Gi
+        limits:
+          memory: 2Gi
+expect:
+  problems: []
+  files: golden/basic
+  apply:
+    state: installed
+    in_effect:
+      - postgres

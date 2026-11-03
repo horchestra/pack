@@ -1,0 +1,25 @@
+name: openbao with the postgres it holds, its storage filled from it
+values:
+  openbao: {}
+  postgres:
+    database: openbao
+    superuser:
+      password:
+        secretRef:
+          name: bao-pg
+          key: password
+env:
+  keys:
+    postgres:
+      resources:
+        requests:
+          cpu: 500m
+          memory: 1Gi
+expect:
+  problems: []
+  files: golden/with-postgres
+  apply:
+    state: installed
+    in_effect:
+      - openbao
+      - postgres

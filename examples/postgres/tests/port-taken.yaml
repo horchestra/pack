@@ -1,0 +1,30 @@
+name: postgres that cannot listen fails, is taken back, and is diagnosed a port conflict
+values:
+  database: app
+  superuser:
+    password:
+      secretRef:
+        name: pg-admin
+        key: password
+env:
+  keys:
+    postgres:
+      resources:
+        requests:
+          cpu: 500m
+          memory: 1Gi
+fail_at: postgres/wait
+fail_error: postgres is not ready
+logs:
+  postgres:
+    postgres-0:
+      - 'LOG:  could not bind IPv4 address "0.0.0.0": Address already in use'
+      - 'FATAL:  could not create any TCP/IP sockets'
+expect:
+  apply:
+    state: failed
+    in_effect: []
+  diagnose:
+    class: port_conflict
+    remedies:
+      - command: pack discover

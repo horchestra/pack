@@ -1,0 +1,26 @@
+name: a storage written by hand beside the postgres is refused
+values:
+  openbao:
+    storage:
+      - type: raft
+        config:
+          path: /openbao/data
+  postgres:
+    database: openbao
+    superuser:
+      password:
+        secretRef:
+          name: bao-pg
+          key: password
+env:
+  keys:
+    postgres:
+      resources:
+        requests:
+          cpu: 500m
+          memory: 1Gi
+expect:
+  problems:
+    - where: /openbao/storage
+      kind: rule
+      rule: storage-from-postgres

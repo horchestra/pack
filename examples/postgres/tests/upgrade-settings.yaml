@@ -1,0 +1,27 @@
+name: a setting changed is the key applied again, past its savepoint
+from:
+  values:
+    database: app
+    superuser:
+      password:
+        secretRef:
+          name: pg-admin
+          key: password
+values:
+  database: app
+  superuser:
+    password:
+      secretRef:
+        name: pg-admin
+        key: password
+  conf:
+    max_connections: 300
+env:
+  keys:
+    postgres:
+      resources:
+        requests:
+          cpu: 500m
+          memory: 1Gi
+expect:
+  plan: golden/upgrade-settings.plan

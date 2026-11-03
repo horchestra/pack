@@ -6,6 +6,7 @@ package memory
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"maps"
 	"os"
@@ -28,6 +29,13 @@ func init() {
 		t.logs = settings["logs"]
 		if u := settings["unready"]; len(u) > 0 {
 			t.unready = strings.Split(u, ",")
+		}
+		if at := settings["fail_at"]; len(at) > 0 {
+			msg := settings["fail_error"]
+			if len(msg) == 0 {
+				msg = "fail_at " + at
+			}
+			t.Fail = failAt(at, msg)
 		}
 		return t, nil
 	})
@@ -133,6 +141,13 @@ var (
 	systems   = map[string]*system{}
 )
 
+// Reset forgets what the target held of the installation: a system of its own from the next step on.
+func Reset(installation string) {
+	systemsMu.Lock()
+	defer systemsMu.Unlock()
+	delete(systems, installation)
+}
+
 func systemOf(installation string) *system {
 	systemsMu.Lock()
 	defer systemsMu.Unlock()
@@ -140,6 +155,19 @@ func systemOf(installation string) *system {
 		systems[installation] = &system{held: map[string]target.Observed{}}
 	}
 	return systems[installation]
+}
+
+// failAt fails the step the settings name (fail_at: <key>/<kind>, a hook <key>/hook:<name>) with msg — the step
+// forward, not its undoing: a stand of a failure for pack test.
+func failAt(at, msg string) func(target.Step) error {
+	key, kind, _ := strings.Cut(at, "/")
+	kind, name, _ := strings.Cut(kind, ":")
+	return func(s target.Step) error {
+		if s.Rollback || s.Key != key || len(kind) > 0 && s.Kind != kind || len(name) > 0 && s.Name != name {
+			return nil
+		}
+		return errors.New(msg)
+	}
 }
 
 // New is an empty memory target.
