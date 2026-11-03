@@ -22,6 +22,7 @@ import (
 	"github.com/horchestra/pack/internal/release"
 	"github.com/horchestra/pack/internal/testpacks/openbao"
 	"github.com/horchestra/pack/internal/testpacks/regserver"
+	"github.com/horchestra/pack/internal/workdir"
 	"github.com/horchestra/pack/pkg/environment"
 	"github.com/horchestra/pack/pkg/render"
 )
@@ -157,13 +158,13 @@ func TestLogPrune(t *testing.T) {
 }
 
 // A pack in a registry: init writes the lock and brings the pack, and the commands that follow read it from there.
-func TestInitFromARegistry(t *testing.T) {
+func TestRefreshFromARegistry(t *testing.T) {
 	host := regserver.Serve(t, &openbao.OpenBao{})
 	ref := "oci://" + host + "/packs/openbao:2.1.0"
 	d := releaseOf(t, ref, nil)
 	write(t, d, "release.yaml", map[string]any{"pack": ref, "registry": map[string]any{"plain_http": true}})
 
-	out := pack(t, d, "init")
+	out := pack(t, d, "refresh")
 	if !strings.Contains(out, "locked at sha256:") {
 		t.Fatalf("init: %s", out)
 	}
@@ -175,7 +176,7 @@ func TestInitFromARegistry(t *testing.T) {
 		t.Fatal("the pack is not in .pack/packs")
 	}
 	// again: the same lock, nothing new
-	pack(t, d, "init")
+	pack(t, d, "refresh")
 	if again, _ := release.ReadLock(d); again == nil || !reflect.DeepEqual(again, lock) {
 		t.Fatalf("lock changed: %+v", again)
 	}
@@ -186,25 +187,25 @@ func TestInitFromARegistry(t *testing.T) {
 	}
 }
 
-// `state: target` keeps its id in release.yaml; init makes it once.
-func TestInitMakesTheIDOfAStateKeptInTheTarget(t *testing.T) {
+// `state: target` keeps its id in release.yaml; refresh makes it once.
+func TestRefreshMakesTheIDOfAStateKeptInTheTarget(t *testing.T) {
 	d := releaseOf(t, generated(t), nil)
 	write(t, d, "release.yaml", map[string]any{"pack": generated(t), "state": "target"})
-	pack(t, d, "init")
+	pack(t, d, "refresh")
 	rel, err := release.Load(d, "")
 	if err != nil || len(rel.ID) == 0 {
 		t.Fatalf("release = %+v, %v", rel, err)
 	}
 	id := rel.ID
-	pack(t, d, "init")
+	pack(t, d, "refresh")
 	if rel, _ := release.Load(d, ""); rel.ID != id {
 		t.Fatalf("the id changed: %s → %s", id, rel.ID)
 	}
 }
 
-// The programs of the targets are downloaded by init from the sources release.yaml names, into .pack/bin; the lock
+// The programs of the targets are downloaded by refresh from the sources release.yaml names, into .pack/bin; the lock
 // keeps their checksums; a source that gives something else is refused until --upgrade.
-func TestInitBringsTheTargets(t *testing.T) {
+func TestRefreshBringsTheTargets(t *testing.T) {
 	body := []byte("#!/bin/sh\necho one\n")
 	var mu sync.Mutex
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -220,7 +221,7 @@ func TestInitBringsTheTargets(t *testing.T) {
 		"pack":    packDir,
 		"targets": map[string]any{"fake": srv.URL + "/pack-target-fake_{os}_{arch}"},
 	})
-	out := pack(t, d, "init")
+	out := pack(t, d, "refresh")
 	file := filepath.Join(d, ".pack", "bin", "pack-target-fake")
 	if got, err := os.ReadFile(file); err != nil || string(got) != string(body) {
 		t.Fatalf("the program: %q %v\n%s", got, err, out)
@@ -238,7 +239,7 @@ func TestInitBringsTheTargets(t *testing.T) {
 	}
 
 	// again: the file is there with the locked checksum, nothing is fetched
-	if out := pack(t, d, "init"); !strings.Contains(out, "up to date") {
+	if out := pack(t, d, "refresh"); !strings.Contains(out, "up to date") {
 		t.Errorf("again: %s", out)
 	}
 
@@ -255,15 +256,15 @@ func TestInitBringsTheTargets(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := bringTargets(context.Background(), rel, env, lock); err == nil || !strings.Contains(err.Error(), "--upgrade") {
+	if err := bringTargets(context.Background(), workdir.New(rel, ""), env, lock, false); err == nil || !strings.Contains(err.Error(), "--upgrade") {
 		t.Fatalf("a program that is not the locked one: %v", err)
 	}
 	if _, err := os.Stat(file); err == nil {
 		t.Error("the refused program is removed")
 	}
 	// --upgrade takes it
-	pack(t, d, "init", "--upgrade")
-	initUpgrade = false // a flag keeps its value between runs in one process
+	pack(t, d, "refresh", "--upgrade")
+	refreshUpgrade = false // a flag keeps its value between runs in one process
 	if got, _ := os.ReadFile(file); string(got) != string(body) {
 		t.Errorf("after --upgrade: %q", got)
 	}
@@ -272,7 +273,7 @@ func TestInitBringsTheTargets(t *testing.T) {
 	d2 := releaseOf(t, packDir, map[string]any{"target": "nowhere"})
 	rel2, _ := release.Load(d2, "")
 	env2, _ := environment.Load(context.Background(), rel2.Config(), nil)
-	if err := bringTargets(context.Background(), rel2, env2, &release.Lock{}); err == nil || !strings.Contains(err.Error(), "no source") {
+	if err := bringTargets(context.Background(), workdir.New(rel2, ""), env2, &release.Lock{}, false); err == nil || !strings.Contains(err.Error(), "no source") {
 		t.Errorf("no source, no program: %v", err)
 	}
 }

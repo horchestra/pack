@@ -145,7 +145,7 @@ func TestDefaultDirIsDotPackBin(t *testing.T) {
 	if err != nil || filepath.Base(filepath.Dir(bin)) != "bin" || !strings.HasSuffix(filepath.Dir(bin), filepath.Join(".pack", "bin")) {
 		t.Fatalf("Find = %q, %v", bin, err)
 	}
-	if _, err := Find("nothing"); err == nil || !strings.Contains(err.Error(), "pack init") {
+	if _, err := Find("nothing"); err == nil || !strings.Contains(err.Error(), "pack refresh") {
 		t.Errorf("the error says how to get it: %v", err)
 	}
 }

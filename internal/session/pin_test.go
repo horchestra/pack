@@ -37,12 +37,12 @@ func registryStand(t *testing.T) *Session {
 }
 
 // A pack in a registry is read by the digest of the lock; without the lock, or with the lock of another pack,
-// the way out is said: `pack init`.
+// the way out is said: `pack refresh`.
 func TestPinnedByTheLock(t *testing.T) {
 	s := registryStand(t)
 	dir := s.Dir.Release.Dir
 
-	if _, err := s.Pinned(registryPack); !errors.Is(err, oci.ErrNoLock) || !strings.Contains(err.Error(), "pack init") {
+	if _, err := s.Pinned(registryPack); !errors.Is(err, oci.ErrNoLock) || !strings.Contains(err.Error(), "pack refresh") {
 		t.Fatalf("no lock: %v", err)
 	}
 	const dgst = "sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"

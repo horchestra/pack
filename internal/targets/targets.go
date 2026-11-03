@@ -1,5 +1,5 @@
 // Package targets brings the programs pack starts for a target (pack-target-<name>) into the release's .pack/bin,
-// the way terraform brings its providers: release.yaml says where each comes from, `pack init` downloads it, and
+// the way terraform brings its providers: release.yaml says where each comes from, `pack refresh` downloads it, and
 // release.lock.json keeps the checksum it had that day.
 //
 // A source is

@@ -36,11 +36,14 @@ func init() {
 	pf := rootCmd.PersistentFlags()
 	pf.StringVarP(&chdir, "chdir", "C", "", "run in this directory, as if started there (a release: release.yaml, values, env.yaml)")
 	pf.StringVar(&envName, "env", os.Getenv("PACK_ENV"), "the environment: env.<name>.yaml of the release instead of env.yaml (PACK_ENV)")
-	rootCmd.PersistentPreRun = run(func(*cobra.Command, []string) error {
+	rootCmd.PersistentPreRun = run(func(c *cobra.Command, _ []string) error {
 		if len(chdir) > 0 {
 			if err := os.Chdir(chdir); err != nil {
 				return err
 			}
+		}
+		if c.Annotations[makesRelease] == "true" {
+			return nil // it reads, and makes, its release itself: none is here yet, and no .pack/ is made in passing
 		}
 		rel, err := release.Load(".", envName)
 		if err != nil {

@@ -42,7 +42,7 @@ type Release struct {
 	// ID is the installation's UUID. A file state makes and keeps its own at the first apply; state: target has
 	// no file to keep it in, so it is written here.
 	ID string `json:"id,omitempty"`
-	// Targets say where `pack init` downloads the programs of the targets the environment uses from, by the
+	// Targets say where `pack refresh` downloads the programs of the targets the environment uses from, by the
 	// target's name.
 	Targets map[string]TargetSource `json:"targets,omitempty"`
 	// Registry is how the pack is read from a registry; a target's source says it for itself.
@@ -179,7 +179,7 @@ func (w *Release) PackRef() (string, error) {
 // Config is the release's environment file, "" when it has none.
 func (w *Release) Config() string { return w.env }
 
-// Update changes release.yaml the way `pack init` needs: set puts values into the document as it is, and the file is
+// Update changes release.yaml the way `pack refresh` needs: set puts values into the document as it is, and the file is
 // written back. It is made if there is none. The comments of the file do not survive: it is a few keys.
 func Update(dir string, set func(doc map[string]any)) error {
 	path := filepath.Join(dir, File)

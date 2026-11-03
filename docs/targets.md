@@ -18,7 +18,7 @@ and `main.go`, built into a program that pack starts and speaks to over gRPC:
 
 ## Using one
 
-Like terraform's providers, a target is named in the release and **downloaded by `pack init`**:
+Like terraform's providers, a target is named in the release and **downloaded by `pack refresh`** (and by `pack init`, which makes the release):
 
 ```yaml
 # env.yaml
@@ -32,7 +32,7 @@ targets:
   k8s: oci://ghcr.io/horchestra/targets/k8s:0.1.0-{os}-{arch}
 ```
 
-`pack init` takes the targets the environment uses (`target:` and the `target:` of each entry of `targets:`), downloads
+`pack refresh` takes the targets the environment uses (`target:` and the `target:` of each entry of `targets:`), downloads
 each from its source into `.pack/bin/pack-target-<name>`, and writes the SHA-256 of what came into `release.lock.json`:
 
 ```json
@@ -75,7 +75,7 @@ A source that names no variables is read anonymously: the credentials of one nev
 `{os}` and `{arch}` stand for GOOS and GOARCH of the machine pack runs on, so one line serves a team with both. A
 program
 that is in `.pack/bin` with the locked checksum is not downloaded again. A source that gives another checksum than the
-lock has is refused (and the program removed) — `pack init --upgrade` takes the new one. A target with no source in
+lock has is refused (and the program removed) — `pack refresh --upgrade` takes the new one. A target with no source in
 `release.yaml` needs `pack-target-<name>` to be in `.pack/bin` already. `memory` is in pack and needs nothing.
 
 `pack` looks for the programs in the directories `PACK_TARGET_PATH` lists, by default **`.pack/bin` of the release it

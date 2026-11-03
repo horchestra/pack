@@ -285,10 +285,10 @@ func (s *suite) packRelease(t *testing.T, ref, target, env, values string) *rele
 	dir := t.TempDir()
 	write(t, filepath.Join(dir, "env.yaml"), env)
 	write(t, filepath.Join(dir, "values.yaml"), values)
-	write(t, filepath.Join(dir, "release.yaml"), strings.NewReplacer("${REGISTRY}", s.registry, "${TARGET}", target, "${TARGET_TAG}", targetTag).Replace(hostReleaseYAML))
 	full := fmt.Sprintf("oci://%s/packs/%s", s.registry, ref)
-	if out, err := runCmd(dir, s.pack, "init", full); err != nil {
-		t.Fatalf("init: %v\n%s", err, out)
+	write(t, filepath.Join(dir, "release.yaml"), strings.NewReplacer("${REGISTRY}", s.registry, "${TARGET}", target, "${TARGET_TAG}", targetTag).Replace(hostReleaseYAML)+"pack: "+full+"\n")
+	if out, err := runCmd(dir, s.pack, "refresh"); err != nil {
+		t.Fatalf("refresh: %v\n%s", err, out)
 	}
 	return &release{suite: s, dir: dir}
 }

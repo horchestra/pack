@@ -1,170 +1,272 @@
 package cmd
 
 import (
+	"bufio"
 	"context"
+	"errors"
 	"fmt"
+	"io"
 	"maps"
 	"os"
 	"path/filepath"
 	"reflect"
 	"slices"
+	"strings"
 
 	"github.com/spf13/cobra"
+	"sigs.k8s.io/yaml"
 
 	"github.com/horchestra/pack/internal/interrupt"
 	"github.com/horchestra/pack/internal/oci"
 	"github.com/horchestra/pack/internal/release"
+	"github.com/horchestra/pack/internal/session"
 	"github.com/horchestra/pack/internal/targets"
+	"github.com/horchestra/pack/internal/valuesfile"
 	"github.com/horchestra/pack/internal/workdir"
 	"github.com/horchestra/pack/pkg/environment"
 	"github.com/horchestra/pack/pkg/target"
 )
 
-var initUpgrade bool
-
 func init() {
-	initCmd.Flags().BoolVar(&initUpgrade, "upgrade", false, "take the digest the registry has for the tag now and the programs the sources give now, not the ones the lock says")
+	initCmd.Flags().StringVar(&initTarget, "target", "", "the target the release is installed on (docker, ansible, k8s, memory); asked when it is a terminal")
+	initCmd.Flags().StringVar(&initSource, "target-source", "", "where the target's program is downloaded from (https://… or oci://…), into release.yaml targets:")
+	initCmd.Flags().StringVar(&initLang, "lang", "", "the language of the comments of values.yaml (env.yaml lang:)")
+	initCmd.Flags().BoolVar(&initForce, "force", false, "write the files over the ones there")
 	rootCmd.AddCommand(initCmd)
 }
 
+var (
+	initTarget string
+	initSource string
+	initLang   string
+	initForce  bool
+)
+
+// The targets a release is likely installed on: pack's own and the ones of github.com/horchestra/targets.
+var knownTargets = []string{"docker", "ansible", "k8s"}
+
+// makesRelease marks a command that makes the release it runs in: the root command reads none before it.
+const makesRelease = "makes-release"
+
 var initCmd = &cobra.Command{
-	Use:   "init [oci://registry/repo:tag]",
-	Short: "bring the targets and the pack of the release into .pack and lock them",
-	Args:  cobra.MaximumNArgs(1),
-	Long: `Brings what the release needs into .pack: the programs of the targets the environment uses, from the source
-release.yaml names for each (targets: {docker: https://…, k8s: oci://…}), into .pack/bin, and the pack, if it is in a
-registry, with the packs it holds, into .pack/packs. release.lock.json keeps the checksum of each program and
-which digest the tag meant today. apply and plan read the pack from there, so the same
-release gives the same result whatever the tag becomes. With an argument, release.yaml says it first
-(pack: oci://…; the file is made if there is none). A pack that is a directory has nothing to bring.`,
+	Use:         "init <oci://registry/repo:tag|dir> [release dir]",
+	Annotations: map[string]string{makesRelease: "true"},
+	Short:       "a release of a pack: release.yaml, env.yaml, a documented values.yaml, AGENTS.md; then init",
+	Long: `Makes a release of the pack in the directory (made if there is none, . by default):
+release.yaml names the pack (and the target's source, --target-source); env.yaml (env.<name>.yaml
+with --env) the target; values.yaml every setting of the pack, documented, left to its default
+(pack values write); AGENTS.md how an agent works with the release. Then it does what pack
+refresh does: the pack of a registry locked and brought into .pack, the target's program
+downloaded.
+
+The target is --target, or asked when pack runs in a terminal: one pack knows (docker,
+ansible, k8s, memory), or any with --target-source. A file that is there is not written over
+without --force; pack refresh brings what a release that is there needs.`,
+	Args: cobra.RangeArgs(1, 2),
 	Run: run(func(_ *cobra.Command, args []string) error {
 		ctx, stop := interrupt.Context()
 		defer stop()
-		rel := dir.Release
-		if len(args) > 0 {
-			if err := release.Update(rel.Dir, func(doc map[string]any) { doc["pack"] = args[0] }); err != nil {
-				return err
-			}
+		out := "."
+		if len(args) > 1 {
+			out = args[1]
 		}
-		// a state kept in the target has no file to keep its id in: it is written here, once
-		if rel.State == workdir.StateTarget && len(rel.ID) == 0 {
-			id := workdir.NewID()
-			if err := release.Update(rel.Dir, func(doc map[string]any) { doc["id"] = id }); err != nil {
-				return err
-			}
-			fmt.Println("id:", id)
+		said, err := initRelease(ctx, args[0], out, os.Stdin, isTerminal(os.Stdin))
+		for _, s := range said {
+			fmt.Println(s)
 		}
-		fresh, err := release.Load(rel.Dir, envName)
-		if err != nil {
-			return err
-		}
-		env, err := environment.Load(ctx, fresh.Config(), nil)
-		if err != nil {
-			return err
-		}
-		lock, err := release.ReadLock(fresh.Dir)
-		if err != nil {
-			return err
-		}
-		if lock == nil {
-			lock = &release.Lock{}
-		}
-		before := *lock
-		before.Targets = maps.Clone(lock.Targets)
-
-		if err := bringTargets(ctx, fresh, env, lock); err != nil {
-			return err
-		}
-
-		ref, err := fresh.PackRef()
-		if err != nil {
-			return err
-		}
-		if !oci.IsRef(ref) {
-			fmt.Printf("%s is a directory: nothing to bring\n", ref)
-		} else {
-			o, err := fresh.Registry.Options()
-			if err != nil {
-				return fmt.Errorf("registry: %w", err)
-			}
-			var pin string
-			if lock.Pack == ref && !initUpgrade {
-				pin, err = oci.WithDigest(ref, lock.Digest)
-			} else {
-				pin, err = oci.Pin(ctx, ref, o)
-			}
-			if err != nil {
-				return err
-			}
-			p, err := oci.Pull(ctx, pin, dir.PacksPath(), o)
-			if err != nil {
-				return err
-			}
-			lock.Pack, lock.Digest = ref, p.Digest
-			fmt.Printf("%s locked at %s\n", ref, p.Digest)
-		}
-		if !reflect.DeepEqual(before, *lock) {
-			return release.WriteLock(fresh.Dir, lock)
-		}
-		return nil
+		return err
 	}),
 }
 
-// bringTargets downloads the program of every target the environment uses that is not in pack itself, from the source
-// release.yaml names for it, into .pack/bin; the lock keeps the checksum of what came. A program that is there with
-// the checksum the lock has is not downloaded again; one that comes with another is refused unless --upgrade says the
-// source moved.
-func bringTargets(ctx context.Context, rel *release.Release, env *environment.Environment, lock *release.Lock) error {
-	used := map[string]bool{}
-	if len(env.Target) > 0 {
-		used[env.Target] = true
-	}
-	for _, t := range env.Targets {
-		if len(t.Target) > 0 {
-			used[t.Target] = true
-		}
-	}
-	builtin := target.Names()
-	bin := dir.BinPath()
-	for _, name := range slices.Sorted(maps.Keys(used)) {
-		if slices.Contains(builtin, name) {
-			continue
-		}
-		file := filepath.Join(bin, targets.Binary(name))
-		from := rel.Targets[name]
-		source := from.URL
-		if len(source) == 0 {
-			if _, err := os.Stat(file); err != nil {
-				return fmt.Errorf("target %s: no source for it in release.yaml (targets: {%s: https://… or oci://…}) and %s is not there", name, name, file)
-			}
-			fmt.Printf("target %s: %s, no source named\n", name, file)
-			continue
-		}
-		locked, has := lock.Targets[name]
-		same := has && locked.Source == source && !initUpgrade
-		if same {
-			if sum, err := targets.Sum(file); err == nil && sum == locked.SHA256 {
-				fmt.Printf("target %s: up to date (sha256 %s)\n", name, sum)
-				continue
-			}
-		}
-		o, err := from.Options()
-		if err != nil {
-			return fmt.Errorf("targets.%s: %w", name, err)
-		}
-		sum, err := targets.Fetch(ctx, name, source, bin, o)
-		if err != nil {
-			return err
-		}
-		if same && sum != locked.SHA256 {
-			_ = os.Remove(file)
-			return fmt.Errorf("target %s: %s now gives sha256 %s, the lock has %s — `pack init --upgrade` takes the new one", name, source, sum, locked.SHA256)
-		}
-		if lock.Targets == nil {
-			lock.Targets = map[string]release.TargetLock{}
-		}
-		lock.Targets[name] = release.TargetLock{Source: source, SHA256: sum}
-		fmt.Printf("target %s: downloaded from %s (sha256 %s)\n", name, source, sum)
-	}
-	return nil
+func isTerminal(f *os.File) bool {
+	st, err := f.Stat()
+	return err == nil && st.Mode()&os.ModeCharDevice != 0
 }
+
+// initRelease makes the release of ref in out, and says what it did.
+func initRelease(ctx context.Context, ref, out string, in io.Reader, ask bool) ([]string, error) {
+	var said []string
+	if !oci.IsRef(ref) {
+		abs, err := filepath.Abs(ref)
+		if err != nil {
+			return nil, err
+		}
+		if st, err := os.Stat(filepath.Join(abs, "schema.json")); err != nil || st.IsDir() {
+			return nil, fmt.Errorf("%s: not a pack (no schema.json) and not oci://…", ref)
+		}
+		ref = abs
+	}
+	if err := os.MkdirAll(out, 0o755); err != nil {
+		return nil, err
+	}
+	out, err := filepath.Abs(out)
+	if err != nil {
+		return nil, err
+	}
+	if !oci.IsRef(ref) {
+		// the release names a pack near it from where it is, so that the two move together; one far away by its path
+		if rel, err := filepath.Rel(out, ref); err == nil && strings.Count(rel, "..") <= 2 {
+			ref = rel
+		}
+	}
+	name := initTarget
+	if len(name) == 0 {
+		if !ask {
+			return nil, fmt.Errorf("--target names the target the release is installed on (%s)", strings.Join(targetChoices(), ", "))
+		}
+		if name, err = askTarget(in); err != nil {
+			return nil, err
+		}
+	}
+	if !slices.Contains(targetChoices(), name) && len(initSource) == 0 {
+		return nil, fmt.Errorf("target %q: not one pack knows (%s) — --target-source names where a target of another name comes from", name, strings.Join(targetChoices(), ", "))
+	}
+	envFile := "env.yaml"
+	if len(envName) > 0 {
+		envFile = "env." + envName + ".yaml"
+	}
+	files := []string{release.File, envFile, "values.yaml", "AGENTS.md"}
+	if !initForce {
+		var there []string
+		for _, f := range files {
+			if _, err := os.Stat(filepath.Join(out, f)); err == nil {
+				there = append(there, f)
+			}
+		}
+		if len(there) > 0 {
+			return nil, fmt.Errorf("%s: %s already there — pack refresh brings what a release that is there needs; --force writes over", out, strings.Join(there, ", "))
+		}
+	}
+
+	rel := map[string]any{"pack": ref}
+	if len(initSource) > 0 {
+		rel["targets"] = map[string]any{name: initSource}
+	}
+	env := map[string]any{"target": name}
+	if len(initLang) > 0 {
+		env["lang"] = initLang
+	}
+	docs := map[string]any{release.File: rel, envFile: env}
+	for _, f := range []string{release.File, envFile} {
+		b, err := yaml.Marshal(docs[f])
+		if err != nil {
+			return nil, err
+		}
+		if err := os.WriteFile(filepath.Join(out, f), b, 0o644); err != nil {
+			return nil, err
+		}
+		said = append(said, "wrote "+f)
+	}
+
+	// from here on the release is the directory's: what the root command does for -C
+	if err := os.Chdir(out); err != nil {
+		return said, err
+	}
+	r, err := release.Load(".", envName)
+	if err != nil {
+		return said, err
+	}
+	dir = workdir.New(r, envName)
+	dir.Ensure()
+	lock, err := release.ReadLock(r.Dir)
+	if err != nil {
+		return said, err
+	}
+	if lock == nil {
+		lock = &release.Lock{}
+	}
+	before := *lock
+	before.Targets = maps.Clone(lock.Targets)
+	if err := lockPack(ctx, dir, lock, false); err != nil {
+		return said, err
+	}
+	if slices.Contains(target.Names(), name) {
+		// in pack itself: nothing to download
+	} else if _, err := os.Stat(filepath.Join(dir.BinPath(), targets.Binary(name))); err == nil || len(initSource) > 0 {
+		e, err := environment.Load(ctx, r.Config(), nil)
+		if err != nil {
+			return said, err
+		}
+		if err := bringTargets(ctx, dir, e, lock, false); err != nil {
+			return said, err
+		}
+	} else {
+		said = append(said, fmt.Sprintf("target %s: no source — name it in release.yaml (targets: %s: https://… or oci://…) and run pack refresh", name, name))
+	}
+	if !reflect.DeepEqual(before, *lock) {
+		if err := release.WriteLock(r.Dir, lock); err != nil {
+			return said, err
+		}
+	}
+
+	b, err := session.ReleasePack(ctx, dir)
+	if err != nil {
+		return said, err
+	}
+	values, err := valuesfile.Write(b, nil, nil, valuesfile.Lang(initLang))
+	if err != nil {
+		return said, err
+	}
+	if err := os.WriteFile("values.yaml", values, 0o644); err != nil {
+		return said, err
+	}
+	said = append(said, "wrote values.yaml")
+	if err := os.WriteFile("AGENTS.md", []byte(agents), 0o644); err != nil {
+		return said, err
+	}
+	said = append(said, "wrote AGENTS.md", "next: set values.yaml, then pack check, pack plan, pack apply")
+	return said, nil
+}
+
+func targetChoices() []string {
+	out := slices.Clone(knownTargets)
+	for _, n := range target.Names() {
+		if !slices.Contains(out, n) {
+			out = append(out, n)
+		}
+	}
+	return out
+}
+
+// askTarget asks which target, the first of the choices when the answer is empty.
+func askTarget(in io.Reader) (string, error) {
+	choices := targetChoices()
+	fmt.Printf("target (%s) [%s]: ", strings.Join(choices, ", "), choices[0])
+	line, err := bufio.NewReader(in).ReadString('\n')
+	if err != nil && !errors.Is(err, io.EOF) {
+		return "", err
+	}
+	line = strings.TrimSpace(line)
+	if len(line) == 0 {
+		return choices[0], nil
+	}
+	return line, nil
+}
+
+// agents is AGENTS.md: how an agent — a model, or a person new to it — works with the release, in the commands
+// pack has.
+const agents = `# Working with this release
+
+This directory is a release of a pack: release.yaml says which pack, env.yaml where it is installed,
+values.yaml its settings. Work through the pack command; do not edit .pack/ or release.lock.json.
+
+1. The settings are in values.yaml, each documented in the comments above it. A line ` + "`#key: value`" + ` is
+   left to its default: remove the ` + "`#`" + ` to set it. Write no comments of your own: pack values write
+   refuses a file that has them.
+2. Never write a password or a token into a file. A secret is a reference to one kept elsewhere:
+
+       password:
+         secretRef:
+           name: db-admin
+           key: password
+
+3. After changing values.yaml run ` + "`pack check`" + `. Fix what it says and run it again until it says ok.
+4. ` + "`pack plan`" + ` says what an apply would change. Read it, then ` + "`pack apply`" + `.
+5. When an apply fails, ` + "`pack log`" + ` shows what happened, ` + "`pack rollback`" + ` takes back what it left
+   unfinished.
+6. ` + "`pack refresh --upgrade`" + ` brings the version the pack's tag has now; ` + "`pack values write`" + ` then
+   writes values.yaml for it, the values kept.
+
+Stop and ask a person when a plan removes something that holds data, when a problem of pack check is not
+about a value, or when you are not sure what a setting means.
+`

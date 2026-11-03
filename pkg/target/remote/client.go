@@ -29,7 +29,7 @@ import (
 
 const (
 	// EnvPath lists the directories searched for the programs of targets. Unset, it is .pack/bin of the release the
-	// command runs in — where `pack init` downloads them.
+	// command runs in — where `pack refresh` downloads them.
 	EnvPath = "PACK_TARGET_PATH"
 	// DefaultDir is what EnvPath defaults to, relative to the directory pack runs in.
 	DefaultDir = ".pack/bin"
@@ -67,7 +67,7 @@ func Find(name string) (string, error) {
 			return p, nil
 		}
 	}
-	return "", fmt.Errorf("target %q: no %s in %s — `pack init` downloads it from the source release.yaml names under targets:", name, bin, strings.Join(dirs, string(filepath.ListSeparator)))
+	return "", fmt.Errorf("target %q: no %s in %s — `pack refresh` downloads it from the source release.yaml names under targets:", name, bin, strings.Join(dirs, string(filepath.ListSeparator)))
 }
 
 // Plugin is a provider running in its own process, as a target.Target.

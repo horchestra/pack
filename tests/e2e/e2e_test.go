@@ -1,5 +1,5 @@
 // Package e2e installs a pack the way an operator does, against a real Docker engine: the packs are generated and
-// pushed to a registry (distribution, in a testcontainer), `pack init oci://…` starts a new release and brings the
+// pushed to a registry (distribution, in a testcontainer), `pack refresh` brings, for a release naming `oci://…`, the
 // pack and the docker target from that registry, `pack apply` runs openbao, and openbao itself is asked what it runs.
 //
 //	make test-e2e        the docker target (fast)
@@ -363,7 +363,7 @@ type release struct {
 	id    string
 }
 
-// release makes a new release from the documents of a scenario and runs `pack init` in it.
+// release makes a new release from the documents of a scenario, naming the pack, and runs `pack refresh` in it.
 func (s *suite) release(t *testing.T, env, values string) *release {
 	t.Helper()
 	dir := t.TempDir()
@@ -371,21 +371,21 @@ func (s *suite) release(t *testing.T, env, values string) *release {
 	placeholders := strings.NewReplacer("${REGISTRY}", s.registry, "${TARGET_TAG}", targetTag, "${API_PORT}", api)
 	write(t, filepath.Join(dir, "env.yaml"), placeholders.Replace(env))
 	write(t, filepath.Join(dir, "values.yaml"), values)
-	write(t, filepath.Join(dir, "release.yaml"), placeholders.Replace(releaseYAML))
+	ref := "oci://" + s.registry + "/" + openbaoRef
+	write(t, filepath.Join(dir, "release.yaml"), placeholders.Replace(releaseYAML)+"pack: "+ref+"\n")
 	r := &release{suite: s, dir: dir, api: api}
 	t.Cleanup(func() { r.cleanup(t) })
 
-	ref := "oci://" + s.registry + "/" + openbaoRef
-	out := run(t, dir, nil, s.pack, "init", ref)
+	out := run(t, dir, nil, s.pack, "refresh")
 	if !strings.Contains(out, ref+" locked at sha256:") {
-		t.Errorf("init locked nothing:\n%s", out)
+		t.Errorf("refresh locked nothing:\n%s", out)
 	}
 	raw, err := os.ReadFile(filepath.Join(dir, "release.yaml"))
 	if err != nil {
 		t.Fatal(err)
 	}
 	if !strings.Contains(string(raw), "pack: "+ref) {
-		t.Errorf("init did not name the pack in release.yaml:\n%s", raw)
+		t.Errorf("release.yaml does not name the pack:\n%s", raw)
 	}
 	var lock struct {
 		Pack, Digest string

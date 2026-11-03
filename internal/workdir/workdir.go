@@ -4,7 +4,7 @@
 //	.pack/state.json                    the record: what is installed, how far a saga got
 //	.pack/state.<env>.json              the same for --env <env>: a state per environment, as terraform has per workspace
 //	.pack/journal/<id>/<run>.jsonl      the sagas' journals: stages and logs
-//	.pack/packs/<digest>/               the packs brought from a registry (pack init): each pack beside the ones it holds
+//	.pack/packs/<digest>/               the packs brought from a registry (pack init, pack refresh): each pack beside the ones it holds
 //
 // PACK_DIR moves it; PACK_JOURNAL moves the journals only, "off" keeps none.
 package workdir
@@ -72,7 +72,7 @@ func (d *Dir) JournalPath() string {
 // PacksPath is where the packs brought from a registry are, one directory for each digest.
 func (d *Dir) PacksPath() string { return filepath.Join(d.Path, "packs") }
 
-// BinPath is where the programs of the targets are, pack-target-<name> each: what `pack init` downloads, and where
+// BinPath is where the programs of the targets are, pack-target-<name> each: what `pack refresh` downloads, and where
 // pack looks for them unless PACK_TARGET_PATH says otherwise.
 func (d *Dir) BinPath() string { return filepath.Join(d.Path, "bin") }
 

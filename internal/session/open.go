@@ -43,7 +43,7 @@ func ReleasePack(ctx context.Context, d *workdir.Dir) (*bundle.Bundle, error) {
 }
 
 // Pack opens the pack of the release, or one named by ref: a directory, or a pack in a registry — which the lock
-// of the release (pack init) or the digest in the reference says exactly.
+// of the release (pack init, pack refresh) or the digest in the reference says exactly.
 func (s *Session) Pack(ref string) (*bundle.Bundle, error) {
 	dir := ref
 	if oci.IsRef(ref) {
@@ -75,7 +75,7 @@ func (s *Session) pin(ref string) (string, error) {
 		return "", err
 	}
 	if lock == nil || lock.Pack != ref {
-		return "", fmt.Errorf("%s: %w — run `pack init`", ref, oci.ErrNoLock)
+		return "", fmt.Errorf("%s: %w — run `pack refresh`", ref, oci.ErrNoLock)
 	}
 	return oci.WithDigest(ref, lock.Digest)
 }

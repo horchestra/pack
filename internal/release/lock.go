@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 )
 
-// LockFile is what `pack init` writes for a pack in a registry: which digest the tag meant on that day. It is
+// LockFile is what `pack refresh` (and `pack init`) writes for a pack in a registry: which digest the tag meant on that day. It is
 // the release's, like release.yaml — in the repository.
 const LockFile = "release.lock.json"
 
@@ -15,7 +15,7 @@ const LockFile = "release.lock.json"
 type Lock struct {
 	Pack   string `json:"pack,omitempty"`   // as release.yaml says: oci://host/repo:tag
 	Digest string `json:"digest,omitempty"` // what the registry had for it
-	// Targets are the programs `pack init` downloaded, by the target's name.
+	// Targets are the programs `pack refresh` downloaded, by the target's name.
 	Targets map[string]TargetLock `json:"targets,omitempty"`
 }
 

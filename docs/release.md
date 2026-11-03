@@ -6,10 +6,10 @@ the same bare command gives the same result on a console and in CI. **The comman
 
 | file                                      |                                                                                                                                                                                                     |
 |-------------------------------------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| `release.yaml`                            | `pack:` a directory or `oci://host/repo:tag`; `values:` more files or directories; `state: file` (default) or `target`; `id:` the installation's UUID (`state: target` only; `pack init` writes it) |
+| `release.yaml`                            | `pack:` a directory or `oci://host/repo:tag`; `values:` more files or directories; `state: file` (default) or `target`; `id:` the installation's UUID (`state: target` only; `pack refresh` writes it) |
 | `values.yaml`, `*.values.yaml`, `values/` | what the operator wants, in the pack's own words, see [values.md](values.md)                                                                                                                        |
 | `env.yaml`                                | the environment; `--env x` (or `PACK_ENV`) reads `env.x.yaml` instead                                                                                                                               |
-| `release.lock.json`                       | the digest a registry tag meant when `pack init` ran; commit it                                                                                                                                     |
+| `release.lock.json`                       | the digest a registry tag meant when `pack init` or `pack refresh` ran; commit it                                                                                                                                     |
 | `.pack/`                                  | the state (`state.json`), the journal, the packs brought from a registry (`packs/<digest>/`); not for version control                                                                               |
 
 ```yaml
@@ -65,7 +65,7 @@ keys: # how the environment runs each key of the pack
 
 - `target:` names a target; the core knows none by name. `memory` is in pack (it keeps what it is told in the
   process: what the tests and `plan`/`template` use; `observe: "true"` makes it report what it holds, so drift can be
-  seen). `docker`, `ansible` and `k8s` are programs of their own that `pack init` downloads and pack starts,
+  seen). `docker`, `ansible` and `k8s` are programs of their own that `pack refresh` (and `pack init`) downloads and pack starts,
   `pack-target-<name>`, see [targets.md](targets.md); each one's settings and the entries of `keys:` it reads are in its README.
 - The default target is the one the top-level keys describe; each entry of `targets` is a target of its own, none
   inherited from the default one. `target:` may name an entry instead (`target: main`, `targets: {main: {target: docker}}`):
@@ -82,7 +82,7 @@ keys: # how the environment runs each key of the pack
 `state: file` keeps the record of the installation in `.pack/state.json` (mode 0600; references to credentials, never
 the
 credentials). `state: target` has the target keep it, so a CI job with no disk finds the installation where it is;
-without a file for it, the installation's `id` is written to `release.yaml` by `pack init`.
+without a file for it, the installation's `id` is written to `release.yaml` by `pack refresh`.
 
 The record names the installation (a UUID that outlives its removal: what stays after `delete` is found again by the
 next
