@@ -35,6 +35,7 @@ type Node struct {
 	AdditionalProperties *bool
 
 	Compute string
+	Suggest *packschema.Suggest
 	Rules   []packschema.Rule
 	File    *packschema.File // the file of Root.Content written from this subtree, when there is one
 	Arg     *packschema.Arg
@@ -213,6 +214,15 @@ func parseNodeOrdered(m map[string]any, ptr string, orders map[string][]string) 
 			return nil, fmt.Errorf("%s: x-pack-compute must be a non-empty string", ptr)
 		}
 		n.Compute = s
+	}
+	if sg, ok := m["x-pack-suggest"]; ok {
+		n.Suggest = &packschema.Suggest{}
+		if err := strict(sg, n.Suggest); err != nil {
+			return nil, fmt.Errorf("%s: x-pack-suggest: %w", ptr, err)
+		}
+		if len(n.Suggest.Expr) == 0 {
+			return nil, fmt.Errorf("%s: x-pack-suggest without an expression", ptr)
+		}
 	}
 	if rs, ok := m["x-pack-rules"]; ok {
 		l, ok := rs.([]any)

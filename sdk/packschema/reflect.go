@@ -4,9 +4,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"maps"
-	"slices"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"strings"
 
 	"github.com/invopop/jsonschema"
@@ -23,6 +23,10 @@ type Rooter interface{ PackRoot() Root }
 // Computer gives the formulas, keyed by JSON Pointer relative to the component
 // root. CEL does not live in a struct tag: quotes and commas.
 type Computer interface{ PackCompute() map[string]string }
+
+// Suggester gives the suggestions, keyed by JSON Pointer like the formulas: a value pack fill offers for a setting
+// the operator did not give — never one it takes by itself, as a formula's.
+type Suggester interface{ PackSuggest() map[string]Suggest }
 
 // Ruler gives the validation rules, keyed by JSON Pointer like the formulas:
 // every rule of the list hangs on the node as x-pack-rules and must hold of
@@ -76,6 +80,18 @@ func Reflect(defaults any, o Options) (*jsonschema.Schema, error) {
 				return nil, fmt.Errorf("x-pack-compute %s: %w", ptr, err)
 			}
 			extras(node)["x-pack-compute"] = expr
+		}
+	}
+	if c, ok := defaults.(Suggester); ok {
+		for ptr, sg := range c.PackSuggest() {
+			if len(sg.Expr) == 0 {
+				return nil, fmt.Errorf("x-pack-suggest %s: no expression", ptr)
+			}
+			node, err := lookup(s, ptr)
+			if err != nil {
+				return nil, fmt.Errorf("x-pack-suggest %s: %w", ptr, err)
+			}
+			extras(node)["x-pack-suggest"] = sg
 		}
 	}
 	if c, ok := defaults.(Ruler); ok {

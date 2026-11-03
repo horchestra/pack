@@ -28,4 +28,9 @@ public abstract class Pack {
     public Map<String, List<Rule>> packRules() {
         return Map.of();
     }
+
+    /** Optional: {pointer: suggestion} that pack fill offers for a setting not given. */
+    public Map<String, Suggest> packSuggest() {
+        return Map.of();
+    }
 }

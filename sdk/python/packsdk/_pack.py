@@ -14,7 +14,7 @@ from typing import Any
 
 from . import _docs, _yaml
 from ._reflect import SchemaError, hints, is_pack, json_name, reflect, tags, unwrap
-from ._vocab import Meta, Root, Rule
+from ._vocab import Meta, Root, Rule, Suggest
 
 DEFAULT_REPO = "packs"  # the prefix of the repositories packs are published under: <repo>/<name>:<version>
 ARTIFACT_PACK = "application/vnd.pack.pack.v1+json"
@@ -47,6 +47,9 @@ class Pack:
         return {}
 
     def pack_rules(self) -> dict[str, list[Rule]]:
+        return {}
+
+    def pack_suggest(self) -> dict[str, Suggest]:
         return {}
 
 

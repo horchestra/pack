@@ -165,6 +165,14 @@ var Phases = []Phase{PreInstall, PostInstall, PreUpgrade, PostUpgrade, PreDowngr
 // effective document they produce.
 var RulePhases = []Phase{PreMutate, PostMutate}
 
+// Suggest is `x-pack-suggest` on a node: a CEL expression over what a formula reads — the facts of the key's
+// target (facts), the values, the other keys (pack) — whose answer pack fill offers for the setting, with why; null
+// offers nothing. The operator, or a model, takes it or not: a suggestion is never a value by itself.
+type Suggest struct {
+	Expr string `json:"expr" jsonschema:"required,minLength=1"`
+	Why  string `json:"why,omitempty"`
+}
+
 // Rule is `x-pack-rules` on a node: a CEL expression over the same variables
 // a formula reads (values, limits, me, pack), which must hold — a false one
 // is a refusal with Message, an evaluation error is a refusal with the error.

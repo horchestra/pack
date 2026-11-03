@@ -126,14 +126,19 @@ type Violation struct {
 	// Required: the violation is a missing required property — the operator's
 	// to name, not a defect of the defaults.
 	Required bool
+	// Missing are the properties a Required violation misses, under Path.
+	Missing []string
 }
 
 func (v Violation) String() string { return v.Path + ": " + v.Message }
 
 func flatten(ve *jsonschema.ValidationError, out *[]Violation) {
 	if len(ve.Causes) == 0 {
-		_, required := ve.ErrorKind.(*kind.Required)
-		*out = append(*out, Violation{Path: "/" + joinPath(ve.InstanceLocation), Message: ve.ErrorKind.LocalizedString(printer), Required: required})
+		v := Violation{Path: "/" + joinPath(ve.InstanceLocation), Message: ve.ErrorKind.LocalizedString(printer)}
+		if r, ok := ve.ErrorKind.(*kind.Required); ok {
+			v.Required, v.Missing = true, r.Missing
+		}
+		*out = append(*out, v)
 		return
 	}
 	for _, c := range ve.Causes {

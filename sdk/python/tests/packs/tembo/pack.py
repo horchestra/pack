@@ -2,7 +2,7 @@
 
 from dataclasses import dataclass
 
-from packsdk import File, Meta, Pack, Readiness, Root, Secret, Volume, field
+from packsdk import File, Meta, Pack, Readiness, Root, Secret, Suggest, Volume, field, pointer
 
 
 @dataclass
@@ -38,6 +38,12 @@ class Tembo(Pack):
     def meta(self):
         return Meta(name="tembo", version="0.2.0", description="PostgreSQL with raft", license="Apache-2.0",
                     source="https://example.org/tembo", image="images/tembo:0.2.0")
+
+    # the port next to the agent's own when a host of the target already listens on it
+    def pack_suggest(self):
+        return {pointer(self, lambda o: o.pg_port): Suggest(
+            expr="has(facts.hosts) && facts.hosts.exists(h, has(facts.hosts[h].ports) && facts.hosts[h].ports.exists(p, p.port == 5433)) ? 5434 : null",
+            why="5433 is taken on a host")}
 
     def pack_root(self):
         return Root(

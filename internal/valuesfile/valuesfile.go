@@ -49,8 +49,8 @@ type Source struct {
 	Why   string `json:"why,omitempty"`
 }
 
-// Sources are the sources by the value's JSON Pointer. What fills values for the operator (pack fill, its suggestions:
-// horchestrapack-17) saves them; values write only reads them.
+// Sources are the sources by the value's JSON Pointer. What fills values for the operator — pack fill, pack answer —
+// records them; a release where nothing did has no file of them.
 type Sources map[string]Source
 
 // LoadSources reads dir/values.sources.json; none — no sources.

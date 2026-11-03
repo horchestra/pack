@@ -295,7 +295,10 @@ values.yaml its settings. Work through the pack command; do not edit .pack/ or r
 0. ` + "`pack next --json`" + ` says where the release is, what stops it and the commands to run next: follow it, and
    run it again after each step. Every command takes --json: one JSON document on stdout, an error as
    {"error": {"code", "message", "problems"}, "next": [...]}.
-1. The settings are in values.yaml, each documented in the comments above it. A line ` + "`#key: value`" + ` is
+1. ` + "`pack fill --json`" + ` lists what is to be answered — the settings required, the ones the pack suggests a
+   value for, each with its schema and the answers offered; ` + "`pack answer <pointer> <value> --source llm`" + `
+   answers one (` + "`--patch file`" + ` a JSON Patch of many). An answer the schema or a rule refuses is not written.
+   The settings are in values.yaml, each documented in the comments above it. A line ` + "`#key: value`" + ` is
    left to its default: remove the ` + "`#`" + ` to set it. Write no comments of your own: pack values write
    refuses a file that has them.
 2. Never write a password or a token into a file. A secret is a reference to one kept elsewhere:

@@ -187,6 +187,13 @@ def reflect(p: Any) -> dict:
             _lookup(s, ptr)["x-pack-compute"] = expr
         except SchemaError as e:
             raise SchemaError(f"x-pack-compute {ptr}: {e}") from None
+    for ptr, sg in p.pack_suggest().items():
+        if not sg.expr:
+            raise SchemaError(f"x-pack-suggest {ptr}: no expression")
+        try:
+            _lookup(s, ptr)["x-pack-suggest"] = sg.to_json()
+        except SchemaError as e:
+            raise SchemaError(f"x-pack-suggest {ptr}: {e}") from None
     ids: dict[str, str] = {}
     for ptr, rules in p.pack_rules().items():
         for r in rules:

@@ -120,6 +120,12 @@ type formula struct {
 
 // vrule is one x-pack-rules rule, located like a formula and evaluated the
 // same way — the difference is what a false answer means.
+// suggestion is one x-pack-suggest, located like a formula: what pack fill offers for the leaf.
+type suggestion struct {
+	formula
+	why string
+}
+
 type vrule struct {
 	formula
 	rule packschema.Rule
@@ -132,6 +138,7 @@ type render struct {
 	doc      map[string]any  // the effective document, whole
 	userSet  map[string]bool // pointers the operator wrote
 	formulas []formula
+	suggests []suggestion // x-pack-suggest: only Ask evaluates them
 	rules    []vrule
 	// keys is the SELECTION this render actually installs — b.Keys narrowed to
 	// what the operator named in values plus the held packs that are required,
@@ -158,18 +165,10 @@ type render struct {
 // postMutate rules → validate → convert, and stops at the target-neutral
 // Release a target turns into its own objects.
 func Render(b *bundle.Bundle, v Values, ctx Context) (*Release, error) {
-	if len(ctx.Installation) == 0 {
-		return nil, errors.New("an installation name is required (--name)")
-	}
-	if ctx.Target == nil {
-		return nil, errors.New("a target is required: the render cannot size or address a key without one")
-	}
-	env, err := compute.Env()
+	r, err := newRender(b, ctx)
 	if err != nil {
 		return nil, err
 	}
-	r := &render{b: b, ctx: ctx, env: env, userSet: map[string]bool{},
-		report: Report{Installation: ctx.Installation, Namespace: ctx.Target.Namespace(), Pack: b.Name}}
 	if err := r.configure(v); err != nil {
 		return nil, err
 	}
@@ -202,6 +201,21 @@ func Render(b *bundle.Bundle, v Values, ctx Context) (*Release, error) {
 		return nil, err
 	}
 	return r.convert(v)
+}
+
+func newRender(b *bundle.Bundle, ctx Context) (*render, error) {
+	if len(ctx.Installation) == 0 {
+		return nil, errors.New("an installation name is required (--name)")
+	}
+	if ctx.Target == nil {
+		return nil, errors.New("a target is required: the render cannot size or address a key without one")
+	}
+	env, err := compute.Env()
+	if err != nil {
+		return nil, err
+	}
+	return &render{b: b, ctx: ctx, env: env, userSet: map[string]bool{},
+		report: Report{Installation: ctx.Installation, Namespace: ctx.Target.Namespace(), Pack: b.Name}}, nil
 }
 
 // configure: defaults ⊕ user values, the instances selected, the order derived.
@@ -386,6 +400,13 @@ func (r *render) collect() error {
 				}
 			}
 			r.formulas = append(r.formulas, f)
+		}
+		if n.Suggest != nil {
+			a, err := compute.Compile(r.env, n.Suggest.Expr)
+			if err != nil {
+				return fmt.Errorf("%s: x-pack-suggest: %w", ptr, err)
+			}
+			r.suggests = append(r.suggests, suggestion{formula: locate(a), why: n.Suggest.Why})
 		}
 		for _, rule := range n.Rules {
 			a, err := compute.Compile(r.env, rule.Rule)
@@ -845,7 +866,16 @@ func (r *render) validate() error {
 		return err
 	}
 	var problems []Problem
+	escape := strings.NewReplacer("~", "~0", "/", "~1")
 	for _, v := range compiled.Validate(r.doc) {
+		if v.Required && len(v.Missing) > 0 {
+			// one problem a setting missing, where the setting is: what is to be given, not the object without it
+			parent := strings.TrimSuffix(v.Path, "/")
+			for _, m := range v.Missing {
+				problems = append(problems, Problem{Kind: KindRequired, Where: r.where(parent + "/" + escape.Replace(m)), Message: "required, not given"})
+			}
+			continue
+		}
 		kind := KindSchema
 		if v.Required {
 			kind = KindRequired

@@ -56,7 +56,7 @@ model that follows it instead of planning: with --json it is {state, blocking, n
 
   new          no release here                        pack init <pack> .
   unrefreshed  the pack or a target is not brought    pack refresh
-  unfilled     settings the pack requires not given   edit values.yaml, pack check
+  unfilled     settings the pack requires not given   pack fill, pack answer, pack check
   invalid      values the schema or a rule refuses    edit values.yaml, pack check
   failed       a saga failed or was cut short         pack log, pack apply, pack rollback
   planned      what is wanted is not what is there    pack plan, pack apply
@@ -139,7 +139,7 @@ func stateNow(ctx context.Context) nextState {
 					where = append(where, p.Where)
 				}
 				return nextState{State: StateUnfilled, Blocking: []apiError{e},
-					Next: []string{"edit values.yaml: set " + strings.Join(where, ", "), "pack check"}}
+					Next: []string{"pack fill", "pack answer <pointer> <value>: " + strings.Join(where, ", "), "pack check"}}
 			}
 			return nextState{State: StateInvalid, Blocking: []apiError{e}, Next: []string{"edit values.yaml", "pack check"}}
 		}

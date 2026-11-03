@@ -207,6 +207,12 @@ final class Reflect {
             node.put("x-pack-compute", e.getValue());
             sortExtensions(node);
         }
+        for (Map.Entry<String, Suggest> e : new TreeMap<>(p.packSuggest()).entrySet()) {
+            if (e.getValue().expr == null || e.getValue().expr.isEmpty()) throw new SchemaException("x-pack-suggest " + e.getKey() + ": no expression");
+            Map<String, Object> node = lookup(s, e.getKey(), "x-pack-suggest");
+            node.put("x-pack-suggest", e.getValue().toJson());
+            sortExtensions(node);
+        }
         Map<String, String> ids = new TreeMap<>();
         for (Map.Entry<String, List<Rule>> e : new TreeMap<>(p.packRules()).entrySet()) {
             List<Object> rules = new ArrayList<>();

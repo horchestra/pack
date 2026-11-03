@@ -57,6 +57,16 @@ postgres:
   hand-written block scalar) reads as a comment at the end of its line: `--rewrite` writes it as pack does. `--check` says whether the file is what pack would write. A release whose values are
   split over files, or a file that is a whole document (`rollout`, `skip`), is not written.
 
+## pack fill and pack answer
+
+`pack fill` says what is to be answered: every setting required that nothing gives, every setting not given that the
+pack suggests a value for (`PackSuggest`, worked out with the facts of the key's target). A question is its pointer,
+why it is asked, the field's schema with its documentation, and the answers offered — the suggestion with why, the
+default, the values of an `enum`, the examples. In a terminal it asks them one by one; with `--json` it lists them,
+for `pack answer <pointer> <value>` (or `--answers`, `--patch`) to answer. The answer goes into `values.yaml` with who
+gave it above it — `# source: suggest — why`, `# source: llm` — and one the schema or a rule refuses is not written.
+`pack values explain <pointer>` says of a setting what it is and where it came from.
+
 ## How the effective document is built
 
 1. **defaults** — the schema's `default`s: what `SetDefaults` left non-zero;

@@ -96,6 +96,7 @@ func Run(c Component) ([]Problem, error) {
 	}
 	insideFile := map[string]string{} // instance ptr → the file subtree it is under
 	computes := map[string]string{}
+	suggests := map[string]*schema.Node{}
 	computeTypes := map[string][]string{} // instance ptr → the node's JSON types
 	rules := map[string][]packschema.Rule{}
 
@@ -141,6 +142,9 @@ func Run(c Component) ([]Problem, error) {
 		if len(n.Compute) > 0 {
 			computes[ptr] = n.Compute
 			computeTypes[ptr] = n.Types // a default beside a formula is allowed: the default is the constant, the formula the computation
+		}
+		if n.Suggest != nil {
+			suggests[ptr] = n
 		}
 		if len(n.Rules) > 0 {
 			if n.IsForeign() {
@@ -191,6 +195,27 @@ func Run(c Component) ([]Problem, error) {
 	}
 	if cycle := findCycle(reads); len(cycle) > 0 {
 		add(cycle, "x-pack-compute reads form a cycle")
+	}
+
+	// 2a. suggestions compile and type-check; one is no password's (a credential is a reference, never a value
+	// offered) and no formula's (a formula fills what the operator does not give)
+	for _, ptr := range slices.Sorted(maps.Keys(suggests)) {
+		n := suggests[ptr]
+		if _, err := compute.Compile(env, n.Suggest.Expr); err != nil {
+			add(ptr, "x-pack-suggest does not compile: %v", err)
+			continue
+		}
+		if rt, err := compute.ResultType(env, n.Suggest.Expr); err != nil {
+			add(ptr, "x-pack-suggest does not type-check: %v", err)
+		} else if len(rt) > 0 && len(n.Types) > 0 && !typeAccepts(n.Types, rt) {
+			add(ptr, "x-pack-suggest yields %s, the node is %s", rt, strings.Join(n.Types, "|"))
+		}
+		if n.IsPassword() {
+			add(ptr, "x-pack-suggest on a password: a credential is a reference, never a value offered")
+		}
+		if len(n.Compute) > 0 {
+			add(ptr, "x-pack-suggest beside x-pack-compute: the formula fills what the operator does not give, nothing is left to suggest")
+		}
 	}
 
 	// 2b. rules compile, yield a boolean, run at a phase a rule runs at, read no replica identity

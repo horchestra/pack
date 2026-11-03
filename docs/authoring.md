@@ -70,6 +70,23 @@ packschema.Pointer(o, &o.Bao.Storage): fmt.Sprintf(
 }
 ```
 
+A **suggestion** (`PackSuggest`, `pack_suggest`, `packSuggest`) is CEL too, keyed the same way, with why: a value
+`pack fill` *offers* for a setting the operator did not give — from the facts of the key's target (`facts`, `pack
+discover`) as often as not — and never takes by itself, as a formula does. `null` offers nothing:
+
+```go
+func (c *Config) PackSuggest() map[string]packschema.Suggest {
+	return map[string]packschema.Suggest{
+		packschema.Pointer(c, &c.PGPort): {
+			Expr: "has(facts.hosts) && facts.hosts.exists(h, has(facts.hosts[h].ports) && facts.hosts[h].ports.exists(p, p.port == 5433)) ? 5434 : null",
+			Why:  "5433 is taken on a host",
+		},
+	}
+}
+```
+
+A suggestion on a password, or beside a formula, is a problem of `pack check`.
+
 The expression sees `values` (the whole document), `pack.values.<key>` and `pack.keys.<key>` (another key's values
 and address), `limits` and `me`. A field that is not there is an error at generation, not a broken schema; so is a name
 an expression cannot select (a dash, a dot).

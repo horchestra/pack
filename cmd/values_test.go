@@ -113,3 +113,16 @@ func TestValuesWriteMakesTheFile(t *testing.T) {
 		t.Fatalf("%q, %v", out, err)
 	}
 }
+
+// values write records no sources where nothing gave any: no file of them.
+func TestValuesWriteMakesNoSources(t *testing.T) {
+	d := releaseOf(t, generated(t), nil)
+	inRelease(t, d)
+	valuesFlags(t, false, false)
+	if _, err := writeValues(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(d, ".pack", "values.sources.json")); err == nil {
+		t.Error("values write made a file of sources")
+	}
+}

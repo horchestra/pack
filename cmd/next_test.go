@@ -25,7 +25,7 @@ func TestNext(t *testing.T) {
 	write(t, d, "values.yaml", map[string]any{"postgres": map[string]any{"id": "n1"}}) // openbao.api_addr is required
 	inRelease(t, d)
 	n := whatNext(ctx)
-	if n.State != StateUnfilled || len(n.Blocking) != 1 || n.Blocking[0].Code != CodeValuesMissing || !strings.Contains(n.Next[0], "/openbao") {
+	if n.State != StateUnfilled || len(n.Blocking) != 1 || n.Blocking[0].Code != CodeValuesMissing || !strings.Contains(n.Next[1], "/openbao/api_addr") {
 		t.Fatalf("a required setting not given: %+v", n)
 	}
 

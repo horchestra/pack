@@ -191,6 +191,17 @@ class Root:
 
 
 @dataclass
+class Suggest:
+    """x-pack-suggest on a node: a CEL expression pack fill offers the answer of for a setting not given, with why —
+    never a value by itself, as a formula's."""
+    expr: str
+    why: str = ""
+
+    def to_json(self) -> dict:
+        return {"expr": self.expr, **_drop({"why": self.why})}
+
+
+@dataclass
 class Rule:
     """x-pack-rules on a node: a CEL expression that must hold of the values. id names it among the pack's rules, so
     that docs/<lang>.yaml can say its message in other languages (rules: {<id>: …})."""

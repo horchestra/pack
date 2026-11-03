@@ -2,6 +2,7 @@ package render_test
 
 import (
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -501,5 +502,40 @@ func TestFormulasReadTheFacts(t *testing.T) {
 	}
 	if got := envOf(rel.Units[0], "CACHE"); got != "128MB" {
 		t.Errorf("no facts told: cache = %v", got)
+	}
+}
+
+// Ask: what the values do not give and should — required settings, and settings the pack suggests a value for, with
+// the facts of the key's target.
+func TestAsk(t *testing.T) {
+	b := loadOpenbao(t)
+	facts := (&target.Facts{Hosts: map[string]target.HostFacts{"db1": {Ports: []target.Port{{Port: 5433, Proto: "tcp"}}}}}).Map()
+	ctx := render.Context{Installation: "t", Target: memory.New(), Facts: map[string]map[string]any{render.DefaultTarget: facts}}
+	qs, err := render.Ask(b, render.Values{Values: map[string]any{"postgres": map[string]any{}}}, ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	byPtr := map[string]render.Question{}
+	for _, q := range qs.Questions {
+		byPtr[q.Pointer] = q
+	}
+	if q, ok := byPtr["/openbao/api_addr"]; !ok || q.Reason != render.ReasonRequired || q.Schema["type"] != "string" {
+		t.Errorf("a required setting: %+v", q)
+	}
+	if q, ok := byPtr["/postgres/pg_port"]; !ok || q.Reason != render.ReasonSuggested || len(q.Candidates) < 2 ||
+		q.Candidates[0].Source != render.FromSuggest || q.Candidates[0].Why != "5433 is taken on a host" || q.Candidates[1].Source != render.FromDefault {
+		t.Errorf("a suggestion from the facts: %+v", q)
+	}
+	// without the facts the suggestion offers nothing; given, it is no question
+	qs, _ = render.Ask(b, render.Values{Values: map[string]any{"postgres": map[string]any{"pg_port": 6000}}}, ctx)
+	for _, q := range qs.Questions {
+		if q.Pointer == "/postgres/pg_port" {
+			t.Errorf("a setting given is asked: %+v", q)
+		}
+	}
+	qs, _ = render.Ask(b, render.Values{Values: map[string]any{"postgres": map[string]any{}, "openbao": map[string]any{"api_addr": "x", "log_level": 7}}},
+		render.Context{Installation: "t", Target: memory.New()})
+	if len(qs.Questions) != 0 || !slices.ContainsFunc(qs.Problems, func(p render.Problem) bool { return p.Kind == render.KindSchema && p.Where == "/openbao/log_level" }) {
+		t.Errorf("no facts, a wrong value: %+v", qs)
 	}
 }

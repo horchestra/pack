@@ -71,3 +71,13 @@ func (*Config) PackRoot() packschema.Root {
 		Readiness: &packschema.Readiness{HTTP: "api/health"},
 	}
 }
+
+// PackSuggest offers the port next to the agent's own when a host of the target already listens on it.
+func (c *Config) PackSuggest() map[string]packschema.Suggest {
+	return map[string]packschema.Suggest{
+		packschema.Pointer(c, &c.PGPort): {
+			Expr: "has(facts.hosts) && facts.hosts.exists(h, has(facts.hosts[h].ports) && facts.hosts[h].ports.exists(p, p.port == 5433)) ? 5434 : null",
+			Why:  "5433 is taken on a host",
+		},
+	}
+}

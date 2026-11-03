@@ -1,5 +1,9 @@
 package io.horchestra.pack.sdk.packs;
 
+import java.util.Map;
+
+import io.horchestra.pack.sdk.Paths;
+import io.horchestra.pack.sdk.Suggest;
 import io.horchestra.pack.sdk.Meta;
 import io.horchestra.pack.sdk.Pack;
 import io.horchestra.pack.sdk.Root;
@@ -55,6 +59,13 @@ public class Tembo extends Pack {
         return new Meta("tembo", "0.2.0").description("PostgreSQL with raft").license("Apache-2.0")
                 .source("https://example.org/tembo").image("images/tembo:0.2.0")
                 .dir("src/test/packs/tembo");
+    }
+
+    /** The port next to the agent's own when a host of the target already listens on it. */
+    @Override
+    public Map<String, Suggest> packSuggest() {
+        return Map.of(Paths.pointer(Tembo.class, "pgPort"), new Suggest(
+                "has(facts.hosts) && facts.hosts.exists(h, has(facts.hosts[h].ports) && facts.hosts[h].ports.exists(p, p.port == 5433)) ? 5434 : null", "5433 is taken on a host"));
     }
 
     @Override

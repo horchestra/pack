@@ -120,8 +120,10 @@ func nextFor(code string) []string {
 		return []string{"pack init <oci://registry/repo:tag|dir> ."}
 	case CodeNotRefreshed:
 		return []string{"pack refresh"}
-	case CodeValuesMissing, CodeValuesInvalid:
-		return []string{"edit values.yaml", "pack check"}
+	case CodeValuesMissing:
+		return []string{"pack fill", "pack answer <pointer> <value>", "pack check"}
+	case CodeValuesInvalid:
+		return []string{"pack answer <pointer> <value>", "edit values.yaml", "pack check"}
 	case CodeCheckFailed:
 		return []string{"pack check"}
 	case CodeSagaFailed, CodeSagaUnfinished:
