@@ -264,6 +264,20 @@ The author checks run on the result with `pack check <dir>`. Python and
 Java: [../sdk/python/README.md](../sdk/python/README.md),
 [../sdk/java/README.md](../sdk/java/README.md).
 
+## Checking while writing
+
+`pack author check [src]` is the loop of writing a pack — a person's, or a model's writing it from a prompt: it
+generates the pack from the source in the directory with the SDK of its language (`go run` of the package of
+`sdk.Run`, `./cmd` when there is one; `python3` of the file of `packsdk.main`; `javac` and `java` of the class of
+`PackSdk.main`, `--classpath` the SDK's classes), runs `pack check` and the docs checks on what it wrote and the
+scenarios of `tests/` beside the source or above it, and says what to fix: each problem with the field's pointer and,
+when the source writes the field on one line, its `file:line` (a json tag in Go, a field in Python, `json =` or the
+camel field in Java); what the generator said when it failed (a compiler's line, the SDK's refusal). It says `ok`
+when only warnings are left. `pack author cel <expr> --pack <generated> --key K` works an expression out as a formula
+of the key would, on values (`--values`), facts (`--facts`, a fixture) and limits (`--env`); `pack author ref <topic>`
+is the part of this guide a topic is, with the code of `--lang`; `pack author example postgres|openbao|docker` an
+example's source; `pack author docs [src] -l ru` the `docs/<lang>.yaml` to fill. `pack mcp` has them as tools.
+
 ## Testing
 
 `pack test <generated pack> [scenario.yaml|dir]…` runs the pack's scenarios — `tests/*.yaml` of the current

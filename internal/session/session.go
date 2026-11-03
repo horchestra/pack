@@ -85,7 +85,7 @@ func Open(ctx context.Context, d *workdir.Dir, readOnly bool) (*Session, error) 
 	for _, w := range warnings {
 		_, _ = fmt.Fprintln(os.Stderr, "pack: facts:", w)
 	}
-	s.Ctx = render.Context{Installation: id, Target: s.Inst, Keys: placements(env.Keys)}
+	s.Ctx = render.Context{Installation: id, Target: s.Inst, Keys: Placements(env.Keys)}
 	for name, f := range facts {
 		if s.Ctx.Facts == nil {
 			s.Ctx.Facts = map[string]map[string]any{}
@@ -150,8 +150,8 @@ func (s *Session) pruneJournal() {
 	}
 }
 
-// placements are the environment's keys as the render takes them.
-func placements(keys map[string]environment.Key) map[string]render.Placement {
+// Placements are the environment's keys as the render takes them.
+func Placements(keys map[string]environment.Key) map[string]render.Placement {
 	out := make(map[string]render.Placement, len(keys))
 	for name, k := range keys {
 		p := render.Placement{Target: k.Target, Replicas: k.Replicas, Labels: k.Labels, Annotations: k.Annotations, Raw: k.Raw}

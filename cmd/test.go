@@ -173,16 +173,15 @@ are not compared there; a scenario of fail_at or logs is the memory target's, an
 				fmt.Println("      " + strings.ReplaceAll(m, "\n", "\n      "))
 			}
 		}
-		if err := result(struct {
+		doc := struct {
 			Scenarios []testResult `json:"scenarios"`
-		}{results}); err != nil {
-			return err
-		}
+		}{results}
 		if failed > 0 {
-			return withCode(CodeTestFailed, fmt.Errorf("%d of %d scenario(s) failed", failed, len(results)))
+			// one document, the error's: the scenarios are its detail
+			return withDetail(CodeTestFailed, fmt.Errorf("%d of %d scenario(s) failed", failed, len(results)), doc)
 		}
 		fmt.Printf("%d scenario(s) ok\n", len(results))
-		return nil
+		return result(doc)
 	}),
 }
 

@@ -63,6 +63,7 @@ type coded struct {
 	err      error
 	problems []render.Problem
 	next     []string // what to run next, when the code alone does not say it
+	detail   any      // what the command found besides problems (author check, pack test): in the error's document
 }
 
 func (c *coded) Error() string { return c.err.Error() }
@@ -80,6 +81,11 @@ func withNext(code string, err error, next []string) error {
 	return &coded{code: code, err: err, next: next}
 }
 
+// withDetail is withCode with what the command found, for the error's document: one document, the error's.
+func withDetail(code string, err error, detail any) error {
+	return &coded{code: code, err: err, detail: detail}
+}
+
 // withProblems is withCode with the problems the command found: the error's document carries them.
 func withProblems(code string, err error, problems []render.Problem) error {
 	return &coded{code: code, err: err, problems: problems}
@@ -90,6 +96,7 @@ type apiError struct {
 	Code     string           `json:"code"`
 	Message  string           `json:"message"`
 	Problems []render.Problem `json:"problems,omitempty"`
+	Detail   any              `json:"detail,omitempty"` // what the command found: the scenarios of pack test, what pack author check says
 }
 
 // failure is the JSON of a command that failed: what went wrong, and what to run next.
@@ -110,7 +117,7 @@ func classify(err error) apiError {
 			out.Code = CodeValuesMissing
 		}
 	case errors.As(err, &c):
-		out.Code, out.Problems = c.code, c.problems
+		out.Code, out.Problems, out.Detail = c.code, c.problems, c.detail
 	case errors.Is(err, oci.ErrNoLock), errors.Is(err, target.ErrNotBrought):
 		out.Code = CodeNotRefreshed
 	case errors.Is(err, release.ErrNoPack):

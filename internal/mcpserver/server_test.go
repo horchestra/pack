@@ -118,8 +118,12 @@ func TestOperator(t *testing.T) {
 			t.Errorf("%s: a person's approval in a tool", tl.Name)
 		}
 	}
-	if len(names) != 10 {
+	if len(names) != 15 {
 		t.Errorf("the tools: %v", names)
+	}
+
+	if ok, doc := s.call("author_ref", map[string]any{"name": "action", "lang": "python"}); !ok || !strings.Contains(string(mustJSON(doc)), "pack run") {
+		t.Errorf("author_ref: %v", doc)
 	}
 
 	if st := s.state(); st != "unfilled" {
