@@ -2,7 +2,8 @@
 // pushed to a registry (distribution, in a testcontainer), `pack init oci://…` starts a new release and brings the
 // pack and the docker target from that registry, `pack apply` runs openbao, and openbao itself is asked what it runs.
 //
-//	make test-e2e
+//	make test-e2e        the docker target (fast)
+//	make test-e2e-hosts  the ansible one: real Debian and Fedora hosts (slow, needs the internet)
 //
 // It needs a Docker engine, python3 for a venv of ansible (TestFromOSPackages), the internet for the hosts' packages, and the targets checkout (PACK_E2E_TARGETS, by default targets/ of this repository); the
 // images come from the engine, pulled if it does not have them.
@@ -22,6 +23,7 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+	"sync"
 	"syscall"
 	"testing"
 	"time"
@@ -156,13 +158,54 @@ openbao:
 `
 )
 
-// suite is what every scenario shares: the registry, with the packs and the target pushed.
+// suite is what every scenario shares: the registry, with the packs and the docker target pushed. It is built once
+// for the whole run — the builds, the registry and the pushes are the slow part — and torn down by TestMain.
 type suite struct {
 	pack       string
 	packer     string
 	targets    string
 	registry   string
 	registryIP string // how a host reaches the registry, on the engine's network
+
+	reg      testcontainers.Container
+	tagged   []string // the images pushed into the registry, removed at the end
+	tmp      []string // the directories of the builds
+	ansibleOnce sync.Once
+	ansibleE error
+}
+
+var (
+	shared     *suite
+	sharedOnce sync.Once
+)
+
+func TestMain(m *testing.M) {
+	code := m.Run()
+	if shared != nil {
+		shared.close()
+	}
+	os.Exit(code)
+}
+
+// setup is the suite of the run, built on the first test that asks.
+func setup(t *testing.T) *suite {
+	t.Helper()
+	sharedOnce.Do(func() { shared = newSuite(t) })
+	if shared == nil { // the build failed a test before this one (t.Fatal inside the Once)
+		t.Fatal("the suite was not built")
+	}
+	return shared
+}
+
+func (s *suite) close() {
+	ctx := context.Background()
+	_ = s.reg.Terminate(ctx)
+	for _, tag := range s.tagged {
+		_ = exec.Command("docker", "rmi", tag).Run()
+	}
+	for _, d := range s.tmp {
+		_ = os.RemoveAll(d)
+	}
 }
 
 func TestOpenBao(t *testing.T) {
@@ -199,10 +242,10 @@ func TestOpenBao(t *testing.T) {
 	})
 }
 
-// setup starts the registry and publishes into it what the release will ask for: the images, the packs (the held one
-// first: an item of a pack file is mounted from the registry being pushed to) and the docker target.
-func setup(t *testing.T) *suite {
-	t.Helper()
+// newSuite starts the registry and publishes into it what the release will ask for: the images, the packs (the held
+// one first: an item of a pack file is mounted from the registry being pushed to) and the docker target. The ansible
+// target is built and pushed by withAnsible, when a test that needs it runs.
+func newSuite(t *testing.T) *suite {
 	ctx := context.Background()
 
 	root, err := filepath.Abs(filepath.Join("..", ".."))
@@ -213,28 +256,20 @@ func setup(t *testing.T) *suite {
 	if len(targets) == 0 {
 		targets = filepath.Join(root, "targets")
 	}
-	bin := t.TempDir()
+	bin, err := os.MkdirTemp("", "pack-e2e-bin")
+	if err != nil {
+		t.Fatal(err)
+	}
 	pack := filepath.Join(bin, "pack")
 	packer := filepath.Join(bin, "oci-packer")
-	targetDir := t.TempDir()
 	run(t, root, nil, "go", "build", "-o", pack, "./cmd/pack")
 	// the version go.mod pins, whatever is on PATH
 	run(t, root, nil, "go", "build", "-o", packer, "github.com/arenadata/oci-packer/cmd/oci-packer")
-	// the ansible target carries oci-proxy to the hosts
-	run(t, targets, nil, "make", "oci-proxy")
-	for _, name := range []string{"docker", "ansible"} {
-		dir := filepath.Join(targetDir, name)
-		if err := os.MkdirAll(dir, 0o755); err != nil {
-			t.Fatal(err)
-		}
-		run(t, filepath.Join(targets, name), nil, "go", "build", "-o", filepath.Join(dir, "pack-target-"+name), ".")
-	}
 
 	c, err := testcontainers.Run(ctx, registryImage,
 		testcontainers.WithExposedPorts("5000/tcp"),
 		testcontainers.WithWaitStrategy(wait.ForHTTP("/v2/").WithPort("5000/tcp")),
 	)
-	testcontainers.CleanupContainer(t, c)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -244,6 +279,7 @@ func setup(t *testing.T) *suite {
 	}
 	// 127.0.0.1 the engine takes as an insecure registry by itself, on the machine and in Docker Desktop's VM alike
 	reg := "127.0.0.1:" + port.Port()
+	s := &suite{pack: pack, packer: packer, targets: targets, registry: reg, reg: c, tmp: []string{bin}}
 
 	for from, to := range map[string]string{
 		"openbao/openbao:2.6.5": "images/openbao:2.6.5",
@@ -254,28 +290,69 @@ func setup(t *testing.T) *suite {
 		}
 		docker(t, "tag", from, reg+"/"+to)
 		docker(t, "push", "-q", reg+"/"+to)
-		t.Cleanup(func() { _ = exec.Command("docker", "rmi", reg+"/"+to).Run() })
+		s.tagged = append(s.tagged, reg+"/"+to)
 	}
 
 	// a pack is generated and published on its own, the pack it holds first; the pack file says where it goes
-	generated := t.TempDir()
+	generated, err := os.MkdirTemp("", "pack-e2e-gen")
+	if err != nil {
+		t.Fatal(err)
+	}
+	s.tmp = append(s.tmp, generated)
 	for _, name := range []string{"docker", "postgres", "openbao"} {
 		run(t, root, nil, "go", "run", "./examples/"+name+"/go/cmd", "generate", "-o", generated)
 		run(t, filepath.Join(generated, name), nil, packer, "oci://"+reg, "-f", "pack.yaml", "--plain-http")
 	}
 
-	for _, name := range []string{"docker", "ansible"} {
-		dir := filepath.Join(targetDir, name)
-		write(t, filepath.Join(dir, "pack.yaml"), "type: application/vnd.pack.target.v1\nitems:\n- from: file://pack-target-"+name+"\n")
-		run(t, dir, nil, packer,
-			fmt.Sprintf("oci://%s/targets/%s:%s-%s-%s", reg, name, targetTag, runtime.GOOS, runtime.GOARCH), "-f", "pack.yaml", "--plain-http")
-	}
-
+	s.pushTarget(t, "docker")
 	ip, err := c.ContainerIP(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
-	return &suite{pack: pack, packer: packer, targets: targets, registry: reg, registryIP: ip}
+	s.registryIP = ip
+	return s
+}
+
+// pushTarget builds pack-target-<name> and pushes it to the registry, <name>:<targetTag>-<os>-<arch>.
+func (s *suite) pushTarget(t *testing.T, name string) {
+	t.Helper()
+	if err := s.pushTargetE(name); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func (s *suite) pushTargetE(name string) error {
+	dir, err := os.MkdirTemp("", "pack-e2e-target-"+name)
+	if err != nil {
+		return err
+	}
+	s.tmp = append(s.tmp, dir)
+	if out, err := runCmd(filepath.Join(s.targets, name), "go", "build", "-o", filepath.Join(dir, "pack-target-"+name), "."); err != nil {
+		return fmt.Errorf("build the %s target: %v\n%s", name, err, out)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "pack.yaml"), []byte("type: application/vnd.pack.target.v1\nitems:\n- from: file://pack-target-"+name+"\n"), 0o644); err != nil {
+		return err
+	}
+	if out, err := runCmd(dir, s.packer,
+		fmt.Sprintf("oci://%s/targets/%s:%s-%s-%s", s.registry, name, targetTag, runtime.GOOS, runtime.GOARCH), "-f", "pack.yaml", "--plain-http"); err != nil {
+		return fmt.Errorf("push the %s target: %v\n%s", name, err, out)
+	}
+	return nil
+}
+
+// withAnsible builds and pushes the ansible target, once: the ansible target carries oci-proxy to the hosts.
+func (s *suite) withAnsible(t *testing.T) {
+	t.Helper()
+	s.ansibleOnce.Do(func() {
+		if out, err := runCmd(s.targets, "make", "oci-proxy"); err != nil {
+			s.ansibleE = fmt.Errorf("make oci-proxy: %v\n%s", err, out)
+			return
+		}
+		s.ansibleE = s.pushTargetE("ansible")
+	})
+	if s.ansibleE != nil {
+		t.Fatal(s.ansibleE)
+	}
 }
 
 // release is one deployment: its directory, and where the api of its openbao is published.

@@ -13,7 +13,7 @@ PROTO_OUT := pkg/target/remote/remotepb
 PROTOS    := $(wildcard $(PROTO_DIR)/*.proto)
 
 .DEFAULT_GOAL := help
-.PHONY: help proto build test test-core test-sdk test-e2e golden vet fmt clean
+.PHONY: help proto build test test-core test-sdk test-e2e test-e2e-hosts test-e2e-all golden vet fmt clean
 
 help: ## list the targets
 	@grep -E '^[a-zA-Z_-]+:.*## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*## "}; {printf "  %-14s %s\n", $$1, $$2}'
@@ -54,6 +54,12 @@ test-sdk: ## the Python and Java SDKs and examples against the golden files
 	rm -rf $$out
 
 test-e2e: ## openbao from a registry on a real Docker engine (dev, raft, postgres): needs Docker and targets/
+	cd tests/e2e && $(GO) test -count=1 -timeout 20m -run 'TestOpenBao' ./...
+
+test-e2e-hosts: ## the packs from OS packages on real Debian and Fedora hosts and from a registry mirror (ansible): slow, needs the internet
+	cd tests/e2e && $(GO) test -count=1 -timeout 20m -run 'TestFromOSPackages|TestFromARegistryMirror' ./...
+
+test-e2e-all: ## all of the e2e
 	cd tests/e2e && $(GO) test -count=1 -timeout 20m ./...
 
 golden: ## rewrite the golden files the SDKs and examples are compared with (after a deliberate change of the format)

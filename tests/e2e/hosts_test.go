@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -20,6 +21,7 @@ import (
 )
 
 const (
+	// ${HOSTS} is hostsBlock's: the environment's hosts, one entry per host of the scenario
 	dockerEnv = `---
 target: main
 targets:
@@ -28,12 +30,7 @@ targets:
     ansible: ${ANSIBLE}
     ssh_private_key: ${SSH_KEY}
     state: ${STATE}
-    hosts:
-      host:
-        host: 127.0.0.1
-        port: ${SSH_PORT}
-        user: root
-`
+${HOSTS}`
 	dockerValues = `---
 daemon:
   log-driver: local
@@ -46,11 +43,7 @@ targets:
     ansible: ${ANSIBLE}
     ssh_private_key: ${SSH_KEY}
     state: ${STATE}
-    hosts:
-      host:
-        host: 127.0.0.1
-        port: ${SSH_PORT}
-        user: root
+${HOSTS}
 secrets:
   provider: generate
   provision:
@@ -74,6 +67,35 @@ openbao:
       tls_disable: true
 `
 )
+
+// osUnderTest is one OS the packs are installed from packages on: testdata/<name> is its host image, pkgQuery says
+// whether a package is installed there. bao is the version the OS's own openbao package is; "" — the OS's repository
+// moves, it is not checked.
+type osUnderTest struct {
+	name     string
+	bao      string
+	pkgQuery []string
+}
+
+var osUnderTests = []osUnderTest{
+	{"debian", "2.6.5", []string{"dpkg-query", "-W", "docker-ce"}},
+	{"fedora", "", []string{"rpm", "-q", "docker-ce"}},
+}
+
+// hostsBlock is the hosts of the environment: name → the SSH port the host's 22 is published at.
+func hostsBlock(ports map[string]string) string {
+	names := make([]string, 0, len(ports))
+	for n := range ports {
+		names = append(names, n)
+	}
+	slices.Sort(names)
+	var b strings.Builder
+	b.WriteString("    hosts:\n")
+	for _, n := range names {
+		fmt.Fprintf(&b, "      %s:\n        host: 127.0.0.1\n        port: %s\n        user: root\n", n, ports[n])
+	}
+	return b.String()
+}
 
 // A host: what the hosts of a stand are, an empty OS with systemd that SSH reaches, ansible in a venv of its own.
 func startHost(t *testing.T, name, key string) (testcontainers.Container, string) {
@@ -137,6 +159,7 @@ func hostExec(t *testing.T, c testcontainers.Container, cmd ...string) string {
 // The packs from OS packages: the same packs as in TestOpenBao, on the OSes they name.
 func TestFromOSPackages(t *testing.T) {
 	s := setup(t)
+	s.withAnsible(t)
 	t.Setenv("ANSIBLE_HOST_KEY_CHECKING", "False")
 	t.Setenv("LC_ALL", "en_US.UTF-8")
 	t.Setenv("OBJC_DISABLE_INITIALIZE_FORK_SAFETY", "YES")
@@ -149,30 +172,61 @@ func TestFromOSPackages(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	for name, bao := range map[string]string{"debian": "2.6.5", "fedora": ""} {
-		t.Run(name, func(t *testing.T) {
-			c, port := startHost(t, name, strings.TrimSpace(string(pub)))
-			fill := func(env string) string {
-				return strings.NewReplacer("${ANSIBLE}", bin, "${SSH_KEY}", key, "${SSH_PORT}", port, "${STATE}", filepath.Join(t.TempDir(), "state.json")).Replace(env)
+	for _, os := range osUnderTests {
+		t.Run(os.name, func(t *testing.T) {
+			c, port := startHost(t, os.name, strings.TrimSpace(string(pub)))
+			fill := func(env string, hosts map[string]string) string {
+				return strings.NewReplacer("${ANSIBLE}", bin, "${SSH_KEY}", key, "${STATE}", filepath.Join(t.TempDir(), "state.json"),
+					"${HOSTS}", hostsBlock(hosts)).Replace(env)
 			}
 
 			t.Run("docker", func(t *testing.T) {
-				r := s.packRelease(t, "docker:1.0.0", "ansible", fill(dockerEnv), dockerValues)
+				// a second host: every host of the environment gets the key, one apply
+				c2, port2 := startHost(t, os.name, strings.TrimSpace(string(pub)))
+				r := s.packRelease(t, "docker:1.0.0", "ansible", fill(dockerEnv, map[string]string{"host": port, "host2": port2}), dockerValues)
 				out := run(t, r.dir, journal(c), s.pack, "apply")
 				if !strings.Contains(out, "installed docker 1.0.0") {
 					t.Errorf("apply:\n%s", out)
 				}
-				if got := hostExec(t, c, "systemctl", "is-active", "docker"); strings.TrimSpace(got) != "active" {
-					t.Errorf("docker = %q", got)
+				for _, h := range []testcontainers.Container{c, c2} {
+					if got := hostExec(t, h, "systemctl", "is-active", "docker"); strings.TrimSpace(got) != "active" {
+						t.Errorf("docker = %q", got)
+					}
+					// the value of the release reached the engine: a restart was notified by the file
+					if got := hostExec(t, h, "docker", "info", "-f", "{{.LoggingDriver}}"); !strings.Contains(got, "local") {
+						t.Errorf("the log driver = %q", got)
+					}
 				}
-				// the value of the release reached the engine: a restart was notified by the file
-				if got := hostExec(t, c, "docker", "info", "-f", "{{.LoggingDriver}}"); !strings.Contains(got, "local") {
-					t.Errorf("the log driver = %q", got)
+
+				// a second apply changes nothing, and what runs is not restarted
+				uptime := strings.TrimSpace(hostExec(t, c, "systemctl", "show", "docker", "-p", "ActiveEnterTimestamp"))
+				run(t, r.dir, journal(c), s.pack, "apply")
+				if got := strings.TrimSpace(hostExec(t, c, "systemctl", "show", "docker", "-p", "ActiveEnterTimestamp")); got != uptime {
+					t.Errorf("a no-op apply restarted docker: %s → %s", uptime, got)
+				}
+			})
+
+			t.Run("delete", func(t *testing.T) {
+				c3, port3 := startHost(t, os.name, strings.TrimSpace(string(pub)))
+				r := s.packRelease(t, "docker:1.0.0", "ansible", fill(dockerEnv, map[string]string{"host": port3}), dockerValues)
+				run(t, r.dir, journal(c3), s.pack, "apply")
+				run(t, r.dir, journal(c3), s.pack, "delete")
+				if code, _, _ := c3.Exec(context.Background(), []string{"test", "-e", "/etc/docker/daemon.json"}); code == 0 {
+					t.Error("daemon.json is still there")
+				}
+				if code, out, _ := c3.Exec(context.Background(), []string{"systemctl", "is-active", "docker"}, tcexec.Multiplexed()); code == 0 {
+					b, _ := io.ReadAll(out)
+					t.Errorf("docker still runs: %s", b)
+				}
+				// the packages stay: another key may need them
+				if code, out, err := c3.Exec(context.Background(), os.pkgQuery, tcexec.Multiplexed()); err != nil || code != 0 {
+					b, _ := io.ReadAll(out)
+					t.Errorf("docker-ce is gone: %d %v %s", code, err, b)
 				}
 			})
 
 			t.Run("openbao on postgres", func(t *testing.T) {
-				r := s.packRelease(t, "openbao:2.6.5", "ansible", fill(bothEnv), bothValues)
+				r := s.packRelease(t, "openbao:2.6.5", "ansible", fill(bothEnv, map[string]string{"host": port}), bothValues)
 				run(t, r.dir, journal(c), s.pack, "apply")
 				mapped, err := c.MappedPort(context.Background(), "8200/tcp")
 				if err != nil {
@@ -201,8 +255,8 @@ func TestFromOSPackages(t *testing.T) {
 					t.Errorf("storage = %q", status.Storage)
 				}
 				// the version is the OS's, not the pack's: Debian takes the release's file, Fedora its own package
-				if len(bao) > 0 && status.Version != bao {
-					t.Errorf("version = %q, want %s", status.Version, bao)
+				if len(os.bao) > 0 && status.Version != os.bao {
+					t.Errorf("version = %q, want %s", status.Version, os.bao)
 				}
 				got := hostExec(t, c, "runuser", "-u", "postgres", "--", "psql", "-d", "openbao", "-tAc", "select to_regclass('openbao_kv_store') is not null")
 				if strings.TrimSpace(got) != "t" {

@@ -26,12 +26,7 @@ targets:
     state: ${STATE}
     mirror_registry: ${MIRROR_REGISTRY}
     mirror_plain_http: true
-    hosts:
-      host:
-        host: 127.0.0.1
-        port: ${SSH_PORT}
-        user: root
-`
+${HOSTS}`
 	mirrorValues = `---
 release_url: http://127.0.0.1:8081/mirrors/openbao:2.6.5
 openbao:
@@ -84,6 +79,15 @@ func download(t *testing.T, name string) []byte {
 	return b
 }
 
+// repoImage is an image with the repository tooling of an OS (apt-ftparchive, createrepo_c), from
+// testdata/repo-<name>/Dockerfile; the engine's cache makes the build a no-op after the first run.
+func repoImage(t *testing.T, name string) string {
+	t.Helper()
+	image := "pack-e2e-repo-" + name
+	docker(t, "build", "-q", "-t", image, filepath.Join("testdata", "repo-"+name))
+	return image
+}
+
 // publishTree pushes a directory as an artifact whose files keep their paths, as a mirror is kept.
 func (s *suite) publishTree(t *testing.T, tree, repository string) {
 	t.Helper()
@@ -131,6 +135,7 @@ func (s *suite) startProxy(t *testing.T, c testcontainers.Container) {
 // packages through oci-proxy; the pack's own installation goes the same way, the target bringing oci-proxy and taking it away.
 func TestFromARegistryMirror(t *testing.T) {
 	s := setup(t)
+	s.withAnsible(t)
 	t.Setenv("ANSIBLE_HOST_KEY_CHECKING", "False")
 	t.Setenv("LC_ALL", "en_US.UTF-8")
 	t.Setenv("OBJC_DISABLE_INITIALIZE_FORK_SAFETY", "YES")
@@ -153,8 +158,8 @@ func TestFromARegistryMirror(t *testing.T) {
 		if err := os.WriteFile(filepath.Join(pool, deb), download(t, deb), 0o644); err != nil {
 			t.Fatal(err)
 		}
-		docker(t, "run", "--rm", "-v", tree+":/repo", "-w", "/repo", "debian:13", "sh", "-c", fmt.Sprintf(
-			"apt-get update -qq && apt-get install -y -qq --no-install-recommends apt-utils >/dev/null && d=dists/stable/main/binary-%[1]s && mkdir -p $d && apt-ftparchive packages pool > $d/Packages && apt-ftparchive release dists/stable > dists/stable/Release", arch))
+		docker(t, "run", "--rm", "-v", tree+":/repo", "-w", "/repo", repoImage(t, "debian"), "sh", "-c", fmt.Sprintf(
+			"d=dists/stable/main/binary-%[1]s && mkdir -p $d && apt-ftparchive packages pool > $d/Packages && apt-ftparchive release dists/stable > dists/stable/Release", arch))
 		s.publishTree(t, tree, "mirrors/apt:1")
 
 		c, _ := startHost(t, "debian", strings.TrimSpace(string(pub)))
@@ -176,7 +181,7 @@ func TestFromARegistryMirror(t *testing.T) {
 		if err := os.WriteFile(filepath.Join(tree, rpm), download(t, rpm), 0o644); err != nil {
 			t.Fatal(err)
 		}
-		docker(t, "run", "--rm", "-v", tree+":/repo", "fedora:43", "sh", "-c", "dnf install -y -q createrepo_c >/dev/null && createrepo_c /repo")
+		docker(t, "run", "--rm", "-v", tree+":/repo", repoImage(t, "fedora"), "createrepo_c", "/repo")
 		s.publishTree(t, tree, "mirrors/dnf:1")
 
 		c, _ := startHost(t, "fedora", strings.TrimSpace(string(pub)))
@@ -204,8 +209,8 @@ func TestFromARegistryMirror(t *testing.T) {
 		// what the OS's own repository gives, which is not this pack's mirror: Prepare's packages, and what ansible's apt needs
 		hostExec(t, c, "sh", "-c", "apt-get update -qq && apt-get install -y -qq --no-install-recommends ca-certificates openssl python3-apt >/dev/null")
 		cutOff(t, c)
-		env := strings.NewReplacer("${ANSIBLE}", bin, "${SSH_KEY}", key, "${SSH_PORT}", port, "${STATE}", filepath.Join(t.TempDir(), "state.json"),
-			"${MIRROR_REGISTRY}", s.registryIP+":5000").Replace(mirrorEnv)
+		env := strings.NewReplacer("${ANSIBLE}", bin, "${SSH_KEY}", key, "${STATE}", filepath.Join(t.TempDir(), "state.json"),
+			"${MIRROR_REGISTRY}", s.registryIP+":5000", "${HOSTS}", hostsBlock(map[string]string{"host": port})).Replace(mirrorEnv)
 		r := s.packRelease(t, "openbao:2.6.5", "ansible", env, mirrorValues)
 		run(t, r.dir, journal(c), s.pack, "apply")
 		mapped, err := c.MappedPort(context.Background(), "8200/tcp")
