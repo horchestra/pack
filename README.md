@@ -80,6 +80,7 @@ string is what is not a field: the literals of the formula (`'postgres://'`, the
 | `plan`                              | the saga between the installed version and the wanted one, with drift                                |
 | `apply`                             | run the saga                                                                                         |
 | `delete`, `rollback [--to N]`       | take the installation away; take back an unfinished saga, or go back to a revision                   |
+| `next`                              | where the release is and what to run next (`--json` on any command: one JSON document on stdout)   |
 | `history`                           | the revisions of the installation: every saga that ended                                             |
 | `template [--key K] [-o dir]`       | the rendered config files, nothing installed                                                         |
 | `graph [-f dot\|mermaid]`           | keys, dependencies, savepoints                                                                       |

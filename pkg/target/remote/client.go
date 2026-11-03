@@ -67,7 +67,7 @@ func Find(name string) (string, error) {
 			return p, nil
 		}
 	}
-	return "", fmt.Errorf("target %q: no %s in %s — `pack refresh` downloads it from the source release.yaml names under targets:", name, bin, strings.Join(dirs, string(filepath.ListSeparator)))
+	return "", fmt.Errorf("target %q: no %s in %s — `pack refresh` downloads it from the source release.yaml names under targets: %w", name, bin, strings.Join(dirs, string(filepath.ListSeparator)), target.ErrNotBrought)
 }
 
 // Plugin is a provider running in its own process, as a target.Target.
@@ -355,9 +355,9 @@ func unwrap(err error) error {
 		return nil
 	}
 	if s, ok := status.FromError(err); ok {
-		return errors.New(strings.TrimSpace(s.Message()))
+		return &target.Error{Err: errors.New(strings.TrimSpace(s.Message()))}
 	}
-	return err
+	return &target.Error{Err: err}
 }
 
 func init() {
@@ -370,7 +370,10 @@ func init() {
 		}
 		p, err := rt.Start(name, installation)
 		if err != nil {
-			return nil, err
+			if errors.Is(err, target.ErrNotBrought) {
+				return nil, err
+			}
+			return nil, &target.Error{Err: err} // it did not start, or did not answer
 		}
 		in, err := p.Configure(installation, rest)
 		if err != nil {

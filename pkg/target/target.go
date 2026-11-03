@@ -112,6 +112,15 @@ func Open(name, installation string, settings map[string]string) (Installation, 
 	return f(installation, settings)
 }
 
+// Error is what a target said: it refused a step, or could not be started or reached. Its text is the target's own.
+type Error struct{ Err error }
+
+func (e *Error) Error() string { return e.Err.Error() }
+func (e *Error) Unwrap() error { return e.Err }
+
+// ErrNotBrought is a target whose program or image the release has not brought (pack refresh does).
+var ErrNotBrought = errors.New("not brought: run pack refresh")
+
 // Fallback opens a target that is not registered: set by the package that runs targets as programs of their own
 // (target/remote), which a build of pack imports. Its error says where it looked.
 var Fallback func(name, installation string, settings map[string]string) (Installation, error)

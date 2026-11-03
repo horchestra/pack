@@ -34,6 +34,9 @@ var planCmd = &cobra.Command{
 			return err
 		}
 		fmt.Print(c.Plan.Text())
+		if err := result(c.Plan); err != nil {
+			return err
+		}
 		if len(planOut) == 0 {
 			return nil
 		}

@@ -75,11 +75,22 @@ without --force; pack refresh brings what a release that is there needs.`,
 		if len(args) > 1 {
 			out = args[1]
 		}
-		said, err := initRelease(ctx, args[0], out, os.Stdin, isTerminal(os.Stdin))
+		said, err := initRelease(ctx, args[0], out, os.Stdin, isTerminal(os.Stdin) && !jsonOut)
 		for _, s := range said {
 			fmt.Println(s)
 		}
-		return err
+		if err != nil {
+			return err
+		}
+		abs, _ := filepath.Abs(".") // initRelease is in the release's directory now
+		if !jsonOut {
+			return nil
+		}
+		return result(struct {
+			Dir  string    `json:"dir"`
+			Said []string  `json:"said"`
+			Next nextState `json:"next"` // what pack next says of the release made
+		}{abs, said, whatNext(ctx)})
 	}),
 }
 
@@ -281,6 +292,9 @@ const agents = `# Working with this release
 This directory is a release of a pack: release.yaml says which pack, env.yaml where it is installed,
 values.yaml its settings. Work through the pack command; do not edit .pack/ or release.lock.json.
 
+0. ` + "`pack next --json`" + ` says where the release is, what stops it and the commands to run next: follow it, and
+   run it again after each step. Every command takes --json: one JSON document on stdout, an error as
+   {"error": {"code", "message", "problems"}, "next": [...]}.
 1. The settings are in values.yaml, each documented in the comments above it. A line ` + "`#key: value`" + ` is
    left to its default: remove the ` + "`#`" + ` to set it. Write no comments of your own: pack values write
    refuses a file that has them.

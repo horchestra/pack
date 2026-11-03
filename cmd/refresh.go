@@ -80,9 +80,14 @@ release; refresh brings what one names, after a clone or a change of release.yam
 			return err
 		}
 		if !reflect.DeepEqual(before, *lock) {
-			return release.WriteLock(fresh.Dir, lock)
+			if err := release.WriteLock(fresh.Dir, lock); err != nil {
+				return err
+			}
 		}
-		return nil
+		return result(struct {
+			Lock    *release.Lock `json:"lock"`
+			Changed bool          `json:"changed"`
+		}{lock, !reflect.DeepEqual(before, *lock)})
 	}),
 }
 

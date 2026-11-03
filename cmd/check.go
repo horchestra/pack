@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"maps"
 	"slices"
@@ -47,20 +48,29 @@ rendered against it.`,
 			return err
 		}
 		n := 0
-		for _, p := range problems {
+		var ps []render.Problem
+		for i, p := range problems {
 			if checkStrict {
 				p.Warning = false
+				problems[i] = p
 			}
 			fmt.Println(p)
+			kind := render.KindWarning
 			if !p.Warning {
 				n++
+				kind = render.KindCheck
 			}
+			ps = append(ps, render.Problem{Kind: kind, Where: p.Path, Message: p.Message})
 		}
 		if n > 0 {
-			return fmt.Errorf("%d problem(s)", n)
+			// the problems are the error's: one document, the error's
+			return withProblems(CodeCheckFailed, fmt.Errorf("%d problem(s)", n), ps)
 		}
 		fmt.Println("ok")
-		return nil
+		return result(struct {
+			OK       bool             `json:"ok"`
+			Problems []render.Problem `json:"problems,omitempty"`
+		}{true, ps})
 	}),
 }
 
@@ -104,7 +114,14 @@ func checkPack(ctx context.Context, ref string, s *session.Session) ([]check.Pro
 		return nil, err
 	}
 	if _, err := render.Render(b, v, s.Ctx); err != nil {
-		problems = append(problems, check.Problem{Path: "release", Message: err.Error()})
+		var ps *render.Problems
+		if errors.As(err, &ps) {
+			for _, p := range ps.Problems {
+				problems = append(problems, check.Problem{Path: p.Where, Message: p.Message})
+			}
+		} else {
+			problems = append(problems, check.Problem{Path: "release", Message: err.Error()})
+		}
 	}
 	return problems, nil
 }

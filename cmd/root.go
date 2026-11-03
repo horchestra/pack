@@ -3,7 +3,6 @@ package cmd
 
 import (
 	"context"
-	"fmt"
 	"os"
 
 	"github.com/spf13/cobra"
@@ -36,7 +35,16 @@ func init() {
 	pf := rootCmd.PersistentFlags()
 	pf.StringVarP(&chdir, "chdir", "C", "", "run in this directory, as if started there (a release: release.yaml, values, env.yaml)")
 	pf.StringVar(&envName, "env", os.Getenv("PACK_ENV"), "the environment: env.<name>.yaml of the release instead of env.yaml (PACK_ENV)")
+	pf.BoolVar(&jsonOut, "json", false, "the result as one JSON document on stdout, what is said along the way on stderr; an error as {\"error\": {code, message}, \"next\": […]}")
+	rootCmd.PersistentPostRun = func(*cobra.Command, []string) {
+		if f, ok := stdout.(*os.File); ok && jsonOut {
+			os.Stdout = f // the next command of a process (a test's) starts as it was
+		}
+	}
 	rootCmd.PersistentPreRun = run(func(c *cobra.Command, _ []string) error {
+		if jsonOut {
+			asJSON()
+		}
 		if len(chdir) > 0 {
 			if err := os.Chdir(chdir); err != nil {
 				return err
@@ -70,11 +78,6 @@ func run(f func(*cobra.Command, []string) error) func(*cobra.Command, []string) 
 			fail(err)
 		}
 	}
-}
-
-func fail(err error) {
-	_, _ = fmt.Fprintln(os.Stderr, "pack:", err)
-	os.Exit(1)
 }
 
 // open is the session of a command: readOnly — the secret store is only read.

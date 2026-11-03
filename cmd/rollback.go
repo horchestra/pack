@@ -49,7 +49,7 @@ first (pack rollback, without --to).`,
 			return err
 		}
 		if rec == nil || (len(rec.Pack) == 0 && !rec.Unfinished() && (rollbackTo == 0 || len(rec.History) == 0)) {
-			return fmt.Errorf("nothing is installed on %s", s.Target)
+			return withCode(CodeNothingInstalled, fmt.Errorf("nothing is installed on %s", s.Target))
 		}
 		if rollbackTo != 0 {
 			return rollbackToRevision(ctx, s, rec, curB, curRel, rollbackTo)
@@ -65,18 +65,23 @@ first (pack rollback, without --to).`,
 				return err
 			}
 			fmt.Printf("undoing the saga towards %s %s (%s): in effect %v, under way %v\n", sg.Pack, sg.Version, rec.State, sg.Done, sg.Running)
+			undone := struct {
+				Undone version `json:"undone"`
+				Back   version `json:"back"`
+				DryRun bool    `json:"dry_run,omitempty"`
+			}{versionOf("", sg.Version, sg.Pack), versionOf("", rec.Version, rec.Pack), rollbackDry}
 			if rollbackDry {
-				return nil
+				return result(undone)
 			}
 			if err := s.Undo(ctx, g, curRel, toRel); err != nil {
-				return err
+				return withCode(CodeSagaFailed, err)
 			}
 			if len(rec.Pack) == 0 {
 				fmt.Println("not installed any more")
 			} else {
 				fmt.Printf("back to %s %s\n", rec.Pack, rec.Version)
 			}
-			return nil
+			return result(undone)
 		}
 
 		if rec.Previous == nil {
@@ -100,10 +105,10 @@ func rollbackToRevision(ctx context.Context, s *session.Session, rec *saga.Recor
 	}
 	if cur := rec.Current(); cur != nil && cur.N == n {
 		fmt.Printf("revision %d is what is installed: nothing to do\n", n)
-		return nil
+		return result(installedResult{Installed: versionOf("", rec.Version, rec.Pack), Target: s.Target, Installation: s.ID})
 	} else if rec.State == saga.Installed && rev.Same(rec.Installation) {
 		fmt.Printf("revision %d is the same as what is installed (%s %s): nothing to do\n", n, rec.Pack, rec.Version)
-		return nil
+		return result(installedResult{Installed: versionOf("", rec.Version, rec.Pack), Target: s.Target, Installation: s.ID})
 	}
 	return rollForwardTo(ctx, s, curB, curRel, rev.Installation, fmt.Sprintf("revision %d", n))
 }
@@ -115,17 +120,21 @@ func rollForwardTo(ctx context.Context, s *session.Session, curB *bundle.Bundle,
 	if err != nil {
 		return fmt.Errorf("%s, %s: %w", what, in.Pack, err)
 	}
+	name := ""
+	if toB != nil {
+		name = toB.Name
+	}
 	p, err := plan.Build(plan.Input{From: curB, To: toB, FromOut: curRel, ToOut: toRel})
 	if err != nil {
 		return err
 	}
 	fmt.Print(p.Text())
 	if rollbackDry {
-		return nil
+		return result(p)
 	}
 	if err := s.RollForward(ctx, p, curRel, toRel, in); err != nil {
-		return err
+		return withCode(CodeSagaFailed, err)
 	}
 	fmt.Printf("back to %s: %s %s\n", what, in.Pack, in.Version)
-	return nil
+	return result(installedResult{Installed: versionOf(name, in.Version, in.Pack), Target: s.Target, Installation: s.ID, Plan: p})
 }

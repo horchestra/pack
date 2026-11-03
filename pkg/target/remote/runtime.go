@@ -10,6 +10,8 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+
+	"github.com/horchestra/pack/pkg/target"
 )
 
 // The runtimes a target's program runs in.
@@ -153,7 +155,7 @@ func list(v string) []string {
 func (rt Runtime) Start(name, installation string) (*Plugin, error) {
 	if rt.Type == RuntimeDocker {
 		if len(rt.Image) == 0 {
-			return nil, fmt.Errorf("target %s: runtime docker, and no image for it: name it in release.yaml (targets: %s: {image: oci://…}) and run pack refresh", name, name)
+			return nil, fmt.Errorf("target %s: runtime docker, and no image for it: name it in release.yaml (targets: %s: {image: oci://…}): %w", name, name, target.ErrNotBrought)
 		}
 		return startContainer(name, installation, rt)
 	}

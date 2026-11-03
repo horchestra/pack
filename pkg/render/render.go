@@ -406,7 +406,7 @@ func (r *render) where(ptr string) string {
 // at preMutate. Every violation is a refusal, with the rule's message; an
 // evaluation error is a violation too, with the error as the message.
 func (r *render) checkRules(phase packschema.Phase) error {
-	var problems []string
+	var problems []Problem
 	for i := range r.rules {
 		ru := &r.rules[i]
 		phases := ru.rule.Phases
@@ -419,23 +419,22 @@ func (r *render) checkRules(phase packschema.Phase) error {
 		v, err := r.eval(&ru.formula, r.doc, nil)
 		switch {
 		case err != nil:
-			problems = append(problems, fmt.Sprintf("%s: %v", r.where(ru.ptr), err))
+			problems = append(problems, Problem{Kind: KindRule, Where: r.where(ru.ptr), Rule: ru.rule.ID, Message: err.Error()})
 		default:
 			holds, ok := v.(bool)
 			if !ok {
-				problems = append(problems, fmt.Sprintf("%s: the rule yielded %v, not a boolean", r.where(ru.ptr), v))
+				problems = append(problems, Problem{Kind: KindRule, Where: r.where(ru.ptr), Rule: ru.rule.ID, Message: fmt.Sprintf("the rule yielded %v, not a boolean", v)})
 			} else if !holds {
 				msg := ru.rule.Message
 				if len(msg) == 0 {
 					msg = "the rule does not hold"
 				}
-				problems = append(problems, fmt.Sprintf("%s: %s", r.where(ru.ptr), msg))
+				problems = append(problems, Problem{Kind: KindRule, Where: r.where(ru.ptr), Rule: ru.rule.ID, Message: msg})
 			}
 		}
 	}
 	if len(problems) > 0 {
-		sort.Strings(problems)
-		return fmt.Errorf("values do not validate (%s):\n  %s", phase, strings.Join(problems, "\n  "))
+		return newProblems(string(phase), problems)
 	}
 	return nil
 }
@@ -826,9 +825,13 @@ func (r *render) validate() error {
 	if err != nil {
 		return err
 	}
-	var problems []string
+	var problems []Problem
 	for _, v := range compiled.Validate(r.doc) {
-		problems = append(problems, r.where(v.Path)+": "+v.Message) // the operator's words, not the flat view's
+		kind := KindSchema
+		if v.Required {
+			kind = KindRequired
+		}
+		problems = append(problems, Problem{Kind: kind, Where: r.where(v.Path), Message: v.Message}) // the operator's words, not the flat view's
 	}
 	for _, key := range r.keys {
 		var req map[string]string
@@ -838,19 +841,20 @@ func (r *render) validate() error {
 		for name, min := range r.b.Packs[r.b.KeyPack[key]].Root.Minimum {
 			have, ok := req[name]
 			if !ok {
-				problems = append(problems, fmt.Sprintf("environment: keys.%s.resources.requests.%s: %s requires at least %s", key, name, r.b.KeyPack[key], min))
+				problems = append(problems, Problem{Kind: KindEnvironment, Where: "environment: keys." + key + ".resources.requests." + name,
+					Message: fmt.Sprintf("%s requires at least %s", r.b.KeyPack[key], min)})
 				continue
 			}
 			hv, err1 := compute.Quantity(have)
 			mv, err2 := compute.Quantity(min)
 			if err1 == nil && err2 == nil && hv < mv {
-				problems = append(problems, fmt.Sprintf("environment: keys.%s.resources.requests.%s: %s is below the minimum of %s, %s", key, name, have, r.b.KeyPack[key], min))
+				problems = append(problems, Problem{Kind: KindEnvironment, Where: "environment: keys." + key + ".resources.requests." + name,
+					Message: fmt.Sprintf("%s is below the minimum of %s, %s", have, r.b.KeyPack[key], min)})
 			}
 		}
 	}
 	if len(problems) > 0 {
-		sort.Strings(problems)
-		return fmt.Errorf("values do not validate:\n  %s", strings.Join(problems, "\n  "))
+		return newProblems("", problems)
 	}
 	return nil
 }

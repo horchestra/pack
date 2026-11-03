@@ -59,7 +59,9 @@ document (rollout, skip) is written by hand.`,
 			return err
 		}
 		fmt.Println(msg)
-		return nil
+		return result(struct {
+			Result string `json:"result"`
+		}{msg})
 	}),
 }
 
@@ -116,7 +118,7 @@ func writeValues(ctx context.Context) (string, error) {
 	}
 	if len(have) > 0 && !valuesRewrite {
 		if lost := valuesfile.Foreign(have, want); len(lost) > 0 {
-			return "", fmt.Errorf("values.yaml: %s — they would be lost; --rewrite writes it anyway", strings.Join(lost, "; "))
+			return "", withCode(CodeForeignComments, fmt.Errorf("values.yaml: %s — they would be lost; --rewrite writes it anyway", strings.Join(lost, "; ")))
 		}
 	}
 	if bytes.Equal(have, want) {

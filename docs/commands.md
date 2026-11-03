@@ -21,6 +21,7 @@ Registry credentials are in the variables `release.yaml` names (`username_env`, 
 | `history [--json]`                          | the revisions of the installation — every saga that ended, and the removals — the one installed now marked `*`                                                                                                                                                  |
 | `template [--key K] [-o dir]`               | the config files of the release, rendered, nothing installed. `-o` writes `<key>/<path>`; `--key` limits it to a key                                                                                                                                            |
 | `graph [-f dot\|mermaid]`                   | the keys, what each waits for, the savepoints                                                                                                                                                                                                                   |
+| `next`                                      | where the release is — `new`, `unrefreshed`, `unfilled`, `invalid`, `failed`, `planned`, `applied` — what stops it, and the commands to run next, worked out from the files, the lock, the record and a plan                                                     |
 | `log [run] [--list] [--node K] [--prune N]` | the journal of a saga: its stages and the logs of its keys. `--list` lists the sagas, `--node` shows one key's lines, `--prune N` keeps the N newest                                                                                                            |
 
 **Ctrl-C** cancels the command's context: running steps are cut short and the saga is rolled back; a second signal ends
@@ -28,3 +29,41 @@ the process, and the record stays `in-progress` for `rollback` or the next `appl
 
 A command that fails says why (`pack: …`) and exits with 1; no usage follows an error of its own, only a misuse of the
 command line.
+
+## --json
+
+`--json` makes a command's result one JSON document on stdout — the plan of `plan`, what `apply` installed, the problems
+of `check`, the files of `template`, the nodes of `graph`, the entries of `log` (the last 1000, `truncated` beyond) —
+and nothing else goes there: what is said along the way, the saga's events with it, goes to stderr. A command that
+fails writes
+
+```json
+{
+  "error": {
+    "code": "values_missing",
+    "message": "values do not validate: …",
+    "problems": [{"kind": "required", "where": "/openbao/api_addr", "message": "missing property 'api_addr'"}]
+  },
+  "next": ["edit values.yaml", "pack check"]
+}
+```
+
+and exits with 1. The codes are a closed list:
+
+| code                | what                                                      | next                                |
+|---------------------|-----------------------------------------------------------|-------------------------------------|
+| `no_release`        | no `release.yaml`, or it names no pack                    | `pack init <pack> .`                |
+| `not_refreshed`     | the pack or a target is not brought into `.pack`          | `pack refresh`                      |
+| `values_missing`    | settings the schema requires are not given                | edit `values.yaml`, `pack check`    |
+| `values_invalid`    | the schema, a rule of the pack or the resources refuse    | edit `values.yaml`, `pack check`    |
+| `check_failed`      | `pack check` found problems                               | `pack check`                        |
+| `saga_failed`       | a saga failed; the record says what is in effect          | `pack log`, `apply`, `rollback`     |
+| `saga_unfinished`   | a saga did not finish                                     | `pack log`, `apply`, `rollback`     |
+| `nothing_installed` | nothing to remove or roll back                            | `pack plan`, `pack apply`           |
+| `foreign_comments`  | `values.yaml` has comments pack did not write             | `pack values write --rewrite`       |
+| `target`, `error`   | the target refused; anything else                         |                                     |
+
+A problem is `{kind, where, rule?, message}`: `kind` is `required`, `schema`, `rule` or `environment` for the values
+(`where` the operator's JSON Pointer, or the environment's setting), `check` or `warning` for what `pack check` found
+— a failing check's problems are in its error document, the one document it writes. `target` is what the target
+itself said: it refused, or did not start or answer.

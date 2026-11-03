@@ -29,30 +29,37 @@ var deleteCmd = &cobra.Command{
 			return err
 		}
 		defer s.Close()
-		rec, _, rel, err := s.Installed()
+		rec, b, rel, err := s.Installed()
 		if err != nil {
 			return err
 		}
 		if rec == nil || len(rec.Pack) == 0 {
-			return fmt.Errorf("nothing is installed on %s", s.Target)
+			return withCode(CodeNothingInstalled, fmt.Errorf("nothing is installed on %s", s.Target))
 		}
 		if rec.Unfinished() {
-			return fmt.Errorf("a saga towards %s did not finish (%s: %s): apply it again, or pack rollback", rec.Saga.Pack, rec.State, rec.Saga.Error)
+			return withCode(CodeSagaUnfinished, fmt.Errorf("a saga towards %s did not finish (%s: %s): apply it again, or pack rollback", rec.Saga.Pack, rec.State, rec.Saga.Error))
 		}
 		g, err := graph.New(adapter.Specs(rel, nil))
 		if err != nil {
 			return err
 		}
+		var keys []string
 		for _, n := range g.Reverse() {
 			fmt.Println("remove", n.Name)
+			keys = append(keys, n.Name)
 		}
+		removed := struct {
+			Removed version  `json:"removed"`
+			Keys    []string `json:"keys"`
+			DryRun  bool     `json:"dry_run,omitempty"`
+		}{versionOf(b.Name, rec.Version, rec.Pack), keys, deleteDry}
 		if deleteDry {
-			return nil
+			return result(removed)
 		}
 		if err := s.Remove(ctx, g, rel); err != nil {
-			return err
+			return withCode(CodeSagaFailed, err)
 		}
 		fmt.Println("not installed any more")
-		return nil
+		return result(removed)
 	}),
 }

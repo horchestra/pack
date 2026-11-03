@@ -43,8 +43,66 @@ each key, or writes them under -o as <key>/<path> (a file that differs per repli
 		if err != nil {
 			return err
 		}
+		if jsonOut && len(templateOut) == 0 {
+			files, err := templateFiles(rel, templateKey)
+			if err != nil {
+				return err
+			}
+			return result(struct {
+				Files []templateFile `json:"files"`
+			}{files})
+		}
 		return emit(rel, templateKey, templateOut)
 	}),
+}
+
+// maxContent is how much of a file template --json gives: the rest is said truncated.
+const maxContent = 64 << 10
+
+// templateFile is a rendered file as template --json gives it; a secret is only named.
+type templateFile struct {
+	Key       string `json:"key"`
+	Instance  *int   `json:"instance,omitempty"` // a file that differs per replica
+	Path      string `json:"path"`
+	Content   string `json:"content,omitempty"`
+	Truncated bool   `json:"truncated,omitempty"`
+	Secret    string `json:"secret,omitempty"` // the secret whose bytes the file is
+}
+
+func templateFiles(rel *render.Release, key string) ([]templateFile, error) {
+	var out []templateFile
+	add := func(k string, inst *int, path string, b []byte) {
+		f := templateFile{Key: k, Instance: inst, Path: path, Content: string(b)}
+		if len(b) > maxContent {
+			f.Content, f.Truncated = string(b[:maxContent]), true
+		}
+		out = append(out, f)
+	}
+	found := len(key) == 0
+	for _, u := range rel.Units {
+		if len(key) > 0 && u.Key != key {
+			continue
+		}
+		found = true
+		for _, f := range u.Files {
+			if f.PerInstance() {
+				for i, b := range f.Instances {
+					if b != nil {
+						add(u.Key, &i, f.Path, b)
+					}
+				}
+				continue
+			}
+			add(u.Key, nil, f.Path, f.Content)
+		}
+		for _, f := range u.SecretFiles {
+			out = append(out, templateFile{Key: u.Key, Path: f.Path, Secret: f.Secret.Name})
+		}
+	}
+	if !found {
+		return nil, fmt.Errorf("no key %q in the release", key)
+	}
+	return out, nil
 }
 
 // emit prints or writes the files of the keys of rel (key: all when empty).

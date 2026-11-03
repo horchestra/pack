@@ -227,7 +227,7 @@ func pinRuntime(name string, settings map[string]string, lock *release.Lock, pac
 		tl = lock.Targets[name]
 	}
 	if len(tl.Image) == 0 || len(tl.Digest) == 0 {
-		return fmt.Errorf("target %s: runtime docker, and its image is not locked — run pack refresh", name)
+		return fmt.Errorf("target %s: runtime docker, and its image is not locked: %w", name, target.ErrNotBrought)
 	}
 	pin, err := oci.WithDigest(tl.Image, tl.Digest)
 	if err != nil {

@@ -171,10 +171,13 @@ func (w *Release) ValuesFiles() []string {
 	return out
 }
 
+// ErrNoPack is a release that names no pack.
+var ErrNoPack = errors.New("no pack")
+
 // PackRef is the release's pack: a directory or a registry reference (oci://…).
 func (w *Release) PackRef() (string, error) {
 	if len(w.Pack) == 0 {
-		return "", fmt.Errorf("no pack: write `pack:` in %s", File)
+		return "", fmt.Errorf("%w: write `pack:` in %s", ErrNoPack, File)
 	}
 	return w.Pack, nil
 }

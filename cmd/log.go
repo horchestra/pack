@@ -6,6 +6,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/horchestra/pack/internal/workdir"
+	"github.com/horchestra/pack/pkg/saga"
 	"github.com/horchestra/pack/pkg/saga/storage"
 )
 
@@ -54,13 +55,17 @@ func newLogCmd() *cobra.Command {
 				return err
 			}
 			fmt.Printf("removed %d saga(s)\n", len(gone))
-			return nil
+			return result(struct {
+				Removed []string `json:"removed"`
+			}{gone})
 		}
 		if *list {
 			for _, r := range runs {
 				fmt.Println(r)
 			}
-			return nil
+			return result(struct {
+				Runs []string `json:"runs"`
+			}{runs})
 		}
 		if len(runs) == 0 {
 			return fmt.Errorf("no journal of %s in %s", installation, dir.JournalPath())
@@ -74,12 +79,25 @@ func newLogCmd() *cobra.Command {
 			return err
 		}
 		fmt.Println("saga", run)
+		var shown []saga.Entry
 		for _, e := range entries {
 			if len(*node) == 0 || e.Node == *node {
 				fmt.Println(e)
+				shown = append(shown, e)
 			}
 		}
-		return nil
+		truncated := len(shown) > maxEntries
+		if truncated {
+			shown = shown[len(shown)-maxEntries:] // the last ones: where it ended
+		}
+		return result(struct {
+			Saga      string       `json:"saga"`
+			Entries   []saga.Entry `json:"entries"`
+			Truncated bool         `json:"truncated,omitempty"`
+		}{run, shown, truncated})
 	})
 	return cmd
 }
+
+// maxEntries is how many entries of a saga log --json gives: the last ones, the rest said truncated.
+const maxEntries = 1000

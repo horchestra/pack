@@ -37,8 +37,8 @@ func current(line, n string) bool {
 // Every saga that ends is a revision; rollback --to goes back to one with its values, as a saga of its own.
 func TestHistoryAndRollbackTo(t *testing.T) {
 	d := releaseOf(t, generated(t), nil)
-	historyJSON, rollbackTo, rollbackDry = false, 0, false
-	t.Cleanup(func() { historyJSON, rollbackTo, rollbackDry = false, 0, false })
+	jsonOut, rollbackTo, rollbackDry = false, 0, false
+	t.Cleanup(func() { jsonOut, rollbackTo, rollbackDry = false, 0, false })
 	pack(t, d, "apply")
 	write(t, d, "values.yaml", map[string]any{
 		"openbao":  map[string]any{"api_addr": "https://bao:8300"},
@@ -74,6 +74,7 @@ func TestHistoryAndRollbackTo(t *testing.T) {
 	}
 	rollbackTo = 0
 	out = pack(t, d, "history", "--json")
+	jsonOut = false
 	var revs []map[string]any
 	if err := json.Unmarshal([]byte(out), &revs); err != nil || len(revs) != 3 || revs[0]["values"] == nil || revs[2]["current"] != true || revs[0]["current"] != nil {
 		t.Errorf("--json: %v\n%s", err, out)

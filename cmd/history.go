@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"os"
 	"text/tabwriter"
 
 	"github.com/spf13/cobra"
@@ -13,12 +12,7 @@ import (
 	"github.com/horchestra/pack/pkg/saga"
 )
 
-func init() {
-	historyCmd.Flags().BoolVar(&historyJSON, "json", false, "the revisions as JSON, the values with them")
-	rootCmd.AddCommand(historyCmd)
-}
-
-var historyJSON bool
+func init() { rootCmd.AddCommand(historyCmd) }
 
 var historyCmd = &cobra.Command{
 	Use:   "history",
@@ -43,7 +37,7 @@ a revision that was installed. As many are kept as run.journal_keep says of the 
 		if rec == nil || len(rec.History) == 0 {
 			return fmt.Errorf("no revision is recorded on %s", s.Target)
 		}
-		if historyJSON {
+		if jsonOut {
 			type revision struct {
 				saga.Revision
 				Current bool `json:"current,omitempty"` // the one installed now
@@ -57,7 +51,7 @@ a revision that was installed. As many are kept as run.journal_keep says of the 
 			if err != nil {
 				return err
 			}
-			_, err = os.Stdout.Write(append(b, '\n'))
+			_, err = stdout.Write(append(b, '\n'))
 			return err
 		}
 		fmt.Print(historyText(rec))
