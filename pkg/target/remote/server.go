@@ -15,6 +15,7 @@ package remote
 import (
 	"context"
 	"crypto/subtle"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -47,6 +48,8 @@ const (
 	CapRecord = "record"
 	// CapObserve: the target says what it holds (target.Observer).
 	CapObserve = "observe"
+	// CapDiscover: the target tells the facts of where it installs (target.Discoverer).
+	CapDiscover = "discover"
 )
 
 // MaxMessage bounds one message between pack and a target: a unit carries the files of the pack — an archive of
@@ -258,6 +261,29 @@ func (s *server) DeleteInstalled(context.Context, *remotepb.DeleteInstalledReque
 		return nil, status.Error(codes.Unavailable, err.Error())
 	}
 	return &remotepb.DeleteInstalledResponse{}, nil
+}
+
+func (s *server) Discover(ctx context.Context, req *remotepb.DiscoverRequest) (*remotepb.DiscoverResponse, error) {
+	inst, err := s.installation()
+	if err != nil {
+		return nil, err
+	}
+	d, ok := inst.(target.Discoverer)
+	if !ok {
+		return nil, status.Errorf(codes.Unimplemented, "target %s does not tell facts", s.name)
+	}
+	f, err := d.Discover(ctx, req.Hosts)
+	if errors.Is(err, target.ErrNoFacts) {
+		return nil, status.Error(codes.Unimplemented, err.Error())
+	}
+	if err != nil {
+		return nil, status.Error(codes.Unavailable, err.Error())
+	}
+	b, err := json.Marshal(f)
+	if err != nil {
+		return nil, status.Error(codes.Internal, err.Error())
+	}
+	return &remotepb.DiscoverResponse{Facts: b}, nil
 }
 
 func (s *server) Observe(ctx context.Context, _ *remotepb.ObserveRequest) (*remotepb.ObserveResponse, error) {

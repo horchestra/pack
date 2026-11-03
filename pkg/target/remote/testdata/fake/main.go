@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 
 	"github.com/horchestra/pack/pkg/render"
 	"github.com/horchestra/pack/pkg/target"
@@ -64,6 +65,19 @@ func (i *inst) DeleteInstalled() error {
 	return err
 }
 
+// Discover tells one host, the hosts asked for being the ones it keeps.
+func (i *inst) Discover(_ context.Context, hosts []string) (*target.Facts, error) {
+	f := &target.Facts{Hosts: map[string]target.HostFacts{"h1": {OS: "debian", MemoryMB: 2048}, "h2": {OS: "fedora"}}}
+	if len(hosts) > 0 {
+		for n := range f.Hosts {
+			if !slices.Contains(hosts, n) {
+				delete(f.Hosts, n)
+			}
+		}
+	}
+	return f, nil
+}
+
 func (i *inst) Observe(context.Context) (map[string]target.Observed, error) {
 	return map[string]target.Observed{"kafka": {Image: "images/kafka:3", Replicas: 3}}, nil
 }
@@ -90,7 +104,7 @@ func (i *inst) Execute(_ context.Context, s target.Step, events func(string)) er
 }
 
 func main() {
-	if err := remote.Serve("fake", factory, remote.CapRecord, remote.CapObserve); err != nil {
+	if err := remote.Serve("fake", factory, remote.CapRecord, remote.CapObserve, remote.CapDiscover); err != nil {
 		_, _ = fmt.Fprintln(os.Stderr, "pack-target-fake:", err)
 		os.Exit(1)
 	}

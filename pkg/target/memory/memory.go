@@ -5,9 +5,13 @@ package memory
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"maps"
+	"os"
+	"slices"
 	"sync"
+	"time"
 
 	"github.com/horchestra/pack/pkg/render"
 	"github.com/horchestra/pack/pkg/target"
@@ -19,6 +23,7 @@ func init() {
 		if settings["observe"] == "true" {
 			t.observe = systemOf(installation)
 		}
+		t.facts = settings["facts"]
 		return t, nil
 	})
 }
@@ -35,6 +40,35 @@ type Target struct {
 	// observe is the system the target runs in, when it was asked to be observable (observe: true): it outlives
 	// the target, as a real system outlives the process that changed it.
 	observe *system
+	// facts is the file of the facts it tells (facts: <path>, target.Facts as JSON): a stand of hosts written down.
+	facts string
+}
+
+// Discover tells the facts of the file the settings name (facts:), of the hosts asked for — all of them when none
+// is asked for. A target with no facts: setting tells none (ErrNoFacts).
+func (t *Target) Discover(_ context.Context, hosts []string) (*target.Facts, error) {
+	if len(t.facts) == 0 {
+		return nil, target.ErrNoFacts
+	}
+	b, err := os.ReadFile(t.facts)
+	if err != nil {
+		return nil, err
+	}
+	var f target.Facts
+	if err := json.Unmarshal(b, &f); err != nil {
+		return nil, fmt.Errorf("facts %s: %w", t.facts, err)
+	}
+	if len(hosts) > 0 {
+		for name := range f.Hosts {
+			if !slices.Contains(hosts, name) {
+				delete(f.Hosts, name)
+			}
+		}
+	}
+	if f.At.IsZero() {
+		f.At = time.Now().UTC().Truncate(time.Second)
+	}
+	return &f, nil
 }
 
 type system struct {

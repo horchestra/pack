@@ -30,7 +30,13 @@ type Context struct {
 	Keys map[string]Placement
 	// Secrets, when set, gives the passwords the operator did not: see CredentialSource.
 	Secrets CredentialSource
+	// Facts are what the targets told of where they install (pack discover), by the name a placement gives the
+	// target, DefaultTarget for the default one: a formula reads its key's target's as `facts`.
+	Facts map[string]map[string]any
 }
+
+// DefaultTarget is the name the facts of the default target go by.
+const DefaultTarget = "default"
 
 // Placement is how the environment runs one key. What the render reads of it — resources (cgroups, the same on
 // every target, and what formulas see as `limits`), env, metadata — it uses itself; the rest is the target's.
@@ -538,11 +544,24 @@ func (r *render) eval(f *formula, doc map[string]any, instance map[string]any) (
 		"limits": orEmpty(r.limits[f.key]),
 		"me":     r.me(f.key),
 		"pack":   r.packContext(f.key, instance),
+		"facts":  r.facts(f.key),
 	}
 	if readsPackValues(f.reads) {
 		vars["pack"].(map[string]any)["values"] = r.allValues(doc)
 	}
 	return compute.Eval(r.env, f.ast, vars)
+}
+
+// facts are the facts of the target the key runs on; none told — empty.
+func (r *render) facts(key string) map[string]any {
+	name := r.ctx.Keys[key].Target
+	if len(name) == 0 {
+		name = DefaultTarget
+	}
+	if f, ok := r.ctx.Facts[name]; ok && f != nil {
+		return f
+	}
+	return map[string]any{}
 }
 
 func orEmpty(m any) any {

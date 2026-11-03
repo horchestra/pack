@@ -167,11 +167,11 @@ type suite struct {
 	registry   string
 	registryIP string // how a host reaches the registry, on the engine's network
 
-	reg      testcontainers.Container
-	tagged   []string // the images pushed into the registry, removed at the end
-	tmp      []string // the directories of the builds
+	reg         testcontainers.Container
+	tagged      []string // the images pushed into the registry, removed at the end
+	tmp         []string // the directories of the builds
 	ansibleOnce sync.Once
-	ansibleE error
+	ansibleE    error
 }
 
 var (

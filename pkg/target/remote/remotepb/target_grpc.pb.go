@@ -45,6 +45,7 @@ const (
 	Target_WriteInstalled_FullMethodName  = "/pack.target.v1.Target/WriteInstalled"
 	Target_DeleteInstalled_FullMethodName = "/pack.target.v1.Target/DeleteInstalled"
 	Target_Observe_FullMethodName         = "/pack.target.v1.Target/Observe"
+	Target_Discover_FullMethodName        = "/pack.target.v1.Target/Discover"
 	Target_Execute_FullMethodName         = "/pack.target.v1.Target/Execute"
 )
 
@@ -67,6 +68,9 @@ type TargetClient interface {
 	DeleteInstalled(ctx context.Context, in *DeleteInstalledRequest, opts ...grpc.CallOption) (*DeleteInstalledResponse, error)
 	// Observe says what the target holds of the installation, by key. Requires the "observe" capability.
 	Observe(ctx context.Context, in *ObserveRequest, opts ...grpc.CallOption) (*ObserveResponse, error)
+	// Discover tells the facts of where the target installs — its hosts as they are — and changes nothing. Requires
+	// the "discover" capability.
+	Discover(ctx context.Context, in *DiscoverRequest, opts ...grpc.CallOption) (*DiscoverResponse, error)
 	// Execute performs one step of the saga on the target and reports as it goes; the last event says whether the
 	// step succeeded.
 	Execute(ctx context.Context, in *ExecuteRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[ExecuteEvent], error)
@@ -150,6 +154,16 @@ func (c *targetClient) Observe(ctx context.Context, in *ObserveRequest, opts ...
 	return out, nil
 }
 
+func (c *targetClient) Discover(ctx context.Context, in *DiscoverRequest, opts ...grpc.CallOption) (*DiscoverResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(DiscoverResponse)
+	err := c.cc.Invoke(ctx, Target_Discover_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *targetClient) Execute(ctx context.Context, in *ExecuteRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[ExecuteEvent], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	stream, err := c.cc.NewStream(ctx, &Target_ServiceDesc.Streams[0], Target_Execute_FullMethodName, cOpts...)
@@ -188,6 +202,9 @@ type TargetServer interface {
 	DeleteInstalled(context.Context, *DeleteInstalledRequest) (*DeleteInstalledResponse, error)
 	// Observe says what the target holds of the installation, by key. Requires the "observe" capability.
 	Observe(context.Context, *ObserveRequest) (*ObserveResponse, error)
+	// Discover tells the facts of where the target installs — its hosts as they are — and changes nothing. Requires
+	// the "discover" capability.
+	Discover(context.Context, *DiscoverRequest) (*DiscoverResponse, error)
 	// Execute performs one step of the saga on the target and reports as it goes; the last event says whether the
 	// step succeeded.
 	Execute(*ExecuteRequest, grpc.ServerStreamingServer[ExecuteEvent]) error
@@ -221,6 +238,9 @@ func (UnimplementedTargetServer) DeleteInstalled(context.Context, *DeleteInstall
 }
 func (UnimplementedTargetServer) Observe(context.Context, *ObserveRequest) (*ObserveResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method Observe not implemented")
+}
+func (UnimplementedTargetServer) Discover(context.Context, *DiscoverRequest) (*DiscoverResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method Discover not implemented")
 }
 func (UnimplementedTargetServer) Execute(*ExecuteRequest, grpc.ServerStreamingServer[ExecuteEvent]) error {
 	return status.Error(codes.Unimplemented, "method Execute not implemented")
@@ -372,6 +392,24 @@ func _Target_Observe_Handler(srv interface{}, ctx context.Context, dec func(inte
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Target_Discover_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(DiscoverRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(TargetServer).Discover(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Target_Discover_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TargetServer).Discover(ctx, req.(*DiscoverRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _Target_Execute_Handler(srv interface{}, stream grpc.ServerStream) error {
 	m := new(ExecuteRequest)
 	if err := stream.RecvMsg(m); err != nil {
@@ -417,6 +455,10 @@ var Target_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "Observe",
 			Handler:    _Target_Observe_Handler,
+		},
+		{
+			MethodName: "Discover",
+			Handler:    _Target_Discover_Handler,
 		},
 	},
 	Streams: []grpc.StreamDesc{

@@ -74,7 +74,23 @@ func Open(ctx context.Context, d *workdir.Dir, readOnly bool) (*Session, error) 
 	if s.Inst, err = target.Open(s.Target, id, env.Settings); err != nil {
 		return nil, err
 	}
+	if _, ok := env.Targets[render.DefaultTarget]; ok {
+		return nil, fmt.Errorf("targets.%s: the name is pack's, for the default target (its facts): name the entry otherwise", render.DefaultTarget)
+	}
+	facts, warnings, err := LoadFacts(d)
+	if err != nil {
+		return nil, err
+	}
+	for _, w := range warnings {
+		_, _ = fmt.Fprintln(os.Stderr, "pack: facts:", w)
+	}
 	s.Ctx = render.Context{Installation: id, Target: s.Inst, Keys: placements(env.Keys)}
+	for name, f := range facts {
+		if s.Ctx.Facts == nil {
+			s.Ctx.Facts = map[string]map[string]any{}
+		}
+		s.Ctx.Facts[name] = f.Map()
+	}
 	s.Execs = map[string]target.Executor{}
 	for _, tn := range slices.Sorted(maps.Keys(env.Targets)) {
 		t := env.Targets[tn]

@@ -798,6 +798,96 @@ func (x *ObserveResponse) GetHeld() map[string]*Observed {
 	return nil
 }
 
+type DiscoverRequest struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// the hosts to ask; none — all of them
+	Hosts         []string `protobuf:"bytes,1,rep,name=hosts,proto3" json:"hosts,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *DiscoverRequest) Reset() {
+	*x = DiscoverRequest{}
+	mi := &file_target_proto_msgTypes[16]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DiscoverRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DiscoverRequest) ProtoMessage() {}
+
+func (x *DiscoverRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_target_proto_msgTypes[16]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DiscoverRequest.ProtoReflect.Descriptor instead.
+func (*DiscoverRequest) Descriptor() ([]byte, []int) {
+	return file_target_proto_rawDescGZIP(), []int{16}
+}
+
+func (x *DiscoverRequest) GetHosts() []string {
+	if x != nil {
+		return x.Hosts
+	}
+	return nil
+}
+
+type DiscoverResponse struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// target.Facts as JSON
+	Facts         []byte `protobuf:"bytes,1,opt,name=facts,proto3" json:"facts,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *DiscoverResponse) Reset() {
+	*x = DiscoverResponse{}
+	mi := &file_target_proto_msgTypes[17]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DiscoverResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DiscoverResponse) ProtoMessage() {}
+
+func (x *DiscoverResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_target_proto_msgTypes[17]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DiscoverResponse.ProtoReflect.Descriptor instead.
+func (*DiscoverResponse) Descriptor() ([]byte, []int) {
+	return file_target_proto_rawDescGZIP(), []int{17}
+}
+
+func (x *DiscoverResponse) GetFacts() []byte {
+	if x != nil {
+		return x.Facts
+	}
+	return nil
+}
+
 type Observed struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Image         string                 `protobuf:"bytes,1,opt,name=image,proto3" json:"image,omitempty"`
@@ -808,7 +898,7 @@ type Observed struct {
 
 func (x *Observed) Reset() {
 	*x = Observed{}
-	mi := &file_target_proto_msgTypes[16]
+	mi := &file_target_proto_msgTypes[18]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -820,7 +910,7 @@ func (x *Observed) String() string {
 func (*Observed) ProtoMessage() {}
 
 func (x *Observed) ProtoReflect() protoreflect.Message {
-	mi := &file_target_proto_msgTypes[16]
+	mi := &file_target_proto_msgTypes[18]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -833,7 +923,7 @@ func (x *Observed) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Observed.ProtoReflect.Descriptor instead.
 func (*Observed) Descriptor() ([]byte, []int) {
-	return file_target_proto_rawDescGZIP(), []int{16}
+	return file_target_proto_rawDescGZIP(), []int{18}
 }
 
 func (x *Observed) GetImage() string {
@@ -865,7 +955,7 @@ type ExecuteRequest struct {
 
 func (x *ExecuteRequest) Reset() {
 	*x = ExecuteRequest{}
-	mi := &file_target_proto_msgTypes[17]
+	mi := &file_target_proto_msgTypes[19]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -877,7 +967,7 @@ func (x *ExecuteRequest) String() string {
 func (*ExecuteRequest) ProtoMessage() {}
 
 func (x *ExecuteRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_target_proto_msgTypes[17]
+	mi := &file_target_proto_msgTypes[19]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -890,7 +980,7 @@ func (x *ExecuteRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ExecuteRequest.ProtoReflect.Descriptor instead.
 func (*ExecuteRequest) Descriptor() ([]byte, []int) {
-	return file_target_proto_rawDescGZIP(), []int{17}
+	return file_target_proto_rawDescGZIP(), []int{19}
 }
 
 func (x *ExecuteRequest) GetStep() *Step {
@@ -942,7 +1032,7 @@ type Step struct {
 
 func (x *Step) Reset() {
 	*x = Step{}
-	mi := &file_target_proto_msgTypes[18]
+	mi := &file_target_proto_msgTypes[20]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -954,7 +1044,7 @@ func (x *Step) String() string {
 func (*Step) ProtoMessage() {}
 
 func (x *Step) ProtoReflect() protoreflect.Message {
-	mi := &file_target_proto_msgTypes[18]
+	mi := &file_target_proto_msgTypes[20]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -967,7 +1057,7 @@ func (x *Step) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Step.ProtoReflect.Descriptor instead.
 func (*Step) Descriptor() ([]byte, []int) {
-	return file_target_proto_rawDescGZIP(), []int{18}
+	return file_target_proto_rawDescGZIP(), []int{20}
 }
 
 func (x *Step) GetN() int64 {
@@ -1052,7 +1142,7 @@ type ExecuteEvent struct {
 
 func (x *ExecuteEvent) Reset() {
 	*x = ExecuteEvent{}
-	mi := &file_target_proto_msgTypes[19]
+	mi := &file_target_proto_msgTypes[21]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1064,7 +1154,7 @@ func (x *ExecuteEvent) String() string {
 func (*ExecuteEvent) ProtoMessage() {}
 
 func (x *ExecuteEvent) ProtoReflect() protoreflect.Message {
-	mi := &file_target_proto_msgTypes[19]
+	mi := &file_target_proto_msgTypes[21]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1077,7 +1167,7 @@ func (x *ExecuteEvent) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ExecuteEvent.ProtoReflect.Descriptor instead.
 func (*ExecuteEvent) Descriptor() ([]byte, []int) {
-	return file_target_proto_rawDescGZIP(), []int{19}
+	return file_target_proto_rawDescGZIP(), []int{21}
 }
 
 func (x *ExecuteEvent) GetMessage() string {
@@ -1154,7 +1244,11 @@ const file_target_proto_rawDesc = "" +
 	"\x04held\x18\x01 \x03(\v2).pack.target.v1.ObserveResponse.HeldEntryR\x04held\x1aQ\n" +
 	"\tHeldEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12.\n" +
-	"\x05value\x18\x02 \x01(\v2\x18.pack.target.v1.ObservedR\x05value:\x028\x01\"<\n" +
+	"\x05value\x18\x02 \x01(\v2\x18.pack.target.v1.ObservedR\x05value:\x028\x01\"'\n" +
+	"\x0fDiscoverRequest\x12\x14\n" +
+	"\x05hosts\x18\x01 \x03(\tR\x05hosts\"(\n" +
+	"\x10DiscoverResponse\x12\x14\n" +
+	"\x05facts\x18\x01 \x01(\fR\x05facts\"<\n" +
 	"\bObserved\x12\x14\n" +
 	"\x05image\x18\x01 \x01(\tR\x05image\x12\x1a\n" +
 	"\breplicas\x18\x02 \x01(\x03R\breplicas\"\xa7\x01\n" +
@@ -1178,7 +1272,7 @@ const file_target_proto_rawDesc = "" +
 	"\fExecuteEvent\x12\x18\n" +
 	"\amessage\x18\x01 \x01(\tR\amessage\x12\x12\n" +
 	"\x04done\x18\x02 \x01(\bR\x04done\x12\x14\n" +
-	"\x05error\x18\x03 \x01(\tR\x05error2\xb2\x05\n" +
+	"\x05error\x18\x03 \x01(\tR\x05error2\x81\x06\n" +
 	"\x06Target\x12P\n" +
 	"\tHandshake\x12 .pack.target.v1.HandshakeRequest\x1a!.pack.target.v1.HandshakeResponse\x12P\n" +
 	"\tConfigure\x12 .pack.target.v1.ConfigureRequest\x1a!.pack.target.v1.ConfigureResponse\x12J\n" +
@@ -1186,7 +1280,8 @@ const file_target_proto_rawDesc = "" +
 	"\rReadInstalled\x12$.pack.target.v1.ReadInstalledRequest\x1a%.pack.target.v1.ReadInstalledResponse\x12_\n" +
 	"\x0eWriteInstalled\x12%.pack.target.v1.WriteInstalledRequest\x1a&.pack.target.v1.WriteInstalledResponse\x12b\n" +
 	"\x0fDeleteInstalled\x12&.pack.target.v1.DeleteInstalledRequest\x1a'.pack.target.v1.DeleteInstalledResponse\x12J\n" +
-	"\aObserve\x12\x1e.pack.target.v1.ObserveRequest\x1a\x1f.pack.target.v1.ObserveResponse\x12I\n" +
+	"\aObserve\x12\x1e.pack.target.v1.ObserveRequest\x1a\x1f.pack.target.v1.ObserveResponse\x12M\n" +
+	"\bDiscover\x12\x1f.pack.target.v1.DiscoverRequest\x1a .pack.target.v1.DiscoverResponse\x12I\n" +
 	"\aExecute\x12\x1e.pack.target.v1.ExecuteRequest\x1a\x1c.pack.target.v1.ExecuteEvent0\x01B@Z>github.com/horchestra/pack/pkg/target/remote/remotepb;remotepbb\x06proto3"
 
 var (
@@ -1201,7 +1296,7 @@ func file_target_proto_rawDescGZIP() []byte {
 	return file_target_proto_rawDescData
 }
 
-var file_target_proto_msgTypes = make([]protoimpl.MessageInfo, 23)
+var file_target_proto_msgTypes = make([]protoimpl.MessageInfo, 25)
 var file_target_proto_goTypes = []any{
 	(*HandshakeRequest)(nil),        // 0: pack.target.v1.HandshakeRequest
 	(*HandshakeResponse)(nil),       // 1: pack.target.v1.HandshakeResponse
@@ -1219,22 +1314,24 @@ var file_target_proto_goTypes = []any{
 	(*DeleteInstalledResponse)(nil), // 13: pack.target.v1.DeleteInstalledResponse
 	(*ObserveRequest)(nil),          // 14: pack.target.v1.ObserveRequest
 	(*ObserveResponse)(nil),         // 15: pack.target.v1.ObserveResponse
-	(*Observed)(nil),                // 16: pack.target.v1.Observed
-	(*ExecuteRequest)(nil),          // 17: pack.target.v1.ExecuteRequest
-	(*Step)(nil),                    // 18: pack.target.v1.Step
-	(*ExecuteEvent)(nil),            // 19: pack.target.v1.ExecuteEvent
-	nil,                             // 20: pack.target.v1.ConfigureRequest.SettingsEntry
-	nil,                             // 21: pack.target.v1.Reach.PortsEntry
-	nil,                             // 22: pack.target.v1.ObserveResponse.HeldEntry
+	(*DiscoverRequest)(nil),         // 16: pack.target.v1.DiscoverRequest
+	(*DiscoverResponse)(nil),        // 17: pack.target.v1.DiscoverResponse
+	(*Observed)(nil),                // 18: pack.target.v1.Observed
+	(*ExecuteRequest)(nil),          // 19: pack.target.v1.ExecuteRequest
+	(*Step)(nil),                    // 20: pack.target.v1.Step
+	(*ExecuteEvent)(nil),            // 21: pack.target.v1.ExecuteEvent
+	nil,                             // 22: pack.target.v1.ConfigureRequest.SettingsEntry
+	nil,                             // 23: pack.target.v1.Reach.PortsEntry
+	nil,                             // 24: pack.target.v1.ObserveResponse.HeldEntry
 }
 var file_target_proto_depIdxs = []int32{
-	20, // 0: pack.target.v1.ConfigureRequest.settings:type_name -> pack.target.v1.ConfigureRequest.SettingsEntry
+	22, // 0: pack.target.v1.ConfigureRequest.settings:type_name -> pack.target.v1.ConfigureRequest.SettingsEntry
 	7,  // 1: pack.target.v1.ResolveResponse.instances:type_name -> pack.target.v1.Instance
 	6,  // 2: pack.target.v1.ResolveResponse.reach:type_name -> pack.target.v1.Reach
-	21, // 3: pack.target.v1.Reach.ports:type_name -> pack.target.v1.Reach.PortsEntry
-	22, // 4: pack.target.v1.ObserveResponse.held:type_name -> pack.target.v1.ObserveResponse.HeldEntry
-	18, // 5: pack.target.v1.ExecuteRequest.step:type_name -> pack.target.v1.Step
-	16, // 6: pack.target.v1.ObserveResponse.HeldEntry.value:type_name -> pack.target.v1.Observed
+	23, // 3: pack.target.v1.Reach.ports:type_name -> pack.target.v1.Reach.PortsEntry
+	24, // 4: pack.target.v1.ObserveResponse.held:type_name -> pack.target.v1.ObserveResponse.HeldEntry
+	20, // 5: pack.target.v1.ExecuteRequest.step:type_name -> pack.target.v1.Step
+	18, // 6: pack.target.v1.ObserveResponse.HeldEntry.value:type_name -> pack.target.v1.Observed
 	0,  // 7: pack.target.v1.Target.Handshake:input_type -> pack.target.v1.HandshakeRequest
 	2,  // 8: pack.target.v1.Target.Configure:input_type -> pack.target.v1.ConfigureRequest
 	4,  // 9: pack.target.v1.Target.Resolve:input_type -> pack.target.v1.ResolveRequest
@@ -1242,17 +1339,19 @@ var file_target_proto_depIdxs = []int32{
 	10, // 11: pack.target.v1.Target.WriteInstalled:input_type -> pack.target.v1.WriteInstalledRequest
 	12, // 12: pack.target.v1.Target.DeleteInstalled:input_type -> pack.target.v1.DeleteInstalledRequest
 	14, // 13: pack.target.v1.Target.Observe:input_type -> pack.target.v1.ObserveRequest
-	17, // 14: pack.target.v1.Target.Execute:input_type -> pack.target.v1.ExecuteRequest
-	1,  // 15: pack.target.v1.Target.Handshake:output_type -> pack.target.v1.HandshakeResponse
-	3,  // 16: pack.target.v1.Target.Configure:output_type -> pack.target.v1.ConfigureResponse
-	5,  // 17: pack.target.v1.Target.Resolve:output_type -> pack.target.v1.ResolveResponse
-	9,  // 18: pack.target.v1.Target.ReadInstalled:output_type -> pack.target.v1.ReadInstalledResponse
-	11, // 19: pack.target.v1.Target.WriteInstalled:output_type -> pack.target.v1.WriteInstalledResponse
-	13, // 20: pack.target.v1.Target.DeleteInstalled:output_type -> pack.target.v1.DeleteInstalledResponse
-	15, // 21: pack.target.v1.Target.Observe:output_type -> pack.target.v1.ObserveResponse
-	19, // 22: pack.target.v1.Target.Execute:output_type -> pack.target.v1.ExecuteEvent
-	15, // [15:23] is the sub-list for method output_type
-	7,  // [7:15] is the sub-list for method input_type
+	16, // 14: pack.target.v1.Target.Discover:input_type -> pack.target.v1.DiscoverRequest
+	19, // 15: pack.target.v1.Target.Execute:input_type -> pack.target.v1.ExecuteRequest
+	1,  // 16: pack.target.v1.Target.Handshake:output_type -> pack.target.v1.HandshakeResponse
+	3,  // 17: pack.target.v1.Target.Configure:output_type -> pack.target.v1.ConfigureResponse
+	5,  // 18: pack.target.v1.Target.Resolve:output_type -> pack.target.v1.ResolveResponse
+	9,  // 19: pack.target.v1.Target.ReadInstalled:output_type -> pack.target.v1.ReadInstalledResponse
+	11, // 20: pack.target.v1.Target.WriteInstalled:output_type -> pack.target.v1.WriteInstalledResponse
+	13, // 21: pack.target.v1.Target.DeleteInstalled:output_type -> pack.target.v1.DeleteInstalledResponse
+	15, // 22: pack.target.v1.Target.Observe:output_type -> pack.target.v1.ObserveResponse
+	17, // 23: pack.target.v1.Target.Discover:output_type -> pack.target.v1.DiscoverResponse
+	21, // 24: pack.target.v1.Target.Execute:output_type -> pack.target.v1.ExecuteEvent
+	16, // [16:25] is the sub-list for method output_type
+	7,  // [7:16] is the sub-list for method input_type
 	7,  // [7:7] is the sub-list for extension type_name
 	7,  // [7:7] is the sub-list for extension extendee
 	0,  // [0:7] is the sub-list for field type_name
@@ -1269,7 +1368,7 @@ func file_target_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_target_proto_rawDesc), len(file_target_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   23,
+			NumMessages:   25,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

@@ -69,6 +69,9 @@ func (d *Dir) JournalPath() string {
 	return filepath.Join(d.Path, "journal")
 }
 
+// FactsPath is where the facts the targets told are, <target>.json each (pack discover).
+func (d *Dir) FactsPath() string { return filepath.Join(d.Path, "facts") }
+
 // PacksPath is where the packs brought from a registry are, one directory for each digest.
 func (d *Dir) PacksPath() string { return filepath.Join(d.Path, "packs") }
 

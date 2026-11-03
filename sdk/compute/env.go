@@ -21,8 +21,10 @@ import (
 // Vars are the names a formula may read. All are dynamic maps. `limits` are
 // facts the target gives about a key's limits, normalised — memory in bytes,
 // cpu in millicores — so that a formula never reads the target's own words
-// (the platform subtree is the target's and is not a variable).
-var Vars = []string{"values", "limits", "me", "pack"}
+// (the platform subtree is the target's and is not a variable). `facts` are what
+// the key's target told of where it installs (pack discover): its hosts, their
+// memory, disks, ports — empty when it told none.
+var Vars = []string{"values", "limits", "me", "pack", "facts"}
 
 const CostLimit = 1_000_000
 

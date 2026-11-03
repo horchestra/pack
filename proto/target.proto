@@ -39,6 +39,9 @@ service Target {
   rpc DeleteInstalled(DeleteInstalledRequest) returns (DeleteInstalledResponse);
   // Observe says what the target holds of the installation, by key. Requires the "observe" capability.
   rpc Observe(ObserveRequest) returns (ObserveResponse);
+  // Discover tells the facts of where the target installs — its hosts as they are — and changes nothing. Requires
+  // the "discover" capability.
+  rpc Discover(DiscoverRequest) returns (DiscoverResponse);
   // Execute performs one step of the saga on the target and reports as it goes; the last event says whether the
   // step succeeded.
   rpc Execute(ExecuteRequest) returns (stream ExecuteEvent);
@@ -113,6 +116,16 @@ message ObserveRequest {}
 
 message ObserveResponse {
   map<string, Observed> held = 1;
+}
+
+message DiscoverRequest {
+  // the hosts to ask; none — all of them
+  repeated string hosts = 1;
+}
+
+message DiscoverResponse {
+  // target.Facts as JSON
+  bytes facts = 1;
 }
 
 message Observed {

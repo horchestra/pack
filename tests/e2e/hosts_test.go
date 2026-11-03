@@ -225,6 +225,10 @@ func TestFromOSPackages(t *testing.T) {
 				if _, err := stat(filepath.Join(r.dir, ".pack", "home", "ansible", ".ansible")); err != nil {
 					t.Errorf("ansible kept nothing in the home pack gave the container: %v", err)
 				}
+				// the host's facts, told by ansible in its container: the OS, its service manager, and the engine it now runs
+				wantFacts(t, stdoutOf(t, r.dir, s.pack, "discover", "--json"), "default", func(h hostFacts) bool {
+					return h.OS == "debian" && h.MemoryMB > 0 && slices.Contains(h.Runtimes, "systemd") && slices.Contains(h.Runtimes, "docker")
+				})
 				run(t, r.dir, journal(c4), s.pack, "delete")
 			})
 

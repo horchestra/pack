@@ -8,6 +8,7 @@ import (
 	"github.com/horchestra/pack/internal/testpacks/openbao"
 	"github.com/horchestra/pack/pkg/bundle"
 	"github.com/horchestra/pack/pkg/render"
+	"github.com/horchestra/pack/pkg/target"
 	"github.com/horchestra/pack/pkg/target/memory"
 	"github.com/horchestra/pack/sdk"
 	"github.com/horchestra/pack/sdk/packschema"
@@ -457,5 +458,48 @@ func TestACommandOfPackagesIsATemplate(t *testing.T) {
 	got := rel.Units[0].Packages["debian"].Commands
 	if len(got) != 1 || got[0][1] != "/data" {
 		t.Errorf("commands: %v", got)
+	}
+}
+
+// Told reads the facts of its key's target: a quarter of the first host's memory, unless the operator says.
+type Told struct {
+	Cache string `json:"cache,omitempty" env:"CACHE"`
+}
+
+func envOf(u render.Unit, name string) string {
+	for _, e := range u.Env {
+		if e.Name == name {
+			return e.Value
+		}
+	}
+	return ""
+}
+
+func (*Told) SetDefaults()              {}
+func (*Told) PackRoot() packschema.Root { return packschema.Root{} }
+func (*Told) Meta() sdk.Meta {
+	return sdk.Meta{Name: "told", Version: "1", Dir: "/nonexistent"}
+}
+func (*Told) PackCompute() map[string]string {
+	return map[string]string{"/cache": "has(facts.hosts) ? string(int(facts.hosts.db1.memory_mb) / 4) + 'MB' : '128MB'"}
+}
+
+func TestFormulasReadTheFacts(t *testing.T) {
+	b := loadPack(t, &Told{})
+	facts := (&target.Facts{Hosts: map[string]target.HostFacts{"db1": {MemoryMB: 4096}}}).Map()
+	rel, err := render.Render(b, render.Values{}, render.Context{Installation: "t", Target: memory.New(),
+		Facts: map[string]map[string]any{render.DefaultTarget: facts}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := envOf(rel.Units[0], "CACHE"); got != "1024MB" {
+		t.Errorf("with facts: cache = %v", got)
+	}
+	rel, err = render.Render(b, render.Values{}, render.Context{Installation: "t", Target: memory.New()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := envOf(rel.Units[0], "CACHE"); got != "128MB" {
+		t.Errorf("no facts told: cache = %v", got)
 	}
 }

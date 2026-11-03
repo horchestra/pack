@@ -4,16 +4,19 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"maps"
 	"os"
 	"path/filepath"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/spf13/cobra"
 
 	"github.com/horchestra/pack/internal/interrupt"
 	"github.com/horchestra/pack/internal/oci"
 	"github.com/horchestra/pack/internal/release"
+	"github.com/horchestra/pack/internal/session"
 	"github.com/horchestra/pack/pkg/environment"
 	"github.com/horchestra/pack/pkg/render"
 	"github.com/horchestra/pack/pkg/target"
@@ -39,6 +42,8 @@ type nextState struct {
 	State    string     `json:"state"`
 	Blocking []apiError `json:"blocking,omitempty"`
 	Next     []string   `json:"next"`
+	// Facts say when the targets told their facts (pack discover), by target: what a formula reads is that old.
+	Facts map[string]time.Time `json:"facts,omitempty"`
 }
 
 var nextCmd = &cobra.Command{
@@ -62,6 +67,9 @@ model that follows it instead of planning: with --json it is {state, blocking, n
 		defer stop()
 		n := whatNext(ctx)
 		fmt.Println("state:", n.State)
+		for _, name := range slices.Sorted(maps.Keys(n.Facts)) {
+			fmt.Printf("facts of %s: told %s ago\n", name, time.Since(n.Facts[name]).Round(time.Minute))
+		}
 		for _, b := range n.Blocking {
 			fmt.Printf("  %s: %s\n", b.Code, strings.ReplaceAll(b.Message, "\n", "\n    "))
 		}
@@ -75,8 +83,21 @@ model that follows it instead of planning: with --json it is {state, blocking, n
 	}),
 }
 
-// whatNext works the state out, from the first thing a release needs to the last.
+// whatNext works the state out, from the first thing a release needs to the last, and says how old the facts are.
 func whatNext(ctx context.Context) nextState {
+	n := stateNow(ctx)
+	if facts, _, err := session.LoadFacts(dir); err == nil {
+		for name, f := range facts {
+			if n.Facts == nil {
+				n.Facts = map[string]time.Time{}
+			}
+			n.Facts[name] = f.At
+		}
+	}
+	return n
+}
+
+func stateNow(ctx context.Context) nextState {
 	rel := dir.Release
 	if _, err := os.Stat(filepath.Join(rel.Dir, release.File)); os.IsNotExist(err) || err == nil && len(rel.Pack) == 0 {
 		return nextState{State: StateNew, Next: []string{"pack init <oci://registry/repo:tag|dir> ."}}

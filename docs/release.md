@@ -35,6 +35,10 @@ namespace: data                      # and anything else the target wants
 lang: ru                             # the language of the comments pack writes (values.yaml); $LANG when unset
 runtime: # where the target's program runs: native (default) or docker — its image, see targets.md
   type: docker
+discover: # what pack discover asks the targets of; no hosts — every host
+  hosts:
+    - db1
+    - db2
 run: # how a saga runs
   jobs: 4                            # keys at once; 0 — as many as CPUs, 1 — one by one
   strict: true                       # refuse a plan with an irreversible step

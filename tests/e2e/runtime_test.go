@@ -3,8 +3,11 @@ package e2e
 import (
 	"encoding/json"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
+	"slices"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -44,6 +47,52 @@ func TestTargetInAContainer(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(dir, ".pack", "home", "docker")); err != nil {
 		t.Errorf("the container had no home of the release's: %v", err)
 	}
+	// the facts of the engine, and the port openbao publishes on it among them
+	wantFacts(t, stdoutOf(t, dir, s.pack, "discover", "--json"), "default", func(h hostFacts) bool {
+		return h.CPUs > 0 && h.MemoryMB > 0 && slices.ContainsFunc(h.Ports, func(p struct{ Port int }) bool { return strconv.Itoa(p.Port) == api })
+	})
+}
+
+// stdoutOf runs a command and gives its stdout alone: what --json writes, without what is said on stderr.
+func stdoutOf(t *testing.T, dir, name string, args ...string) string {
+	t.Helper()
+	cmd := exec.Command(name, args...)
+	cmd.Dir = dir
+	var stderr strings.Builder
+	cmd.Stderr = &stderr
+	out, err := cmd.Output()
+	if err != nil {
+		t.Fatalf("%s %v: %v\n%s%s", name, args, err, out, stderr.String())
+	}
+	return string(out)
+}
+
+// hostFacts is what the e2e tests look at of a host's facts.
+type hostFacts struct {
+	OS       string   `json:"os"`
+	CPUs     int      `json:"cpus"`
+	MemoryMB int64    `json:"memory_mb"`
+	Runtimes []string `json:"runtimes"`
+	Ports    []struct{ Port int }
+}
+
+// wantFacts: pack discover --json told the target's facts, and a host of them is as ok says.
+func wantFacts(t *testing.T, out, target string, ok func(hostFacts) bool) {
+	t.Helper()
+	var got struct {
+		Told map[string]struct {
+			Hosts map[string]hostFacts `json:"hosts"`
+		} `json:"told"`
+	}
+	if err := json.Unmarshal([]byte(out), &got); err != nil {
+		t.Fatalf("discover --json: %v\n%s", err, out)
+	}
+	for _, h := range got.Told[target].Hosts {
+		if ok(h) {
+			return
+		}
+	}
+	t.Errorf("no host of target %s as wanted:\n%s", target, out)
 }
 
 const (
@@ -76,7 +125,12 @@ keys:
 func (s *suite) targetImage(t *testing.T, name string) string {
 	t.Helper()
 	image := s.registry + "/targets/" + name + ":" + targetTag + "-image"
-	run(t, filepath.Join(s.targets, name), nil, "docker", "build", "-q", "-t", image, ".")
+	root, err := filepath.Abs(filepath.Join("..", ".."))
+	if err != nil {
+		t.Fatal(err)
+	}
+	// the checkout of pack beside the target's: what its go.mod's replace of pack means
+	run(t, filepath.Join(s.targets, name), nil, "docker", "build", "-q", "--build-context", "pack="+root, "-t", image, ".")
 	s.tagged = append(s.tagged, image)
 	run(t, s.targets, nil, "docker", "push", "-q", image)
 	return "oci://" + image

@@ -65,8 +65,9 @@ type Environment struct {
 	Store  Store  `envPrefix:"STORE_"`
 	// Run and Secrets are pack's own sections: how it runs a saga, where it gets the passwords it creates. They are
 	// not a target's, and no provider sees them.
-	Run     Run     `envPrefix:"RUN_"`
-	Secrets Secrets `envPrefix:"SECRETS_"`
+	Run      Run      `envPrefix:"RUN_"`
+	Secrets  Secrets  `envPrefix:"SECRETS_"`
+	Discover Discover `envPrefix:"DISCOVER_"`
 	// Lang is the language of what pack writes for the operator — the comments of values.yaml: one of the pack's
 	// docs/ (ru, pt-BR); empty — $LANG's, else the pack's base language.
 	Lang string `env:"LANG"`
@@ -108,6 +109,11 @@ type Run struct {
 
 // DefaultJournalKeep is the number of sagas the journal keeps when run.journal_keep says nothing.
 const DefaultJournalKeep = 20
+
+// Discover is what pack discover asks the targets of.
+type Discover struct {
+	Hosts []string `env:"HOSTS"` // the hosts to ask; none — every host the targets have
+}
 
 // Secrets is where the passwords a pack asks pack to create come from.
 type Secrets struct {
@@ -268,6 +274,7 @@ var ownSettings = map[string]bool{
 	"store_provider": true, "store_addr": true, "store_mount": true, "store_prefix": true, "store_cacert": true,
 	"run_jobs": true, "run_strict": true, "run_no_rollback": true, "run_keep": true, "run_journal_keep": true,
 	"secrets_provider": true, "secrets_provision": true,
+	"discover_hosts": true,
 }
 
 const targetsPrefix = "targets_"

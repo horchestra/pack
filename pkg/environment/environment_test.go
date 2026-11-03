@@ -359,7 +359,7 @@ func TestOwnSettingsAreTheSectionsFields(t *testing.T) {
 	et := reflect.TypeFor[Environment]()
 	for sec := range et.Fields() {
 		switch sec.Type {
-		case reflect.TypeFor[Store](), reflect.TypeFor[Run](), reflect.TypeFor[Secrets]():
+		case reflect.TypeFor[Store](), reflect.TypeFor[Run](), reflect.TypeFor[Secrets](), reflect.TypeFor[Discover]():
 		default:
 			continue
 		}

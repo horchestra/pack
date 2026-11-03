@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -330,6 +331,25 @@ func (r *remote) DeleteInstalled() error {
 	return unwrap(err)
 }
 
+// Discover asks the target the facts of where it installs; a target that did not declare CapDiscover cannot tell.
+func (r *remote) Discover(ctx context.Context, hosts []string) (*target.Facts, error) {
+	if !slices.Contains(r.p.caps, CapDiscover) {
+		return nil, target.ErrNoFacts
+	}
+	resp, err := r.p.client.Discover(ctx, &remotepb.DiscoverRequest{Hosts: hosts})
+	if err != nil {
+		if s, ok := status.FromError(err); ok && s.Code() == codes.Unimplemented {
+			return nil, target.ErrNoFacts
+		}
+		return nil, unwrap(err)
+	}
+	var f target.Facts
+	if err := json.Unmarshal(resp.Facts, &f); err != nil {
+		return nil, fmt.Errorf("the facts of target %s: %w", r.p.name, err)
+	}
+	return &f, nil
+}
+
 // Observe asks the target what it holds; a target that did not declare CapObserve cannot tell.
 func (r *remote) Observe(ctx context.Context) (map[string]target.Observed, error) {
 	if !slices.Contains(r.p.caps, CapObserve) {
@@ -388,4 +408,5 @@ var (
 	_ target.Installation = (*remote)(nil)
 	_ target.Recorder     = (*remote)(nil)
 	_ target.Observer     = (*remote)(nil)
+	_ target.Discoverer   = (*remote)(nil)
 )

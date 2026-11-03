@@ -80,6 +80,7 @@ of `null` leaves the leaf as it was.
 | `pack.installation`, `pack.component`, `pack.namespace`, `pack.service`, `pack.replicas` | where and as what the key is installed                                                                                               |
 | `pack.values.<key>`                                                                      | any key's own values, read without binding a role                                                                                    |
 | `pack.keys.<key>`                                                                        | any key as `me` describes it: `service`, `instances`, `replicas`, `ports`                                                            |
+| `facts`                                                                                  | what the key's target told of where it installs (`pack discover`): `facts.hosts.<name>.memory_mb`, `.cpus`, `.disks`, `.ports` …; `{}` when it told none — guard with `has(facts.hosts)` |
 
 `instances` are names, never addresses: stable under any network mode and known before anything is scheduled. A key on
 another target is described by where it is *reached from outside* (`reach`), which its own target says.

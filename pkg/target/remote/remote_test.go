@@ -149,3 +149,15 @@ func TestDefaultDirIsDotPackBin(t *testing.T) {
 		t.Errorf("the error says how to get it: %v", err)
 	}
 }
+
+func TestDiscover(t *testing.T) {
+	fakeBin(t)
+	in := open(t, t.TempDir(), map[string]string{"target": "fake"})
+	f, err := in.(target.Discoverer).Discover(context.Background(), []string{"h1"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(f.Hosts) != 1 || f.Hosts["h1"].MemoryMB != 2048 {
+		t.Errorf("facts = %+v", f)
+	}
+}
