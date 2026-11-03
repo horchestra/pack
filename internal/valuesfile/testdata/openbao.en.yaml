@@ -1,0 +1,76 @@
+# pack values: sha256:73e34aa141b83d4a
+# OpenBao 2.1.0 — the values of the release. A line `#key: value` is left to its default: remove the
+# `#` to set it. pack rewrites this file (pack values write); a comment of your own stops it, --rewrite drops it.
+
+# The server's own configuration, written to config.json.
+openbao:
+  # Serve the web UI.
+  # e.g. true
+  ui: true
+
+  # How much the server says.
+  # e.g. debug, info
+  #log_level: info
+
+  # The address clients are told to reach the API at.
+  # e.g. https://bao.example:8200
+  # required
+  api_addr: https://bao:8200
+
+  # The storage backends. With the embedded postgres it is filled from it
+  # and must not be set.
+  # filled by a formula unless set
+  #storage:
+
+# A tembo cluster installed with OpenBao as its storage; absent — bring your own storage.
+postgres:
+  # Lowercase letters, digits and underscores; the hostname, dashes turned
+  # into underscores, when unset.
+  # e.g. db_1
+  #id: db_1
+
+  # --- Proxies ---
+
+  # The client proxy to the primary.
+  #listen: :5432
+
+  # The client proxy spread over the standbys.
+  #listen_ro: :5434
+
+  # --- Storage ---
+
+  # The bbolt file of the node.
+  #db: /var/lib/postgresql/tembo.db
+
+  # The Postgres data directory.
+  #pg_data: /var/lib/postgresql/data
+
+  # The port of Postgres itself, behind the proxies, the same on every node.
+  # e.g. 5433
+  # source: suggest — 5432 is taken on db1
+  pg_port: 5440
+
+  # The same on every node; it only bootstraps a new cluster, a running one
+  # is rotated with `tembo rotate-password`.
+  #pg_password:
+  #  secretRef:
+  #    name: ""
+  #    key: ""
+
+  # The file of the node's tags: loaded first, the environment wins over it.
+  #config: /etc/tembo/tembo.env
+
+  # The node's tags and the log it keeps.
+  node:
+    # Bytes of applied raft log to keep; older entries are compacted into the snapshot.
+    #raft_retention_log_size: 8388608
+
+    # The node is never the primary.
+    # e.g. true
+    nofailover: true
+
+    # The node is never a synchronous standby.
+    #nosync:
+
+    # Higher is preferred as a failover candidate.
+    #failover_priority:

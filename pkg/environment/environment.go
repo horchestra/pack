@@ -67,6 +67,9 @@ type Environment struct {
 	// not a target's, and no provider sees them.
 	Run     Run     `envPrefix:"RUN_"`
 	Secrets Secrets `envPrefix:"SECRETS_"`
+	// Lang is the language of what pack writes for the operator — the comments of values.yaml: one of the pack's
+	// docs/ (ru, pt-BR); empty — $LANG's, else the pack's base language.
+	Lang string `env:"LANG"`
 	// Keys is how the environment runs each key of the pack, by the key's name (the section `keys`).
 	Keys map[string]Key `env:"-"`
 	// Settings is the whole set, keys in lower case: what the provider gets — the default target's, without the
@@ -243,6 +246,10 @@ func Load(ctx context.Context, file string, overrides map[string]string) (*Envir
 	for k := range env.Settings {
 		if k == "keys" {
 			delete(env.Settings, k) // the keys' text, taken above
+			continue
+		}
+		if k == "lang" {
+			delete(env.Settings, k) // pack's: the language of what it writes for the operator
 			continue
 		}
 		if ownSettings[k] || strings.HasPrefix(k, "keys_") {

@@ -19,6 +19,44 @@ whatever the order of the names — nothing is overridden silently. The command 
 A credential is only ever a reference, `{secretRef: {name, key}}`; a plain string in a `Secret` leaf is refused.
 Replicas, resources and placement are not values: they are the environment's, see [release.md](release.md#envyaml).
 
+## values.yaml, written by pack
+
+`pack values write` writes the release's `values.yaml` from the pack's schema: every setting of the pack and of the
+packs it holds, in the schema's order, its documentation (the pack's `docs/`, in `lang:` of `env.yaml`, else `$LANG`,
+else the pack's base language) as comments above it.
+
+```yaml
+# pack values: sha256:73e34aa141b83d4a
+…
+openbao:
+  # Serve the web UI.
+  # e.g. true
+  ui: true
+
+  # How much the server says.
+  #log_level: info
+
+postgres:
+  # The port of Postgres itself, behind the proxies, the same on every node.
+  # source: suggest — 5432 is taken on db1
+  pg_port: 5440
+```
+
+- What the release gives is written as it is. A setting it does not give is a commented line — `#log_level: info`, its
+  default, an example, or a secret's `secretRef` — to uncomment: the file written again is the same file. A held pack
+  not given is commented out whole (named, even empty, it is selected).
+- The description, `e.g.` (examples), `one of`, `pattern`, `filled by a formula` and `required` come from the schema;
+  groups are headings, `# --- Logging ---`.
+- A value the tool filled says where it came from, `# source: suggest — why`, while it is the value it wrote
+  (`.pack/values.sources.json`, which what fills values for the operator saves — not values write itself); a value the
+  operator changed since is theirs.
+- The first line stamps the comments pack wrote. Setting values and uncommenting lines leave it right; a comment of
+  the operator's own — a line, or at the end of a line — makes `pack values write` refuse, and so does a comment of
+  pack's taken away or changed; `--rewrite` writes the file anyway, as pack writes it. A comment is `# text`; `#key:`
+  and `#  key:` are commented settings, outside the stamp. A value of the operator's own whose text holds ` #` (a
+  hand-written block scalar) reads as a comment at the end of its line: `--rewrite` writes it as pack does. `--check` says whether the file is what pack would write. A release whose values are
+  split over files, or a file that is a whole document (`rollout`, `skip`), is not written.
+
 ## How the effective document is built
 
 1. **defaults** — the schema's `default`s: what `SetDefaults` left non-zero;

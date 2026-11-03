@@ -389,3 +389,20 @@ func TestOwnSettingsAreTheSectionsFields(t *testing.T) {
 		}
 	}
 }
+
+func TestLangIsPacksNotTheTargets(t *testing.T) {
+	file := filepath.Join(t.TempDir(), "env.yaml")
+	if err := os.WriteFile(file, []byte("target: memory\nlang: ru\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	env, err := Load(context.Background(), file, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if env.Lang != "ru" {
+		t.Errorf("lang = %q", env.Lang)
+	}
+	if _, ok := env.Settings["lang"]; ok {
+		t.Errorf("lang reaches the target: %v", env.Settings)
+	}
+}

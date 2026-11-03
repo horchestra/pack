@@ -1,0 +1,76 @@
+# pack values: sha256:42948797d8433cc3
+# OpenBao 2.1.0 — the values of the release. A line `#key: value` is left to its default: remove the
+# `#` to set it. pack rewrites this file (pack values write); a comment of your own stops it, --rewrite drops it.
+
+# Собственная конфигурация сервера, пишется в config.json.
+openbao:
+  # Отдавать веб-интерфейс.
+  # e.g. true
+  ui: true
+
+  # Насколько подробно пишет сервер.
+  # e.g. debug, info
+  #log_level: info
+
+  # Адрес, по которому клиентам сообщают обращаться к API.
+  # e.g. https://bao.example:8200
+  # required
+  api_addr: https://bao:8200
+
+  # Бэкенды хранения. Со встроенным postgres заполняется из него
+  # и задаваться не должно.
+  # filled by a formula unless set
+  #storage:
+
+# Кластер tembo, устанавливаемый вместе с OpenBao как его хранилище; если не задан — своё хранилище.
+postgres:
+  # Строчные буквы, цифры и подчёркивания; если не задан — имя хоста,
+  # дефисы заменены подчёркиваниями.
+  # e.g. db_1
+  #id: db_1
+
+  # --- Прокси ---
+
+  # Клиентский прокси к первичному узлу.
+  #listen: :5432
+
+  # Клиентский прокси, распределяющий по резервным узлам.
+  #listen_ro: :5434
+
+  # --- Хранилище ---
+
+  # Файл bbolt узла.
+  #db: /var/lib/postgresql/tembo.db
+
+  # Каталог данных Postgres.
+  #pg_data: /var/lib/postgresql/data
+
+  # Порт самого Postgres за прокси, одинаковый на всех узлах.
+  # e.g. 5433
+  # source: suggest — 5432 is taken on db1
+  pg_port: 5440
+
+  # Одинаковый на всех узлах; задаёт только новый кластер, у работающего
+  # меняется командой `tembo rotate-password`.
+  #pg_password:
+  #  secretRef:
+  #    name: ""
+  #    key: ""
+
+  # Файл тегов узла: читается первым, окружение важнее.
+  #config: /etc/tembo/tembo.env
+
+  # Теги узла и журнал, который он хранит.
+  node:
+    # Сколько байт применённого журнала raft хранить; более старое сжимается в снимок.
+    #raft_retention_log_size: 8388608
+
+    # Узел никогда не становится первичным.
+    # e.g. true
+    nofailover: true
+
+    # Узел никогда не становится синхронным резервным.
+    #nosync:
+
+    # Больший приоритет предпочтительнее при переключении.
+    #failover_priority:

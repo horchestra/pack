@@ -32,6 +32,16 @@ func OpenPack(ctx context.Context, d *workdir.Dir, ref string) (*bundle.Bundle, 
 	return bundle.Load(p.Dir)
 }
 
+// ReleasePack opens the release's pack without a session: no target is started — for what only reads the pack and
+// the release (values write). A pack in a registry is the one the lock says.
+func ReleasePack(ctx context.Context, d *workdir.Dir) (*bundle.Bundle, error) {
+	ref, err := d.Release.PackRef()
+	if err != nil {
+		return nil, err
+	}
+	return (&Session{Dir: d, ctx: ctx}).Pack(ref)
+}
+
 // Pack opens the pack of the release, or one named by ref: a directory, or a pack in a registry — which the lock
 // of the release (pack init) or the digest in the reference says exactly.
 func (s *Session) Pack(ref string) (*bundle.Bundle, error) {
