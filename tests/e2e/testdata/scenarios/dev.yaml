@@ -1,0 +1,9 @@
+name: openbao in dev mode installs on the release's docker
+values:
+  dev: true
+expect:
+  problems: []
+  apply:
+    state: installed
+    in_effect:
+      - openbao

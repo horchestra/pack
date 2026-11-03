@@ -2,6 +2,7 @@ package remote
 
 import (
 	"os"
+	"os/exec"
 	"path/filepath"
 	"reflect"
 	"slices"
@@ -239,5 +240,22 @@ func TestOrphaned(t *testing.T) {
 	}
 	if orphaned("h/1", "h", live) {
 		t.Error("a pack that runs left no orphan")
+	}
+}
+
+// A plugin closed twice — a session closed twice — does not wait again for a process that is gone.
+func TestCloseTwice(t *testing.T) {
+	stopped := 0
+	p := &Plugin{stop: func() { stopped++ }, exited: make(chan error, 1), cmd: exec.Command("true")}
+	p.exited <- nil
+	done := make(chan struct{})
+	go func() { p.Close(); p.Close(); close(done) }()
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second):
+		t.Fatal("the second Close waits")
+	}
+	if stopped != 1 {
+		t.Errorf("stopped %d times", stopped)
 	}
 }

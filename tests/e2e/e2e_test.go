@@ -250,6 +250,23 @@ func TestOpenBao(t *testing.T) {
 	})
 }
 
+// The pack's scenarios run on a release's target, docker, for real: what a scenario installed is taken away after it,
+// what only the memory target can do (a failure injected) is skipped.
+func TestScenariosOnARelease(t *testing.T) {
+	s := setup(t)
+	r := s.release(t, devEnv, devValues)
+	out := run(t, r.dir, nil, s.pack, "test", "--release", r.dir, filepath.Join(must(os.Getwd()), "testdata", "scenarios"))
+	for _, want := range []string{"ok    openbao in dev mode installs on the release's docker", "ok    a storage written by hand",
+		"ok    a failure injected is the memory target's", "skipped: fail_at and logs are the memory target's", "3 scenario(s) ok"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("pack test --release says no %q:\n%s", want, out)
+		}
+	}
+	if left := docker(t, "ps", "-a", "--filter", "name=00000000-0000-4000-8000-000000000000", "--format", "{{.Names}}"); len(strings.TrimSpace(left)) > 0 {
+		t.Errorf("a scenario left containers: %s", left)
+	}
+}
+
 // newSuite starts the registry and publishes into it what the release will ask for: the images, the packs (the held
 // one first: an item of a pack file is mounted from the registry being pushed to) and the docker target. The ansible
 // target is built and pushed by withAnsible, when a test that needs it runs.
@@ -553,4 +570,11 @@ func freePort(t *testing.T) string {
 	}
 	defer func() { _ = l.Close() }()
 	return strconv.Itoa(l.Addr().(*net.TCPAddr).Port)
+}
+
+func must[T any](v T, err error) T {
+	if err != nil {
+		panic(err)
+	}
+	return v
 }

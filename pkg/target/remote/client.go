@@ -14,6 +14,7 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"sync"
 	"time"
 
 	"google.golang.org/grpc"
@@ -80,17 +81,18 @@ func Find(name string) (string, error) {
 // Plugin is a provider running in its own process, as a target.Target.
 // Close it when done: it stops the process.
 type Plugin struct {
-	name   string
-	what   string // the binary or the image, for messages
-	cmd    *exec.Cmd
-	stdin  io.WriteCloser
-	exited chan error // the process's one Wait
-	dir    string
-	kill   func() // stops what Close could not
-	stop   func() // a runtime with no process of pack's (k8s): takes away what it made, on Close
-	conn   *grpc.ClientConn
-	client remotepb.TargetClient
-	caps   []string
+	name    string
+	what    string // the binary or the image, for messages
+	cmd     *exec.Cmd
+	stdin   io.WriteCloser
+	exited  chan error // the process's one Wait
+	dir     string
+	kill    func() // stops what Close could not
+	stop    func() // a runtime with no process of pack's (k8s): takes away what it made, on Close
+	closing sync.Once
+	conn    *grpc.ClientConn
+	client  remotepb.TargetClient
+	caps    []string
 }
 
 // Launch finds the program of a target in .pack/bin (Find), starts it and shakes hands with it.
@@ -250,8 +252,10 @@ func newToken() (string, error) {
 	return hex.EncodeToString(b[:]), nil
 }
 
-// Close ends the provider: its stdin closes, it stops serving and exits.
-func (p *Plugin) Close() {
+// Close ends the provider: its stdin closes, it stops serving and exits. A second Close does nothing.
+func (p *Plugin) Close() { p.closing.Do(p.close) }
+
+func (p *Plugin) close() {
 	if p.conn != nil {
 		_ = p.conn.Close()
 	}

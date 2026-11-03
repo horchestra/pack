@@ -313,3 +313,10 @@ Every scenario's installation has the same id, so that what is rendered of it �
 the same each run. `--update` (`UPDATE_GOLDEN=1`) writes `files` and `plan` from what the scenario gives. `--json`
 says the results as `{scenarios: [{name, file, ok, failures}]}`; a scenario that fails ends pack test with
 `test_failed`. `examples/postgres/tests` and `examples/openbao/tests` are scenarios of both kinds.
+
+`pack test --release <dir> [scenario…]` runs the same scenarios on the target of a release instead — its pack, its
+`targets:` and `registry:`, its `env.yaml` (the scenario's `env` over it, key by key of the top) and its lock, as `pack
+refresh` left them — and installs for real: what a scenario installed is taken away after it (a saga left unfinished
+undone, then the installation removed). `files` and `plan` are the memory target's, its addresses in them, and are
+not compared there; a scenario with `fail_at` or `logs` is the memory target's and skipped — the result says what was
+skipped. `tests/e2e` runs it on docker.

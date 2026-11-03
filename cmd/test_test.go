@@ -66,7 +66,7 @@ expect:
     in_effect:
       - postgres
 `)
-	r := runScenario(context.Background(), packDir, ok)
+	r := runScenario(context.Background(), must(memoryStand(packDir)), ok)
 	if !r.OK {
 		t.Fatalf("%s: %v", r.Name, r.Failures)
 	}
@@ -81,7 +81,7 @@ expect:
       - patch: /postgres/pg_port
         value: 5434
 `)
-	if r := runScenario(context.Background(), packDir, diag); !r.OK {
+	if r := runScenario(context.Background(), must(memoryStand(packDir)), diag); !r.OK {
 		t.Errorf("diagnose: %v", r.Failures)
 	}
 
@@ -93,7 +93,7 @@ expect:
   apply:
     state: failed
 `)
-	r = runScenario(context.Background(), packDir, bad)
+	r = runScenario(context.Background(), must(memoryStand(packDir)), bad)
 	got := strings.Join(r.Failures, "\n")
 	for _, want := range []string{"suggest /postgres/pg_port: nothing offered, 5434 expected", "problems: none at /openbao/api_addr", "apply: installed"} {
 		if !strings.Contains(got, want) {
@@ -113,7 +113,7 @@ expect:
     - where: /openbao/api_addr
   files: golden/none
 `)
-	if r := runScenario(context.Background(), packDir, broken); r.OK || !strings.Contains(strings.Join(r.Failures, "\n"), "the values do not render") {
+	if r := runScenario(context.Background(), must(memoryStand(packDir)), broken); r.OK || !strings.Contains(strings.Join(r.Failures, "\n"), "the values do not render") {
 		t.Errorf("files of values that do not render: %v", r.Failures)
 	}
 }
@@ -148,11 +148,11 @@ expect:
 	}
 	t.Cleanup(func() { testUpdate = false })
 	testUpdate = true
-	if r := runScenario(context.Background(), packDir, sc); !r.OK {
+	if r := runScenario(context.Background(), must(memoryStand(packDir)), sc); !r.OK {
 		t.Fatalf("--update: %v", r.Failures)
 	}
 	testUpdate = false
-	if r := runScenario(context.Background(), packDir, sc); !r.OK {
+	if r := runScenario(context.Background(), must(memoryStand(packDir)), sc); !r.OK {
 		t.Fatalf("against what --update wrote: %v", r.Failures)
 	}
 	plan := filepath.Join(d, "golden", "plan.txt")
@@ -172,7 +172,7 @@ expect:
 	if err := os.WriteFile(filepath.Join(d, "golden", "files", "extra"), []byte("x"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	r := runScenario(context.Background(), packDir, sc)
+	r := runScenario(context.Background(), must(memoryStand(packDir)), sc)
 	got := strings.Join(r.Failures, "\n")
 	for _, want := range []string{"plan differs from " + plan, "line 1:", "differs from " + file, `want "edited"`, "extra is not rendered"} {
 		if !strings.Contains(got, want) {

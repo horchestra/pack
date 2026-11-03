@@ -1,0 +1,7 @@
+name: a failure injected is the memory target's
+values:
+  dev: true
+fail_at: openbao/apply
+expect:
+  apply:
+    state: failed

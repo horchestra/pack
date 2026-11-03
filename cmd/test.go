@@ -18,23 +18,89 @@ import (
 	"sigs.k8s.io/yaml"
 
 	"github.com/horchestra/pack/internal/interrupt"
+	"github.com/horchestra/pack/internal/oci"
 	"github.com/horchestra/pack/internal/release"
 	"github.com/horchestra/pack/internal/session"
 	"github.com/horchestra/pack/internal/workdir"
+	"github.com/horchestra/pack/pkg/adapter"
 	"github.com/horchestra/pack/pkg/diagnose"
 	"github.com/horchestra/pack/pkg/graph"
 	"github.com/horchestra/pack/pkg/render"
 	"github.com/horchestra/pack/pkg/saga"
 	"github.com/horchestra/pack/pkg/target"
 	"github.com/horchestra/pack/pkg/target/memory"
+	"github.com/horchestra/pack/pkg/target/remote"
 )
 
 func init() {
+	testCmd.Flags().StringVar(&testRelease, "release", "", "run on the target of this release — its pack, targets, environment and lock (pack refresh) — instead of the memory target: the pack is the release's, the arguments are scenarios")
 	testCmd.Flags().BoolVar(&testUpdate, "update", os.Getenv("UPDATE_GOLDEN") == "1", "write the golden files (files, plan) from what the scenarios give, instead of comparing (UPDATE_GOLDEN=1)")
 	rootCmd.AddCommand(testCmd)
 }
 
-var testUpdate bool
+var (
+	testUpdate  bool
+	testRelease string
+)
+
+// stand is what scenarios run on: the memory target and a pack — or a release's target, which installs for real.
+type stand struct {
+	pack    string         // the pack's reference: a directory (absolute) or oci://…
+	release map[string]any // release.yaml besides the pack: registry, targets (a release's)
+	env     map[string]any // env.yaml before the scenario's: the memory target, or the release's
+	lock    []byte         // release.lock.json (a release's)
+	bin     string         // the programs of the targets (a release's .pack/bin)
+	real    bool           // a release's target: what installs is to be taken away again
+}
+
+// memoryStand is the memory target and the pack of dir.
+func memoryStand(dir string) (*stand, error) {
+	abs, err := filepath.Abs(dir)
+	if err != nil {
+		return nil, err
+	}
+	return &stand{pack: abs, env: map[string]any{"target": "memory", "observe": "true"}}, nil
+}
+
+// releaseStand is the target of the release of dir, refreshed: its pack, release.yaml, env.yaml and lock.
+func releaseStand(dir string) (*stand, error) {
+	abs, err := filepath.Abs(dir)
+	if err != nil {
+		return nil, err
+	}
+	read := func(name string) (map[string]any, error) {
+		b, err := os.ReadFile(filepath.Join(abs, name))
+		if err != nil {
+			return nil, fmt.Errorf("--release: %w", err)
+		}
+		var m map[string]any
+		if err := yaml.Unmarshal(b, &m); err != nil {
+			return nil, fmt.Errorf("--release: %s: %w", name, err)
+		}
+		return m, nil
+	}
+	relDoc, err := read(release.File)
+	if err != nil {
+		return nil, err
+	}
+	env, err := read("env.yaml")
+	if err != nil {
+		return nil, err
+	}
+	pack, _ := relDoc["pack"].(string)
+	if len(pack) == 0 {
+		return nil, fmt.Errorf("--release %s: release.yaml names no pack", dir)
+	}
+	if !oci.IsRef(pack) && !filepath.IsAbs(pack) {
+		pack = filepath.Join(abs, pack)
+	}
+	lock, err := os.ReadFile(filepath.Join(abs, release.LockFile))
+	if err != nil {
+		return nil, fmt.Errorf("--release %s: no lock — run pack refresh there: %w", dir, err)
+	}
+	delete(relDoc, "pack")
+	return &stand{pack: pack, release: relDoc, env: env, lock: lock, bin: filepath.Join(abs, remote.DefaultDir), real: true}, nil
+}
 
 // TestInstallation is the id of the installation of every scenario. The memory target keeps what it holds of an
 // installation (observe) for the process: a scenario starts by forgetting it (memory.Reset), so that one
@@ -45,7 +111,7 @@ const TestInstallation = "00000000-0000-4000-8000-000000000000"
 const CodeTestFailed = "test_failed"
 
 var testCmd = &cobra.Command{
-	Use:   "test <pack-dir> [scenario.yaml|dir]…",
+	Use:   "test <pack-dir> [scenario.yaml|dir]… | test --release <dir> [scenario.yaml|dir]…",
 	Short: "run the pack's scenarios — facts, values, an environment, what they should give — with no infrastructure",
 	Long: `Runs the scenarios of a pack (tests/*.yaml of the current directory, or the files and directories
 named), each in a release of its own on the memory target, in this process: nothing is
@@ -61,27 +127,44 @@ says what it expects:
   apply      how the apply ends: state, the keys in effect
   diagnose   what pack diagnose makes of the failure: class, diagnosis, remedies
 
-Paths are the scenario file's. --update (UPDATE_GOLDEN=1) writes the golden files.`,
+Paths are the scenario file's. --update (UPDATE_GOLDEN=1) writes the golden files.
+
+--release <dir> runs them on the target of a release instead — its pack, targets, env.yaml
+(the scenario's env over it) and lock, refreshed — and installs for real: what a scenario
+installed is taken away after it. files and plan are the memory target's (its addresses) and
+are not compared there; a scenario of fail_at or logs is the memory target's, and skipped.`,
 	Annotations: map[string]string{makesRelease: "true"},
-	Args:        cobra.MinimumNArgs(1),
+	Args:        cobra.ArbitraryArgs,
 	Run: run(func(_ *cobra.Command, args []string) error {
 		ctx, stop := interrupt.Context()
 		defer stop()
-		packDir, err := filepath.Abs(args[0])
+		var on *stand
+		var err error
+		if len(testRelease) > 0 {
+			on, err = releaseStand(testRelease)
+		} else if len(args) == 0 {
+			return errors.New("the pack's directory, or --release of one")
+		} else {
+			on, err = memoryStand(args[0])
+			args = args[1:]
+		}
 		if err != nil {
 			return err
 		}
-		files, err := scenarioFiles(args[1:])
+		files, err := scenarioFiles(args)
 		if err != nil {
 			return err
 		}
 		var results []testResult
 		failed := 0
 		for _, f := range files {
-			r := runScenario(ctx, packDir, f)
+			r := runScenario(ctx, on, f)
 			results = append(results, r)
 			if r.OK {
 				fmt.Printf("ok    %s\n", r.Name)
+				for _, m := range r.Skipped {
+					fmt.Println("      skipped: " + m)
+				}
 				continue
 			}
 			failed++
@@ -188,9 +271,10 @@ type testResult struct {
 	File     string   `json:"file"`
 	OK       bool     `json:"ok"`
 	Failures []string `json:"failures,omitempty"`
+	Skipped  []string `json:"skipped,omitempty"` // what is not checked on a release's target
 }
 
-func runScenario(ctx context.Context, packDir, file string) testResult {
+func runScenario(ctx context.Context, on *stand, file string) testResult {
 	r := testResult{Name: file, File: file}
 	fail := func(format string, a ...any) { r.Failures = append(r.Failures, fmt.Sprintf(format, a...)) }
 	var sc scenario
@@ -210,7 +294,8 @@ func runScenario(ctx context.Context, packDir, file string) testResult {
 			os.Stdout = null
 			defer func() { os.Stdout = out; _ = null.Close() }()
 		}
-		if err := sc.run(ctx, packDir, filepath.Dir(file), fail); err != nil {
+		skip := func(what string) { r.Skipped = append(r.Skipped, what) }
+		if err := sc.run(ctx, on, filepath.Dir(file), fail, skip); err != nil {
 			fail("%v", err)
 		}
 	}
@@ -219,7 +304,11 @@ func runScenario(ctx context.Context, packDir, file string) testResult {
 }
 
 // run plays the scenario in a release of its own; base is the directory its paths are of.
-func (sc *scenario) run(ctx context.Context, packDir, base string, fail func(string, ...any)) error {
+func (sc *scenario) run(ctx context.Context, on *stand, base string, fail func(string, ...any), skip func(string)) error {
+	if on.real && (len(sc.FailAt) > 0 || len(sc.Logs) > 0) {
+		skip("fail_at and logs are the memory target's: the scenario")
+		return nil
+	}
 	tmp, err := os.MkdirTemp("", "pack-test-")
 	if err != nil {
 		return err
@@ -234,8 +323,17 @@ func (sc *scenario) run(ctx context.Context, packDir, base string, fail func(str
 
 	memory.Reset(TestInstallation)
 	defer memory.Reset(TestInstallation)
-	env := map[string]any{"target": "memory", "observe": "true"}
+	env := maps.Clone(on.env)
 	maps.Copy(env, sc.Env)
+	if on.real {
+		if len(on.bin) > 0 && len(os.Getenv(remote.EnvPath)) == 0 {
+			_ = os.Setenv(remote.EnvPath, on.bin)
+			defer func() { _ = os.Unsetenv(remote.EnvPath) }()
+		}
+		if err := os.WriteFile(filepath.Join(tmp, release.LockFile), on.lock, 0o644); err != nil {
+			return err
+		}
+	}
 	if len(sc.Logs) > 0 {
 		b, err := json.Marshal(sc.Logs)
 		if err != nil {
@@ -268,7 +366,12 @@ func (sc *scenario) run(ctx context.Context, packDir, base string, fail func(str
 	saved := dir
 	defer func() { dir = saved }()
 	enter := func(pack string, values map[string]any) error {
-		if err := write("release.yaml", map[string]any{"pack": pack}); err != nil {
+		doc := maps.Clone(on.release)
+		if doc == nil {
+			doc = map[string]any{}
+		}
+		doc["pack"] = pack
+		if err := write("release.yaml", doc); err != nil {
 			return err
 		}
 		if values == nil {
@@ -295,7 +398,7 @@ func (sc *scenario) run(ctx context.Context, packDir, base string, fail func(str
 
 	// the facts, as pack discover leaves them
 	if sc.Facts != nil {
-		if err := enter(packDir, nil); err != nil {
+		if err := enter(on.pack, nil); err != nil {
 			return err
 		}
 		facts, err := factsOf(sc.Facts, of)
@@ -310,7 +413,7 @@ func (sc *scenario) run(ctx context.Context, packDir, base string, fail func(str
 	}
 
 	if sc.From != nil {
-		pack := packDir
+		pack := on.pack
 		if len(sc.From.Pack) > 0 {
 			pack = of(sc.From.Pack)
 		}
@@ -324,14 +427,35 @@ func (sc *scenario) run(ctx context.Context, packDir, base string, fail func(str
 	if err := write("env.yaml", env); err != nil {
 		return err
 	}
-	if err := enter(packDir, sc.Values); err != nil {
+	if err := enter(on.pack, sc.Values); err != nil {
 		return err
+	}
+	if on.real {
+		defer func() {
+			if err := takeAway(ctx); err != nil {
+				fail("taking away what the scenario installed: %v", err)
+			}
+		}()
+		if len(sc.Expect.Files) > 0 {
+			skip("files: the memory target's")
+		}
+		if len(sc.Expect.Plan) > 0 {
+			skip("plan: the memory target's")
+		}
+		sc.Expect.Files, sc.Expect.Plan = "", ""
 	}
 	s, err := open(ctx, false)
 	if err != nil {
 		return err
 	}
-	defer s.Close()
+	closed := false
+	closeSession := func() {
+		if !closed {
+			closed = true
+			s.Close()
+		}
+	}
+	defer closeSession()
 	ex := sc.Expect
 
 	if ex.Suggest != nil {
@@ -428,7 +552,7 @@ func (sc *scenario) run(ctx context.Context, packDir, base string, fail func(str
 	}
 
 	if ex.Apply != nil || ex.Diagnose != nil {
-		s.Close()
+		closeSession() // the apply opens the release itself: one session at a time holds its targets
 		applyErr := applyHere(ctx)
 		s2, err := open(ctx, true)
 		if err != nil {
@@ -476,6 +600,44 @@ func (sc *scenario) run(ctx context.Context, packDir, base string, fail func(str
 		}
 	}
 	return nil
+}
+
+// takeAway undoes a saga left unfinished and removes what is installed, in the release dir is now: a scenario on a
+// release's target leaves nothing behind.
+func takeAway(ctx context.Context) error {
+	s, err := open(ctx, false)
+	if err != nil {
+		return err
+	}
+	defer s.Close()
+	rec, _, curRel, err := s.Installed()
+	if err != nil || rec == nil {
+		return err
+	}
+	if rec.Unfinished() {
+		_, toRel, err := s.Version(rec.Saga.Installation)
+		if err != nil {
+			return err
+		}
+		g, err := graph.New(adapter.Specs(toRel, nil))
+		if err != nil {
+			return err
+		}
+		if err := s.Undo(ctx, g, curRel, toRel); err != nil {
+			return err
+		}
+		if rec, _, curRel, err = s.Installed(); err != nil || rec == nil {
+			return err
+		}
+	}
+	if len(rec.Pack) == 0 || curRel == nil {
+		return nil
+	}
+	g, err := graph.New(adapter.Specs(curRel, nil))
+	if err != nil {
+		return err
+	}
+	return s.Remove(ctx, g, curRel)
 }
 
 // applyHere is an apply of the release dir is now, as pack apply does it, asking for no approval.
