@@ -320,6 +320,7 @@ it to a person; ` + "`--approve`" + ` is theirs to give, not yours.
 
 ` + "`pack status`" + ` says how the installation is; ` + "`pack run`" + ` lists what may be run on it besides an apply (a
 backup, a restore …) and runs one: run only those, never a command of your own on the hosts.
+A client of MCP has the same as tools: ` + "`pack mcp`" + ` in this directory.
 
 Stop and ask a person when a plan removes something that holds data, when a problem of pack check is not
 about a value, or when you are not sure what a setting means.
