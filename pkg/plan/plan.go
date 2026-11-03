@@ -33,6 +33,9 @@ const (
 	Apply  Kind = "apply"
 	Wait   Kind = "wait"
 	Remove Kind = "remove"
+	// Exec is a command in the key's first instance as it runs: an action of the pack (pack run), not a step of a
+	// saga.
+	Exec Kind = "exec"
 )
 
 // Step is one line of the plan.

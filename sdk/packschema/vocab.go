@@ -241,7 +241,7 @@ func (s Secret) IsZero() bool {
 }
 
 // Action is one of `x-pack-actions` on the root of a pack: an operation the author names — backup, restore, rotate,
-// vacuum — that pack run performs on a key of the pack, as a hook is performed, with the installed version's image.
+// vacuum — that pack run performs on a key of the pack, in its first instance as it runs (target.Exec).
 // The list is closed: what a person or a model may run on the installation besides apply is what the pack says here.
 // Command's words are templates over the parameters ({{ .to }}); Params are what it takes, written as the JSON
 // Schema of an object (params) so that a form is built on it.

@@ -59,9 +59,11 @@ groups:
   packages: Packages
 actions:
   backup: Dumps a database with pg_dump to a file of the instance.
-  backup/to: The file (or the directory, of format directory) the dump goes to.
+  backup/to: "The file (or the directory, of format directory) the dump goes to, in the instance: under /var/lib/postgresql/data it outlives the instance."
+  backup/user: The role the dump is made as.
   backup/format: The format of the dump, as pg_dump says it.
   backup/database: The database to dump.
   restore: Restores a database from a dump with pg_restore, dropping what it holds first.
   restore/from: The dump to restore.
   restore/database: The database to restore into.
+  restore/user: The role the restore is made as.

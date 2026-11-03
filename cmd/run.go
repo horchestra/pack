@@ -32,9 +32,10 @@ var runCmd = &cobra.Command{
 	Use:   "run [action]",
 	Short: "run an action of the pack on the installation — backup, restore … — or list them",
 	Long: `Runs one of the actions the pack names (PackActions: backup, restore, rotate …) on a key of
-what is installed, as a hook is run: with the installed version's image, the key's settings
-and credentials, on the key's target; its lines go to the journal as a run of its own (pack
-log). Without an action, lists them with their parameters. The actions are a closed list:
+what is installed: in the key's first instance as it runs (docker exec, the cluster's exec,
+the key's first host), with its files, data, network, environment and secrets, on the key's
+target; its lines go to the journal as a run of its own (pack log). A file it writes outlives
+it on a volume of the key. Without an action, lists them with their parameters. The actions are a closed list:
 what may be run besides apply is what the pack says.
 
 An action that changes the installation (mutating) is a plan to run.approve: asked for under

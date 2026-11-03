@@ -17,9 +17,6 @@ import (
 	"github.com/horchestra/pack/sdk/packschema"
 )
 
-// PhaseAction is the phase of a step that runs an action: a hook outside of any saga of versions.
-const PhaseAction = "action"
-
 // Action is an action of the installed version on one of its keys.
 type Action struct {
 	Key    string            `json:"key"`
@@ -153,8 +150,8 @@ func typed(kind, raw string) (any, error) {
 	return raw, nil
 }
 
-// Plan is the action as a plan of one step: the hook it is on its key, with the installed version's image and the
-// command its parameters make — what run.approve and --approve look at, by its digest. An action that changes the
+// Plan is the action as a plan of one step: the command its parameters make, run in the key's first instance as it
+// runs (exec) — what run.approve and --approve look at, by its digest. An action that changes the
 // installation is a plan to the policy; one the pack says is never run unasked is a risk.
 func (a Action) Plan(b *bundle.Bundle, rel *render.Release, params map[string]any) (*plan.Plan, error) {
 	cmd := make([]string, len(a.Action.Command))
@@ -169,12 +166,8 @@ func (a Action) Plan(b *bundle.Bundle, rel *render.Release, params map[string]an
 		}
 		cmd[i] = sb.String()
 	}
-	image := ""
-	if p := b.Packs[a.Pack]; p != nil {
-		image = p.ImageRef
-	}
-	step := plan.Step{N: 1, Key: a.Key, Kind: plan.Hook, Name: a.Action.Name, Phase: PhaseAction, Timeout: a.Action.Timeout,
-		Image: image, Command: cmd, Target: rel.Report.Targets[a.Key]}
+	step := plan.Step{N: 1, Key: a.Key, Kind: plan.Exec, Name: a.Action.Name, Timeout: a.Action.Timeout,
+		Command: cmd, Target: rel.Report.Targets[a.Key]}
 	p := &plan.Plan{Pack: b.Name, From: b.Version, To: b.Version, Direction: plan.DirAction, Steps: []plan.Step{step}}
 	plan.Seal(p, rel, rel)
 	if a.Action.Approve {
@@ -183,19 +176,13 @@ func (a Action) Plan(b *bundle.Bundle, rel *render.Release, params map[string]an
 	return p, nil
 }
 
-// RunAction performs the plan of an action on the installed version: the hook on its key's target, with the key's
-// unit and credentials, its lines on the way, all of it in the journal as a run of its own.
+// RunAction performs the plan of an action on the installed version: the command in the key's first instance, on its
+// target, with the key's unit, its lines on the way, all of it in the journal as a run of its own.
 func (s *Session) RunAction(ctx context.Context, rel *render.Release, p *plan.Plan) (err error) {
 	st := p.Steps[0]
 	var u *render.Unit
 	if i := slices.IndexFunc(rel.Units, func(u render.Unit) bool { return u.Key == st.Key }); i >= 0 {
 		u = &rel.Units[i]
-	}
-	var creds []render.Credential
-	for _, c := range rel.Credentials {
-		if c.Key == st.Key {
-			creds = append(creds, c)
-		}
 	}
 	x := target.Executor(s.Inst)
 	if len(st.Target) > 0 {
@@ -228,8 +215,9 @@ func (s *Session) RunAction(ctx context.Context, rel *render.Release, p *plan.Pl
 	}
 	note(saga.KindSaga, fmt.Sprintf("action %s on %s: %s", st.Name, st.Key, strings.Join(st.Command, " ")), nil)
 	note(saga.KindStart, "action "+st.Name, nil)
-	err = x.Execute(ctx, target.Step{N: st.N, Key: st.Key, Kind: string(st.Kind), Name: st.Name, Phase: st.Phase,
-		Timeout: st.Timeout, Image: st.Image, Command: st.Command, Unit: u, Credentials: creds},
+	// no credentials: the command runs in the instance, with its environment and its secrets as the instance has them
+	err = x.Execute(ctx, target.Step{N: st.N, Key: st.Key, Kind: string(st.Kind), Name: st.Name,
+		Timeout: st.Timeout, Command: st.Command, Unit: u},
 		func(line string) {
 			fmt.Println(st.Key + ": " + line)
 			note(saga.KindLog, line, nil)

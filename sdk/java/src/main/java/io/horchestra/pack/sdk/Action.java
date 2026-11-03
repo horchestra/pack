@@ -7,8 +7,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.regex.Pattern;
 
-/** One of x-pack-actions on the root of a pack: an operation the author names, pack run performs on a key of the pack
- *  with the installed image. The words of command are templates over the parameters ({{ .to }}); mutating — it changes
+/** One of x-pack-actions on the root of a pack: an operation the author names, pack run performs in the first instance of a
+ *  key of the pack, as it runs. The words of command are templates over the parameters ({{ .to }}); mutating — it changes
  *  the installation; approve — never run unasked but under run.approve: auto. */
 public final class Action {
     static final List<String> TYPES = List.of("string", "integer", "number", "boolean");

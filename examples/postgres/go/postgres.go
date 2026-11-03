@@ -119,26 +119,28 @@ func (*Postgres) PackRoot() packschema.Root {
 
 // PackActions are what an operator runs on the installed postgres besides an apply: a dump, which only reads, and a
 // restore over the database, which the pack never lets run unasked. pg_dump and pg_restore read the server and the
-// password from the instance's environment (PGHOST, PGPASSWORD: the key's own settings).
+// password from the instance's own socket, where the action runs; a dump under the data volume outlives it.
 func (*Postgres) PackActions() []packschema.Action {
 	return []packschema.Action{{
 		Name:    "backup",
-		Command: []string{"pg_dump", "--format={{ .format }}", "--file={{ .to }}", "--dbname={{ .database }}"},
+		Command: []string{"pg_dump", "--username={{ .user }}", "--format={{ .format }}", "--file={{ .to }}", "--dbname={{ .database }}"},
 		Timeout: "1h",
 		Params: []packschema.Param{
 			{Name: "to", Type: "string", Required: true},
 			{Name: "format", Type: "string", Default: "custom", Enum: []any{"custom", "plain", "directory"}},
 			{Name: "database", Type: "string", Default: "postgres"},
+			{Name: "user", Type: "string", Default: "postgres"},
 		},
 	}, {
 		Name:     "restore",
-		Command:  []string{"pg_restore", "--clean", "--if-exists", "--dbname={{ .database }}", "{{ .from }}"},
+		Command:  []string{"pg_restore", "--username={{ .user }}", "--clean", "--if-exists", "--dbname={{ .database }}", "{{ .from }}"},
 		Timeout:  "1h",
 		Mutating: true,
 		Approve:  true,
 		Params: []packschema.Param{
 			{Name: "from", Type: "string", Required: true},
 			{Name: "database", Type: "string", Default: "postgres"},
+			{Name: "user", Type: "string", Default: "postgres"},
 		},
 	}}
 }

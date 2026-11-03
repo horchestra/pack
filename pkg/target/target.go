@@ -58,6 +58,10 @@ const (
 	Apply  = "apply"
 	Wait   = "wait"
 	Remove = "remove"
+	// Exec runs Command in the key's first instance as it runs (docker exec, the API server's exec, the key's first
+	// host), with the instance's environment and secrets — the step carries no credentials: an action of the pack,
+	// pack run. A target that has no instances to run it in refuses it.
+	Exec = "exec"
 )
 
 // Step is one step of a saga as a target performs it: the plan's step, and what it acts on — the key's unit in the
@@ -65,7 +69,7 @@ const (
 type Step struct {
 	N         int
 	Key       string
-	Kind      string // stop | hook | apply | wait | remove
+	Kind      string // stop | hook | apply | wait | remove | exec
 	Name      string // a hook's name
 	Phase     string
 	Timeout   string

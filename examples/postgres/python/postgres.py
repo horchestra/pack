@@ -103,19 +103,21 @@ class Postgres(Pack):
         )
 
     # What an operator runs on the installed postgres besides an apply: a dump, which only reads, and a restore over
-    # the database, which the pack never lets run unasked. pg_dump and pg_restore read the server and the password
-    # from the instance's environment (PGHOST, PGPASSWORD: the key's own settings).
+    # the database, which the pack never lets run unasked. pg_dump and pg_restore reach the server by the instance's
+    # own socket, where the action runs; a dump under the data volume outlives it.
     def pack_actions(self):
         return [
-            Action(name="backup", command=["pg_dump", "--format={{ .format }}", "--file={{ .to }}", "--dbname={{ .database }}"],
+            Action(name="backup", command=["pg_dump", "--username={{ .user }}", "--format={{ .format }}", "--file={{ .to }}", "--dbname={{ .database }}"],
                    timeout="1h",
                    params=[Param(name="to", type="string", required=True),
                            Param(name="format", type="string", default="custom", enum=["custom", "plain", "directory"]),
-                           Param(name="database", type="string", default="postgres")]),
-            Action(name="restore", command=["pg_restore", "--clean", "--if-exists", "--dbname={{ .database }}", "{{ .from }}"],
+                           Param(name="database", type="string", default="postgres"),
+                           Param(name="user", type="string", default="postgres")]),
+            Action(name="restore", command=["pg_restore", "--username={{ .user }}", "--clean", "--if-exists", "--dbname={{ .database }}", "{{ .from }}"],
                    timeout="1h", mutating=True, approve=True,
                    params=[Param(name="from", type="string", required=True),
-                           Param(name="database", type="string", default="postgres")]),
+                           Param(name="database", type="string", default="postgres"),
+                           Param(name="user", type="string", default="postgres")]),
         ]
 
     # A quarter of the memory limit, in MB: the formula fills the leaf when the operator did not write it. The key

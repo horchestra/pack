@@ -25,7 +25,7 @@ const (
 const (
 	DirUninstall = "uninstall" // the installation taken away (pack delete)
 	DirUndo      = "undo"      // an unfinished saga taken back (pack rollback)
-	DirAction    = "action"    // an action of the pack performed on a key (pack run): one step, a hook
+	DirAction    = "action"    // an action of the pack performed on a key (pack run): one step, exec in its first instance
 )
 
 // Risk is one thing of a plan an apply should not do unasked.

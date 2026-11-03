@@ -106,8 +106,10 @@ func (c *Config) PackDiagnose() []packschema.Diagnosis {
 The cause is said in other languages by `diagnose: {<id>: …}` of `docs/<lang>.yaml`.
 
 An **action** (`PackActions`, `pack_actions`, `packActions`) is an operation the author names — a backup, a restore,
-a rotation — that `pack run <name>` performs on a key of the pack as a hook is performed: with the installed
-version's image, the key's settings and credentials, on its target, into the journal. The words of `Command` are
+a rotation — that `pack run <name>` performs on a key of the pack: in the key's first instance as it runs — `docker exec`, the
+cluster's exec in the pod, the command on the key's first host — with its files, its data, its network and its
+environment (the secrets the instance has, a password in its variables), into the journal: pack gives it no
+credentials of its own. What it writes outlives it where the key keeps data (a backup under a volume's mount path). The words of `Command` are
 templates over the parameters (`{{ .to }}`); a parameter is a scalar (`string`, `integer`, `number`, `boolean`) with
 a default and an enum if need be, written into the schema as the JSON Schema of an object (`params`), for a form to
 be built on it. `Mutating` says it changes the installation — `run.approve: plan` asks for it — and `Approve` that it

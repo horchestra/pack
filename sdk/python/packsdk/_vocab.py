@@ -244,8 +244,8 @@ class Param:
 
 @dataclass
 class Action:
-    """One of x-pack-actions on the root: an operation the author names, pack run performs on a key of the pack with
-    the installed image. command's words are templates over the parameters ({{ .to }}); mutating — it changes the
+    """One of x-pack-actions on the root: an operation the author names, pack run performs in the first instance of a key
+    of the pack, as it runs. command's words are templates over the parameters ({{ .to }}); mutating — it changes the
     installation; approve — never run unasked but under run.approve: auto."""
     name: str
     command: list[str]

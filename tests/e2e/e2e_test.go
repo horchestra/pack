@@ -239,6 +239,14 @@ func TestOpenBao(t *testing.T) {
 		if n, err := strconv.Atoi(strings.TrimSpace(out)); err != nil || n == 0 {
 			t.Errorf("openbao keeps nothing in postgres: %q", out)
 		}
+		// an action of the pack runs in the instance as it runs: a dump of the database, under the data volume
+		out = run(t, r.dir, r.dumpLogs, r.suite.pack, "run", "backup", "--param", "to=/var/lib/postgresql/data/openbao.dump", "--param", "database=openbao")
+		if !strings.Contains(out, "backup on postgres: done") {
+			t.Errorf("pack run backup:\n%s", out)
+		}
+		if got := docker(t, "exec", r.container("postgres"), "sh", "-c", "test -s /var/lib/postgresql/data/openbao.dump && echo dumped"); strings.TrimSpace(got) != "dumped" {
+			t.Errorf("no dump in the data volume: %q", got)
+		}
 	})
 }
 
