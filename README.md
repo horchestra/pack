@@ -48,21 +48,21 @@ json tag or a moved field moves them along (a name that is not there is a panic 
 
 ```go
 func (o *OpenBao) PackCompute() map[string]string {
-pg := packschema.Dotted(o, &o.Postgres)
-return map[string]string{
-packschema.Pointer(o, &o.Bao.Storage): fmt.Sprintf(
-`has(pack.values.%[1]s) ? [{'type': 'postgresql', 'config': {'connection_url': 'postgres://' + pack.keys.%[1]s.service + ':5432/openbao'}}] : null`, pg),
-}
+  pg := packschema.Dotted(o, &o.Postgres)
+  return map[string]string{
+	  packschema.Pointer(o, &o.Bao.Storage): fmt.Sprintf(
+		  `has(pack.values.%[1]s) ? [{'type': 'postgresql', 'config': {'connection_url': 'postgres://' + pack.keys.%[1]s.service + ':5432/openbao'}}] : null`, pg),
+  }
 }
 
 func (o *OpenBao) PackRules() map[string][]packschema.Rule {
-pg, storage := packschema.Dotted(o, &o.Postgres), packschema.Dotted(o, &o.Bao.Storage)
-return map[string][]packschema.Rule{
-packschema.Pointer(o, &o.Bao.Storage): {{
-Rule:    fmt.Sprintf("!has(pack.values.%s) || !has(values.%s) || size(values.%[2]s) == 0", pg, storage),
-Message: "storage is filled from the embedded postgres and must not be set",
-}},
-}
+  pg, storage := packschema.Dotted(o, &o.Postgres), packschema.Dotted(o, &o.Bao.Storage)
+  return map[string][]packschema.Rule{
+	  packschema.Pointer(o, &o.Bao.Storage): {{
+		  Rule:    fmt.Sprintf("!has(pack.values.%s) || !has(values.%s) || size(values.%[2]s) == 0", pg, storage), 
+		  Message: "storage is filled from the embedded postgres and must not be set",
+    }},
+  }
 }
 ```
 
