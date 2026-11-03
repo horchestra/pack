@@ -215,6 +215,59 @@ class Diagnosis:
         return {"id": self.id, "match": self.match, "cause": self.cause, **_drop({"fix": [f.to_json() for f in self.fix]})}
 
 
+PARAM_TYPES = ("string", "integer", "number", "boolean")
+ACTION_ORDER = ("name", "description", "command", "timeout", "mutating", "approve", "params", "x-pack-i18n")
+PARAM_ORDER = ("type", "description", "default", "enum", "x-pack-i18n")
+
+
+def ordered(d: dict, order) -> dict:
+    """d with its keys in the order the Go sdk writes them."""
+    return {k: d[k] for k in order if k in d}
+
+
+@dataclass
+class Param:
+    """A parameter of an action: a scalar of type (string, integer, number, boolean)."""
+    name: str
+    type: str
+    required: bool = False
+    description: str = ""
+    default: object = None
+    enum: list = _field(default_factory=list)
+
+    def to_json(self) -> dict:
+        out = {"type": self.type, **_drop({"description": self.description})}
+        if self.default is not None:
+            out["default"] = self.default
+        return {**out, **_drop({"enum": list(self.enum)})}
+
+
+@dataclass
+class Action:
+    """One of x-pack-actions on the root: an operation the author names, pack run performs on a key of the pack with
+    the installed image. command's words are templates over the parameters ({{ .to }}); mutating — it changes the
+    installation; approve — never run unasked but under run.approve: auto."""
+    name: str
+    command: list[str]
+    description: str = ""
+    timeout: str = ""
+    mutating: bool = False
+    approve: bool = False
+    params: list[Param] = _field(default_factory=list)
+
+    def to_json(self) -> dict:
+        out = {"name": self.name, **_drop({"description": self.description}), "command": list(self.command),
+               **_drop({"timeout": self.timeout, "mutating": self.mutating, "approve": self.approve})}
+        if self.params:
+            ps = {"type": "object", "properties": {p.name: p.to_json() for p in sorted(self.params, key=lambda p: p.name)}}
+            req = sorted(p.name for p in self.params if p.required)
+            if req:
+                ps["required"] = req
+            ps["additionalProperties"] = False
+            out["params"] = ps
+        return out
+
+
 @dataclass
 class Suggest:
     """x-pack-suggest on a node: a CEL expression pack fill offers the answer of for a setting not given, with why —

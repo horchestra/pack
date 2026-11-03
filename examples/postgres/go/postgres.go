@@ -117,6 +117,32 @@ func (*Postgres) PackRoot() packschema.Root {
 	}
 }
 
+// PackActions are what an operator runs on the installed postgres besides an apply: a dump, which only reads, and a
+// restore over the database, which the pack never lets run unasked. pg_dump and pg_restore read the server and the
+// password from the instance's environment (PGHOST, PGPASSWORD: the key's own settings).
+func (*Postgres) PackActions() []packschema.Action {
+	return []packschema.Action{{
+		Name:    "backup",
+		Command: []string{"pg_dump", "--format={{ .format }}", "--file={{ .to }}", "--dbname={{ .database }}"},
+		Timeout: "1h",
+		Params: []packschema.Param{
+			{Name: "to", Type: "string", Required: true},
+			{Name: "format", Type: "string", Default: "custom", Enum: []any{"custom", "plain", "directory"}},
+			{Name: "database", Type: "string", Default: "postgres"},
+		},
+	}, {
+		Name:     "restore",
+		Command:  []string{"pg_restore", "--clean", "--if-exists", "--dbname={{ .database }}", "{{ .from }}"},
+		Timeout:  "1h",
+		Mutating: true,
+		Approve:  true,
+		Params: []packschema.Param{
+			{Name: "from", Type: "string", Required: true},
+			{Name: "database", Type: "string", Default: "postgres"},
+		},
+	}}
+}
+
 // PackCompute a quarter of the memory limit, in MB — the formula fills the leaf when the operator did not write
 // it. The key of the map is the field's pointer, found from the field itself.
 func (p *Postgres) PackCompute() map[string]string {

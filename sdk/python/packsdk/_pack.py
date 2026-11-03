@@ -14,7 +14,7 @@ from typing import Any
 
 from . import _docs, _yaml
 from ._reflect import SchemaError, hints, is_pack, json_name, reflect, tags, unwrap
-from ._vocab import Diagnosis, Meta, Root, Rule, Suggest
+from ._vocab import Action, Diagnosis, Meta, Root, Rule, Suggest
 
 DEFAULT_REPO = "packs"  # the prefix of the repositories packs are published under: <repo>/<name>:<version>
 ARTIFACT_PACK = "application/vnd.pack.pack.v1+json"
@@ -53,6 +53,10 @@ class Pack:
         return {}
 
     def pack_diagnose(self) -> list[Diagnosis]:
+        return []
+
+    def pack_actions(self) -> list[Action]:
+        """Optional: the operations the author names, pack run performs (x-pack-actions)."""
         return []
 
 

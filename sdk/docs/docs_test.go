@@ -202,6 +202,7 @@ func TestApplyRefusesWhatTheSchemaHasNot(t *testing.T) {
 		"no field":          {"en.yaml": "/nope:\n  title: x\n"},
 		"no field, in ru":   {"en.yaml": "/name:\n  title: x\n", "ru.yaml": "/conf/nope:\n  title: x\n"},
 		"no rule":           {"en.yaml": "rules:\n  nope: x\n"},
+		"no action":         {"en.yaml": "actions:\n  nope: x\n"},
 		"group no title":    {"en.yaml": "/name:\n  group: g\n"},
 		"group no field":    {"en.yaml": "groups:\n  g: G\n"},
 		"examples of a map": {"en.yaml": "/conf:\n  examples:\n    - x\n"},

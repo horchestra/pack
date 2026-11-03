@@ -14,9 +14,9 @@ import (
 
 // Drift is a key whose state in the target is not what the record says.
 type Drift struct {
-	Key string
+	Key string `json:"key"`
 	// Why: "missing", or what differs.
-	Why string
+	Why string `json:"why"`
 }
 
 func (d Drift) String() string { return d.Key + ": " + d.Why }

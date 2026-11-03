@@ -17,6 +17,9 @@
 //	  logging: Logging
 //	rules:
 //	  storage-from-postgres: storage is filled from the embedded postgres and must not be set
+//	actions:
+//	  snapshot: Takes a snapshot of the storage   # an action of PackActions, by name
+//	  snapshot/to: Where the snapshot goes        # its parameter
 //
 //	# docs/ru.yaml — a translation: titles, descriptions, groups and rules only
 //	/openbao/log_level:
@@ -66,6 +69,7 @@ type File struct {
 	Groups   map[string]string
 	Rules    map[string]string
 	Diagnose map[string]string // the causes of the pack's diagnoses, by id
+	Actions  map[string]string // the descriptions of the pack's actions, by name, and of their parameters, <action>/<param>
 }
 
 // Set is the documentation of a pack: the base language and the others, by name.
@@ -165,7 +169,7 @@ func ParseFile(lang string, src []byte) (*File, error) {
 	if err != nil {
 		return nil, err
 	}
-	f := &File{Lang: lang, Fields: map[string]Entry{}, Groups: map[string]string{}, Rules: map[string]string{}, Diagnose: map[string]string{}}
+	f := &File{Lang: lang, Fields: map[string]Entry{}, Groups: map[string]string{}, Rules: map[string]string{}, Diagnose: map[string]string{}, Actions: map[string]string{}}
 	for _, k := range m.Keys {
 		v := m.Values[k]
 		switch {
@@ -174,7 +178,7 @@ func ParseFile(lang string, src []byte) (*File, error) {
 				return nil, fmt.Errorf("base: true or nothing")
 			}
 			f.Base = true
-		case k == "groups" || k == "rules" || k == "diagnose":
+		case k == "groups" || k == "rules" || k == "diagnose" || k == "actions":
 			texts, err := strings2(k, v)
 			if err != nil {
 				return nil, err
@@ -184,6 +188,8 @@ func ParseFile(lang string, src []byte) (*File, error) {
 				f.Groups = texts
 			case "rules":
 				f.Rules = texts
+			case "actions":
+				f.Actions = texts
 			default:
 				f.Diagnose = texts
 			}
@@ -195,7 +201,7 @@ func ParseFile(lang string, src []byte) (*File, error) {
 			f.Fields[k] = e
 			f.Order = append(f.Order, k)
 		default:
-			return nil, fmt.Errorf("%q: a key is a JSON Pointer of a field (/…, / the pack), base, groups, rules or diagnose", k)
+			return nil, fmt.Errorf("%q: a key is a JSON Pointer of a field (/…, / the pack), base, groups, rules, diagnose or actions", k)
 		}
 	}
 	return f, nil

@@ -53,6 +53,7 @@ const (
 	CodeForeignComments  = "foreign_comments"  // values.yaml has comments pack did not write
 	CodeTarget           = "target"            // the target refused, or could not be reached
 	CodeNeedsApproval    = "needs_approval"    // run.approve keeps the plan from being applied unasked: --approve <its digest>
+	CodeUnhealthy        = "unhealthy"         // what is installed drifted from the record, or a key is not ready (pack status)
 	CodeError            = "error"             // anything else
 )
 
@@ -148,6 +149,8 @@ func nextFor(code string) []string {
 		return []string{"pack values write --rewrite"}
 	case CodeNothingInstalled:
 		return []string{"pack plan", "pack apply"}
+	case CodeUnhealthy:
+		return []string{"pack status", "pack log", "pack apply"}
 	case CodeNeedsApproval:
 		return []string{"pack plan", "pack apply --approve <the plan's digest>"} // the command's own, as a rule (approved)
 	}

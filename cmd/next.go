@@ -32,7 +32,7 @@ const (
 	StateUnrefreshed = "unrefreshed" // the pack or a target is not brought into .pack: pack refresh
 	StateUnfilled    = "unfilled"    // settings the pack requires are not given
 	StateInvalid     = "invalid"     // values the schema or the pack's rules refuse
-	StateFailed      = "failed"      // a saga failed or was cut short: its record says what is in effect
+	StateFailed      = "failed"      // a saga failed or was cut short, or what is installed is not well (pack status)
 	StatePlanned     = "planned"     // what the release wants is not what is installed: an apply does it
 	StateApplied     = "applied"     // what is installed is what the release wants
 	StateError       = "error"       // something else stops it: blocking says what
@@ -60,6 +60,7 @@ model that follows it instead of planning: with --json it is {state, blocking, n
   unfilled     settings the pack requires not given   pack fill, pack answer, pack check
   invalid      values the schema or a rule refuses    edit values.yaml, pack check
   failed       a saga failed or was cut short         pack diagnose, pack apply, pack rollback
+               or what is installed is not well       pack status, pack log, pack apply
   planned      what is wanted is not what is there    pack plan, pack apply
   applied      what is there is what is wanted        —`,
 	Args: cobra.NoArgs,
@@ -159,6 +160,13 @@ func stateNow(ctx context.Context) nextState {
 			return nextState{State: StatePlanned, Blocking: []apiError{classify(err)}, Next: nextOf(err, CodeNeedsApproval)}
 		}
 		return nextState{State: StatePlanned, Next: []string{"pack plan", "pack apply"}}
+	}
+	// what is wanted is what the record says is there: is it there, and well
+	if st, err := statusOf(ctx, s); err != nil {
+		return stopped(err)
+	} else if !st.Healthy && len(st.unwell()) > 0 {
+		e := apiError{Code: CodeUnhealthy, Message: strings.Join(st.unwell(), "\n")}
+		return nextState{State: StateFailed, Blocking: []apiError{e}, Next: nextFor(CodeUnhealthy)}
 	}
 	return nextState{State: StateApplied, Next: []string{}}
 }

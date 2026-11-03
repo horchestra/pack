@@ -105,6 +105,37 @@ func (c *Config) PackDiagnose() []packschema.Diagnosis {
 
 The cause is said in other languages by `diagnose: {<id>: …}` of `docs/<lang>.yaml`.
 
+An **action** (`PackActions`, `pack_actions`, `packActions`) is an operation the author names — a backup, a restore,
+a rotation — that `pack run <name>` performs on a key of the pack as a hook is performed: with the installed
+version's image, the key's settings and credentials, on its target, into the journal. The words of `Command` are
+templates over the parameters (`{{ .to }}`); a parameter is a scalar (`string`, `integer`, `number`, `boolean`) with
+a default and an enum if need be, written into the schema as the JSON Schema of an object (`params`), for a form to
+be built on it. `Mutating` says it changes the installation — `run.approve: plan` asks for it — and `Approve` that it
+is never run unasked but under `run.approve: auto` (a restore over the data). The actions are the closed list of what
+a person or a model runs besides an apply:
+
+```go
+func (*Postgres) PackActions() []packschema.Action {
+	return []packschema.Action{{
+		Name:    "backup",
+		Command: []string{"pg_dump", "--format={{ .format }}", "--file={{ .to }}", "--dbname={{ .database }}"},
+		Params: []packschema.Param{
+			{Name: "to", Type: "string", Required: true},
+			{Name: "format", Type: "string", Default: "custom", Enum: []any{"custom", "plain", "directory"}},
+			{Name: "database", Type: "string", Default: "postgres"},
+		},
+	}, {
+		Name: "restore", Mutating: true, Approve: true,
+		Command: []string{"pg_restore", "--clean", "--if-exists", "--dbname={{ .database }}", "{{ .from }}"},
+		Params:  []packschema.Param{{Name: "from", Type: "string", Required: true}, {Name: "database", Type: "string", Default: "postgres"}},
+	}}
+}
+```
+
+A word is one argument whatever its parameter holds: a command of `sh -c` puts the parameters into a shell, and
+is the author's to quote. The descriptions of an action and of its parameters are `actions: {<name>: …,
+<name>/<param>: …}` of `docs/<lang>.yaml`. A template that reads what is no parameter is a problem of `pack check`.
+
 The expression sees `values` (the whole document), `pack.values.<key>` and `pack.keys.<key>` (another key's values
 and address), `limits` and `me`. A field that is not there is an error at generation, not a broken schema; so is a name
 an expression cannot select (a dash, a dot).

@@ -56,6 +56,9 @@ func (s *Set) Apply(root *jsonschema.Schema) error {
 	if err := s.diagnoses(root); err != nil {
 		return err
 	}
+	if err := s.actions(root); err != nil {
+		return err
+	}
 	extras(root)[KeyLangs] = s.Langs()
 	return nil
 }
@@ -165,6 +168,55 @@ func (s *Set) diagnoses(root *jsonschema.Schema) error {
 	}
 	return nil
 }
+
+// actions says the descriptions of the pack's actions by name, and of their parameters by <action>/<param>.
+func (s *Set) actions(root *jsonschema.Schema) error {
+	as, _ := root.Extras["x-pack-actions"].([]packschema.Action)
+	for _, f := range append([]*File{s.Base}, s.Others...) {
+		for id, text := range f.Actions {
+			name, param, isParam := strings.Cut(id, "/")
+			i := slices.IndexFunc(as, func(a packschema.Action) bool { return a.Name == name })
+			if i < 0 {
+				return fmt.Errorf("%s/%s.yaml: actions: %q is not an action of the pack", Dir, f.Lang, name)
+			}
+			if len(text) == 0 {
+				continue
+			}
+			a := &as[i]
+			if !isParam {
+				if f.Base {
+					a.Description = text
+					continue
+				}
+				if a.I18n == nil {
+					a.I18n = map[string]map[string]string{}
+				}
+				a.I18n[f.Lang] = map[string]string{"description": text}
+				continue
+			}
+			p, ok := Param{}, false
+			if a.Schema != nil {
+				p, ok = a.Schema.Properties[param]
+			}
+			if !ok {
+				return fmt.Errorf("%s/%s.yaml: actions: %q is not a parameter of %s", Dir, f.Lang, param, name)
+			}
+			if f.Base {
+				p.Description = text
+			} else {
+				if p.I18n == nil {
+					p.I18n = map[string]map[string]string{}
+				}
+				p.I18n[f.Lang] = map[string]string{"description": text}
+			}
+			a.Schema.Properties[param] = p
+		}
+	}
+	return nil
+}
+
+// Param is a parameter of an action.
+type Param = packschema.Param
 
 var (
 	integer  = regexp.MustCompile(`^-?(0|[1-9][0-9]*)$`)

@@ -82,6 +82,25 @@ func (c *Config) PackSuggest() map[string]packschema.Suggest {
 	}
 }
 
+// PackActions: a backup, which only reads, and a restore over the data, never run unasked.
+func (*Config) PackActions() []packschema.Action {
+	return []packschema.Action{{
+		Name:    "backup",
+		Command: []string{"tembo", "backup", "--to", "{{ .to }}", "--format", "{{ .format }}"},
+		Timeout: "30m",
+		Params: []packschema.Param{
+			{Name: "to", Type: "string", Required: true},
+			{Name: "format", Type: "string", Default: "custom", Enum: []any{"custom", "plain"}},
+		},
+	}, {
+		Name:     "restore",
+		Command:  []string{"tembo", "restore", "--from", "{{ .from }}"},
+		Mutating: true,
+		Approve:  true,
+		Params:   []packschema.Param{{Name: "from", Type: "string", Required: true}},
+	}}
+}
+
 // PackDiagnose: postgres that cannot listen because something on the host already does.
 func (c *Config) PackDiagnose() []packschema.Diagnosis {
 	return []packschema.Diagnosis{{

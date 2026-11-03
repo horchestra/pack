@@ -53,6 +53,8 @@ final class Docs {
             "dependentRequired", "format", "contentEncoding", "contentMediaType", "contentSchema", "title", "description",
             "default", "deprecated", "readOnly", "writeOnly", "examples");
     private static final List<String> RULE_ORDER = List.of("id", "rule", "message", "phases", I18N);
+    private static final List<String> ACTION_ORDER = List.of("name", "description", "command", "timeout", "mutating", "approve", "params", I18N);
+    private static final List<String> PARAM_ORDER = List.of("type", "description", "default", "enum", I18N);
     private static final List<String> DIAG_ORDER = List.of("id", "match", "cause", "fix", I18N);
 
     private Docs() {
@@ -280,6 +282,7 @@ final class Docs {
         Map<String, String> groups = new LinkedHashMap<>();
         Map<String, String> rules = new LinkedHashMap<>();
         Map<String, String> diagnose = new LinkedHashMap<>();
+        Map<String, String> actions = new LinkedHashMap<>(); // an action's description by name, a parameter's by <action>/<param>
 
         File(String lang) {
             this.lang = lang;
@@ -295,17 +298,18 @@ final class Docs {
             if (k.equals("base")) {
                 if (!"true".equals(v)) throw new SchemaException("base: true or nothing");
                 f.base = true;
-            } else if (k.equals("groups") || k.equals("rules") || k.equals("diagnose")) {
+            } else if (k.equals("groups") || k.equals("rules") || k.equals("diagnose") || k.equals("actions")) {
                 if (!(v instanceof Map<?, ?> m) || !m.values().stream().allMatch(x -> x instanceof String)) {
                     throw new SchemaException(k + ": a mapping of an id to its text");
                 }
                 if (k.equals("groups")) f.groups = (Map<String, String>) m;
                 else if (k.equals("rules")) f.rules = (Map<String, String>) m;
+                else if (k.equals("actions")) f.actions = (Map<String, String>) m;
                 else f.diagnose = (Map<String, String>) m;
             } else if (k.startsWith("/")) {
                 f.fields.put(k, entry(k, v));
             } else {
-                throw new SchemaException("\"" + k + "\": a key is a JSON Pointer of a field (/…, / the pack), base, groups, rules or diagnose");
+                throw new SchemaException("\"" + k + "\": a key is a JSON Pointer of a field (/…, / the pack), base, groups, rules, diagnose or actions");
             }
         }
         return f;
@@ -555,6 +559,43 @@ final class Docs {
                     ((Map<String, Object>) d.computeIfAbsent(I18N, k -> new TreeMap<>())).put(f.lang, new TreeMap<>(Map.of("cause", kv.getValue())));
                 }
                 canonical(d, DIAG_ORDER);
+            }
+        }
+        Map<String, Map<String, Object>> actions = new LinkedHashMap<>();
+        if (root.get("x-pack-actions") instanceof List<?> al) {
+            for (Object a : al) {
+                Map<String, Object> am = (Map<String, Object>) a;
+                actions.put((String) am.get("name"), am);
+            }
+        }
+        for (File f : files) {
+            for (Map.Entry<String, String> kv : f.actions.entrySet()) {
+                String id = kv.getKey();
+                int slash = id.indexOf('/');
+                String name = slash < 0 ? id : id.substring(0, slash);
+                Map<String, Object> a = actions.get(name);
+                if (a == null) {
+                    throw new SchemaException(DIR + "/" + f.lang + ".yaml: actions: \"" + name + "\" is not an action of the pack");
+                }
+                if (kv.getValue().isEmpty()) continue;
+                Map<String, Object> target = a;
+                List<String> order = ACTION_ORDER;
+                if (slash >= 0) {
+                    String param = id.substring(slash + 1);
+                    Map<String, Object> ps = (Map<String, Object>) a.get("params");
+                    Map<String, Object> props = ps == null ? Map.of() : (Map<String, Object>) ps.get("properties");
+                    if (!props.containsKey(param)) {
+                        throw new SchemaException(DIR + "/" + f.lang + ".yaml: actions: \"" + param + "\" is not a parameter of " + name);
+                    }
+                    target = (Map<String, Object>) props.get(param);
+                    order = PARAM_ORDER;
+                }
+                if (f.base) {
+                    target.put("description", kv.getValue());
+                } else {
+                    ((Map<String, Object>) target.computeIfAbsent(I18N, k -> new TreeMap<>())).put(f.lang, new TreeMap<>(Map.of("description", kv.getValue())));
+                }
+                canonical(target, order);
             }
         }
         List<String> langs = new ArrayList<>();

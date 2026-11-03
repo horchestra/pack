@@ -18,12 +18,14 @@ const (
 	RiskSavepoint    = "savepoint"    // a failure after a savepoint leaves what is before it in effect
 	RiskData         = "data"         // a key with data volumes is dropped
 	RiskSecret       = "secret"       // a key's credentials change
+	RiskAction       = "action"       // an action the pack says is never run unasked (pack run)
 )
 
 // The directions of a plan that has no steps and still does something (approved asks for them under run.approve: plan).
 const (
 	DirUninstall = "uninstall" // the installation taken away (pack delete)
 	DirUndo      = "undo"      // an unfinished saga taken back (pack rollback)
+	DirAction    = "action"    // an action of the pack performed on a key (pack run): one step, a hook
 )
 
 // Risk is one thing of a plan an apply should not do unasked.
@@ -80,7 +82,7 @@ func Risks(p *Plan, from, to *render.Release) []Risk {
 			}
 		}
 	}
-	if p.Direction != "install" && p.Direction != DirUninstall && p.Direction != DirUndo && len(p.Units) > 1 {
+	if p.Direction != "install" && p.Direction != DirUninstall && p.Direction != DirUndo && p.Direction != DirAction && len(p.Units) > 1 {
 		add(RiskSavepoint, "", "a failure after a savepoint keeps what is before it: no going back whole")
 	}
 	if to != nil {

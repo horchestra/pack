@@ -8,6 +8,12 @@
 // decoded into them strictly, and a key they do not have is a refusal.
 package packschema
 
+import (
+	"fmt"
+	"regexp"
+	"slices"
+)
+
 // Root is `x-pack` on the root of a component's schema: what the component is to the system around it — the
 // ports it listens on, the volumes it keeps, the least it needs, when it is ready — and how it changes versions.
 // How many instances run, where, and with what resources is the environment's, not the component's.
@@ -232,4 +238,87 @@ type Secret struct {
 
 func (s Secret) IsZero() bool {
 	return s.SecretRef == nil
+}
+
+// Action is one of `x-pack-actions` on the root of a pack: an operation the author names — backup, restore, rotate,
+// vacuum — that pack run performs on a key of the pack, as a hook is performed, with the installed version's image.
+// The list is closed: what a person or a model may run on the installation besides apply is what the pack says here.
+// Command's words are templates over the parameters ({{ .to }}); Params are what it takes, written as the JSON
+// Schema of an object (params) so that a form is built on it.
+type Action struct {
+	Name        string   `json:"name" jsonschema:"required,pattern=^[a-z][a-z0-9-]*$"`
+	Description string   `json:"description,omitempty"`
+	Command     []string `json:"command" jsonschema:"required,minItems=1"`
+	Timeout     string   `json:"timeout,omitempty"`
+	// Mutating: the action changes the installation (restore, rotate) — not only reads it (backup): it is a plan
+	// of its own to run.approve, asked for under plan.
+	Mutating bool `json:"mutating,omitempty"`
+	// Approve: the action is never run unasked but under run.approve: auto (a restore over the data).
+	Approve bool `json:"approve,omitempty"`
+	// Params are the author's: the sdk writes them as Schema.
+	Params []Param       `json:"-"`
+	Schema *ParamsSchema `json:"params,omitempty"`
+	// I18n is the description in the other languages of docs/ — written by the sdk, not the author.
+	I18n map[string]map[string]string `json:"x-pack-i18n,omitempty"`
+}
+
+// Param is a parameter of an action: a scalar of Type (string, integer, number, boolean).
+type Param struct {
+	Name        string                       `json:"-"`
+	Required    bool                         `json:"-"`
+	Type        string                       `json:"type"`
+	Description string                       `json:"description,omitempty"`
+	Default     any                          `json:"default,omitempty"`
+	Enum        []any                        `json:"enum,omitempty"`
+	I18n        map[string]map[string]string `json:"x-pack-i18n,omitempty"`
+}
+
+// ParamsSchema is the parameters of an action as the JSON Schema of an object.
+type ParamsSchema struct {
+	Type                 string           `json:"type"`
+	Properties           map[string]Param `json:"properties"`
+	Required             []string         `json:"required,omitempty"`
+	AdditionalProperties bool             `json:"additionalProperties"`
+}
+
+// ParamTypes are the types a parameter may be.
+var ParamTypes = []string{"string", "integer", "number", "boolean"}
+
+// ActionName and ParamName are what the names of an action and of its parameter look like.
+var (
+	ActionName = regexp.MustCompile(`^[a-z][a-z0-9-]*$`)
+	ParamName  = regexp.MustCompile(`^[a-z][a-z0-9_]*$`)
+)
+
+// Seal checks an action as the author wrote it and makes Schema of its Params.
+func (a *Action) Seal() error {
+	if !ActionName.MatchString(a.Name) {
+		return fmt.Errorf("x-pack-actions: %q: a name of lower case letters, digits and dashes", a.Name)
+	}
+	if len(a.Command) == 0 {
+		return fmt.Errorf("x-pack-actions %s: no command", a.Name)
+	}
+	if len(a.Params) == 0 {
+		a.Schema = nil
+		return nil
+	}
+	ps := &ParamsSchema{Type: "object", Properties: map[string]Param{}}
+	for _, p := range a.Params {
+		if !ParamName.MatchString(p.Name) {
+			return fmt.Errorf("x-pack-actions %s: parameter %q: a name of lower case letters, digits and underscores", a.Name, p.Name)
+		}
+		if _, dup := ps.Properties[p.Name]; dup {
+			return fmt.Errorf("x-pack-actions %s: parameter %q twice", a.Name, p.Name)
+		}
+		if !slices.Contains(ParamTypes, p.Type) {
+			return fmt.Errorf("x-pack-actions %s: parameter %s: type is one of %v", a.Name, p.Name, ParamTypes)
+		}
+		ps.Properties[p.Name] = p
+		if p.Required {
+			ps.Required = append(ps.Required, p.Name)
+		}
+	}
+	slices.Sort(ps.Required)
+	a.Schema = ps
+	return nil
 }

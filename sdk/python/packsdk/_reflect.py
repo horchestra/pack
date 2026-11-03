@@ -8,8 +8,12 @@ import dataclasses
 import types
 import typing
 from typing import Any
+import re
 
-from ._vocab import FORMATS, FORMAT_SECRET, PACK_SCHEME, Secret
+ACTION_NAME = re.compile(r"^[a-z][a-z0-9-]*$")
+PARAM_NAME = re.compile(r"^[a-z][a-z0-9_]*$")
+
+from ._vocab import FORMATS, FORMAT_SECRET, PACK_SCHEME, PARAM_TYPES, Secret
 
 SCHEMA = "https://json-schema.org/draft/2020-12/schema"
 
@@ -205,6 +209,27 @@ def reflect(p: Any) -> dict:
                     raise SchemaError(f"x-pack-diagnose {d.id}: fix {i}: {fx.patch}: {e}") from None
     if diags:
         s["x-pack-diagnose"] = [d.to_json() for d in diags]
+    actions = p.pack_actions()
+    seen = set()
+    for a in actions:
+        if not ACTION_NAME.match(a.name):
+            raise SchemaError(f'x-pack-actions: "{a.name}": a name of lower case letters, digits and dashes')
+        if not a.command:
+            raise SchemaError(f"x-pack-actions {a.name}: no command")
+        if a.name in seen:
+            raise SchemaError(f'x-pack-actions: the name "{a.name}" twice')
+        seen.add(a.name)
+        names = set()
+        for pa in a.params:
+            if not PARAM_NAME.match(pa.name):
+                raise SchemaError(f'x-pack-actions {a.name}: parameter "{pa.name}": a name of lower case letters, digits and underscores')
+            if pa.name in names:
+                raise SchemaError(f'x-pack-actions {a.name}: parameter "{pa.name}" twice')
+            names.add(pa.name)
+            if pa.type not in PARAM_TYPES:
+                raise SchemaError(f"x-pack-actions {a.name}: parameter {pa.name}: type is one of {list(PARAM_TYPES)}")
+    if actions:
+        s["x-pack-actions"] = [a.to_json() for a in actions]
     for ptr, sg in p.pack_suggest().items():
         if not sg.expr:
             raise SchemaError(f"x-pack-suggest {ptr}: no expression")

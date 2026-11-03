@@ -2,7 +2,7 @@
 
 from dataclasses import dataclass
 
-from packsdk import Diagnosis, File, Fix, Meta, Pack, Readiness, Root, Secret, Suggest, Volume, field, pointer
+from packsdk import Action, Diagnosis, Param, File, Fix, Meta, Pack, Readiness, Root, Secret, Suggest, Volume, field, pointer
 
 
 @dataclass
@@ -46,6 +46,13 @@ class Tembo(Pack):
             why="5433 is taken on a host")}
 
     # postgres that cannot listen because something on the host already does
+    def pack_actions(self):
+        return [Action(name="backup", command=["tembo", "backup", "--to", "{{ .to }}", "--format", "{{ .format }}"], timeout="30m",
+                       params=[Param(name="to", type="string", required=True),
+                               Param(name="format", type="string", default="custom", enum=["custom", "plain"])]),
+                Action(name="restore", command=["tembo", "restore", "--from", "{{ .from }}"], mutating=True, approve=True,
+                       params=[Param(name="from", type="string", required=True)])]
+
     def pack_diagnose(self):
         return [Diagnosis(id="port-taken", match="address already in use.*:5433|could not bind .*5433",
                           cause="postgres cannot listen: something on the host already listens on 5433",

@@ -9,6 +9,7 @@ import re
 from pathlib import Path
 
 from ._reflect import SchemaError
+from ._vocab import ACTION_ORDER, PARAM_ORDER, ordered
 
 DIR = "docs"
 DEFAULT_BASE = "en"
@@ -238,6 +239,7 @@ class File:
         self.groups: dict[str, str] = {}
         self.rules: dict[str, str] = {}
         self.diagnose: dict[str, str] = {}
+        self.actions: dict[str, str] = {}  # an action's description by its name, a parameter's by <action>/<param>
 
 
 def parse_file(lang: str, src: str) -> File:
@@ -247,14 +249,14 @@ def parse_file(lang: str, src: str) -> File:
             if v != "true":
                 raise SchemaError("base: true or nothing")
             f.base = True
-        elif k in ("groups", "rules", "diagnose"):
+        elif k in ("groups", "rules", "diagnose", "actions"):
             if not isinstance(v, dict) or not all(isinstance(x, str) for x in v.values()):
                 raise SchemaError(f"{k}: a mapping of an id to its text")
             setattr(f, k, v)
         elif k.startswith("/"):
             f.fields[k] = _entry(k, v)
         else:
-            raise SchemaError(f'"{k}": a key is a JSON Pointer of a field (/…, / the pack), base, groups, rules or diagnose')
+            raise SchemaError(f'"{k}": a key is a JSON Pointer of a field (/…, / the pack), base, groups, rules, diagnose or actions')
     return f
 
 
@@ -447,4 +449,38 @@ def apply(root: dict, base: File, others: list[File]) -> None:
                 d["cause"] = cause
             else:
                 d.setdefault(KEY_I18N, {})[f.lang] = {"cause": cause}
+    actions = {a["name"]: a for a in root.get("x-pack-actions", [])}
+    for f in [base, *others]:
+        for aid, text in f.actions.items():
+            name, _, param = aid.partition("/")
+            a = actions.get(name)
+            if a is None:
+                raise SchemaError(f'{DIR}/{f.lang}.yaml: actions: "{name}" is not an action of the pack')
+            if not text:
+                continue
+            if not param:
+                if f.base:
+                    a["description"] = text
+                else:
+                    a.setdefault(KEY_I18N, {})[f.lang] = {"description": text}
+                actions[name] = a
+                _reorder(a, ACTION_ORDER)
+                continue
+            props = a.get("params", {}).get("properties", {})
+            if param not in props:
+                raise SchemaError(f'{DIR}/{f.lang}.yaml: actions: "{param}" is not a parameter of {name}')
+            if f.base:
+                props[param]["description"] = text
+            else:
+                props[param].setdefault(KEY_I18N, {})[f.lang] = {"description": text}
+            _reorder(props[param], PARAM_ORDER)
     root[KEY_LANGS] = [base.lang, *(f.lang for f in others)]
+
+
+def _reorder(d: dict, order) -> None:
+    """d's keys, in place, in the order the Go sdk writes them; a language added to x-pack-i18n sorted among the others."""
+    if KEY_I18N in d:
+        d[KEY_I18N] = dict(sorted(d[KEY_I18N].items()))
+    items = ordered(d, order)
+    d.clear()
+    d.update(items)

@@ -2,6 +2,7 @@ package io.horchestra.pack.sdk.packs;
 
 import java.util.Map;
 
+import io.horchestra.pack.sdk.Action;
 import io.horchestra.pack.sdk.Diagnosis;
 import io.horchestra.pack.sdk.Paths;
 import io.horchestra.pack.sdk.Suggest;
@@ -60,6 +61,17 @@ public class Tembo extends Pack {
         return new Meta("tembo", "0.2.0").description("PostgreSQL with raft").license("Apache-2.0")
                 .source("https://example.org/tembo").image("images/tembo:0.2.0")
                 .dir("src/test/packs/tembo");
+    }
+
+    /** A backup, which only reads, and a restore over the data, never run unasked. */
+    @Override
+    public java.util.List<Action> packActions() {
+        return java.util.List.of(
+                new Action("backup", "tembo", "backup", "--to", "{{ .to }}", "--format", "{{ .format }}").timeout("30m")
+                        .param(Action.Param.of("to", "string", true))
+                        .param(Action.Param.of("format", "string", false).withDefault("custom").withEnum("custom", "plain")),
+                new Action("restore", "tembo", "restore", "--from", "{{ .from }}").mutating().approve()
+                        .param(Action.Param.of("from", "string", true)));
     }
 
     /** Postgres that cannot listen because something on the host already does. */

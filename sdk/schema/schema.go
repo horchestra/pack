@@ -37,6 +37,7 @@ type Node struct {
 	Compute   string
 	Suggest   *packschema.Suggest
 	Diagnoses []packschema.Diagnosis // on a pack's root
+	Actions   []packschema.Action    // on a pack's root
 	Rules     []packschema.Rule
 	File      *packschema.File // the file of Root.Content written from this subtree, when there is one
 	Arg       *packschema.Arg
@@ -227,6 +228,19 @@ func parseNodeOrdered(m map[string]any, ptr string, orders map[string][]string) 
 				return nil, fmt.Errorf("%s: x-pack-diagnose/%d: %w", ptr, i, err)
 			}
 			n.Diagnoses = append(n.Diagnoses, dg)
+		}
+	}
+	if as, ok := m["x-pack-actions"]; ok {
+		l, ok := as.([]any)
+		if !ok {
+			return nil, fmt.Errorf("%s: x-pack-actions must be a list", ptr)
+		}
+		for i, a := range l {
+			var act packschema.Action
+			if err := strict(a, &act); err != nil {
+				return nil, fmt.Errorf("%s: x-pack-actions/%d: %w", ptr, i, err)
+			}
+			n.Actions = append(n.Actions, act)
 		}
 	}
 	if sg, ok := m["x-pack-suggest"]; ok {

@@ -12,7 +12,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "sdk" / "python"))
 
-from packsdk import (OSPackages, File, Hook, Meta, Pack, Readiness, Root, Secret, Step, Upgrade, Volume, When, field, main,
+from packsdk import (Action, OSPackages, Param, File, Hook, Meta, Pack, Readiness, Root, Secret, Step, Upgrade, Volume, When, field, main,
                      pointer)
 
 
@@ -101,6 +101,22 @@ class Postgres(Pack):
                      command=["vacuumdb", "--all", "--analyze-in-stages"], idempotent=True),
             ],
         )
+
+    # What an operator runs on the installed postgres besides an apply: a dump, which only reads, and a restore over
+    # the database, which the pack never lets run unasked. pg_dump and pg_restore read the server and the password
+    # from the instance's environment (PGHOST, PGPASSWORD: the key's own settings).
+    def pack_actions(self):
+        return [
+            Action(name="backup", command=["pg_dump", "--format={{ .format }}", "--file={{ .to }}", "--dbname={{ .database }}"],
+                   timeout="1h",
+                   params=[Param(name="to", type="string", required=True),
+                           Param(name="format", type="string", default="custom", enum=["custom", "plain", "directory"]),
+                           Param(name="database", type="string", default="postgres")]),
+            Action(name="restore", command=["pg_restore", "--clean", "--if-exists", "--dbname={{ .database }}", "{{ .from }}"],
+                   timeout="1h", mutating=True, approve=True,
+                   params=[Param(name="from", type="string", required=True),
+                           Param(name="database", type="string", default="postgres")]),
+        ]
 
     # A quarter of the memory limit, in MB: the formula fills the leaf when the operator did not write it. The key
     # is the field's pointer, found from the field itself.

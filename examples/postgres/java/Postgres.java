@@ -1,3 +1,4 @@
+import io.horchestra.pack.sdk.Action;
 import io.horchestra.pack.sdk.Meta;
 import io.horchestra.pack.sdk.Pack;
 import io.horchestra.pack.sdk.PackSdk;
@@ -69,6 +70,21 @@ public class Postgres extends Pack {
         return new Meta("postgres", "16.4").description("PostgreSQL").license("PostgreSQL")
                 .image("images/postgres:16.4")
                 .dir(System.getProperty("pack.dir", "."));
+    }
+
+    /** What an operator runs on the installed postgres besides an apply: a dump, which only reads, and a restore over
+     *  the database, which the pack never lets run unasked. pg_dump and pg_restore read the server and the password
+     *  from the instance's environment (PGHOST, PGPASSWORD: the key's own settings). */
+    @Override
+    public List<Action> packActions() {
+        return List.of(
+                new Action("backup", "pg_dump", "--format={{ .format }}", "--file={{ .to }}", "--dbname={{ .database }}").timeout("1h")
+                        .param(Action.Param.of("to", "string", true))
+                        .param(Action.Param.of("format", "string", false).withDefault("custom").withEnum("custom", "plain", "directory"))
+                        .param(Action.Param.of("database", "string", false).withDefault("postgres")),
+                new Action("restore", "pg_restore", "--clean", "--if-exists", "--dbname={{ .database }}", "{{ .from }}").timeout("1h").mutating().approve()
+                        .param(Action.Param.of("from", "string", true))
+                        .param(Action.Param.of("database", "string", false).withDefault("postgres")));
     }
 
     @Override

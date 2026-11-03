@@ -59,3 +59,9 @@ groups:
   storage: Storage
 diagnose:
   port-taken: "postgres cannot listen: something on the host already listens on 5433"
+actions:
+  backup: Dumps the database to a file on the instance.
+  backup/to: The file the dump goes to.
+  backup/format: The format of the dump.
+  restore: Restores the database from a dump, over what it holds.
+  restore/from: The dump to restore.

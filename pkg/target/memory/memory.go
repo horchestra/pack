@@ -10,6 +10,7 @@ import (
 	"maps"
 	"os"
 	"slices"
+	"strings"
 	"sync"
 	"time"
 
@@ -25,6 +26,9 @@ func init() {
 		}
 		t.facts = settings["facts"]
 		t.logs = settings["logs"]
+		if u := settings["unready"]; len(u) > 0 {
+			t.unready = strings.Split(u, ",")
+		}
 		return t, nil
 	})
 }
@@ -45,6 +49,8 @@ type Target struct {
 	facts string
 	// logs is the file of the logs it gives (logs: <path>, {key: {instance: [line]}} as JSON).
 	logs string
+	// unready are the keys it says are not ready (unready: a,b): a stand of instances that went down.
+	unready []string
 }
 
 // Logs gives the last lines of the key's of the file the settings name (logs:); none named — it gives none.
@@ -70,8 +76,8 @@ func (t *Target) Logs(_ context.Context, key string, lines int) (map[string][]st
 	return out, nil
 }
 
-// Health says every key the target holds is ready: in memory nothing fails by itself. A target not set up with
-// observe: true does not tell.
+// Health says every key the target holds is ready — in memory nothing fails by itself — but those the settings name
+// unready. A target not set up with observe: true does not tell.
 func (t *Target) Health(context.Context) (map[string]target.Health, error) {
 	sys := t.observe
 	if sys == nil {
@@ -81,6 +87,10 @@ func (t *Target) Health(context.Context) (map[string]target.Health, error) {
 	defer sys.mu.Unlock()
 	out := map[string]target.Health{}
 	for k := range sys.held {
+		if slices.Contains(t.unready, k) {
+			out[k] = target.Health{Instances: []target.InstanceHealth{{Name: k, State: "exited", Reason: "unready: in the settings"}}}
+			continue
+		}
 		out[k] = target.Health{Ready: true, Instances: []target.InstanceHealth{{Name: k, Ready: true, State: "held"}}}
 	}
 	return out, nil

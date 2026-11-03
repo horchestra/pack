@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"maps"
 	"slices"
 	"strings"
 
@@ -86,6 +87,25 @@ func Gaps(s *schema.Schema) []Gap {
 			if len(tr[l]["cause"]) == 0 {
 				add("/", "diagnosis %s: no cause in %s", id, l)
 			}
+		}
+	}
+	for _, a := range rawActions(s) {
+		name, _ := a["name"].(string)
+		check := func(what string, raw map[string]any) {
+			if desc, _ := raw["description"].(string); len(desc) == 0 {
+				add("/", "%s: no description in %s", what, base)
+				return
+			}
+			tr := translations(raw[KeyI18n])
+			for _, l := range others {
+				if len(tr[l]["description"]) == 0 {
+					add("/", "%s: no description in %s", what, l)
+				}
+			}
+		}
+		check("action "+name, a)
+		for _, p := range actionParams(a) {
+			check("action "+name+" parameter "+p.name, p.raw)
 		}
 	}
 	groups, _ := s.Root.Raw[KeyGroups].([]any)
@@ -227,6 +247,24 @@ func Skeleton(s *schema.Schema, lang string) []byte {
 			writeScalar(&b, t, 2)
 		}
 	}
+	if as := rawActions(s); len(as) > 0 {
+		b.WriteString("actions:\n")
+		write := func(id string, raw map[string]any) {
+			t, hint := text(raw, "description")
+			if len(hint) > 0 {
+				writeComment(&b, base+": "+hint, 2)
+			}
+			writeKey(&b, id, 2)
+			writeScalar(&b, t, 2)
+		}
+		for _, a := range as {
+			name, _ := a["name"].(string)
+			write(name, a)
+			for _, p := range actionParams(a) {
+				write(name+"/"+p.name, p.raw)
+			}
+		}
+	}
 	if len(ids) > 0 {
 		b.WriteString("rules:\n")
 		for _, id := range ids {
@@ -251,4 +289,33 @@ func scalarText(x any) string {
 		b, _ := json.Marshal(v)
 		return string(b)
 	}
+}
+
+// rawActions are the actions of a written schema.
+func rawActions(s *schema.Schema) []map[string]any {
+	l, _ := s.Root.Raw["x-pack-actions"].([]any)
+	var out []map[string]any
+	for _, a := range l {
+		if m, ok := a.(map[string]any); ok {
+			out = append(out, m)
+		}
+	}
+	return out
+}
+
+type rawParam struct {
+	name string
+	raw  map[string]any
+}
+
+// actionParams are an action's parameters, by name.
+func actionParams(a map[string]any) []rawParam {
+	ps, _ := a["params"].(map[string]any)
+	props, _ := ps["properties"].(map[string]any)
+	var out []rawParam
+	for _, name := range slices.Sorted(maps.Keys(props)) {
+		m, _ := props[name].(map[string]any)
+		out = append(out, rawParam{name, m})
+	}
+	return out
 }

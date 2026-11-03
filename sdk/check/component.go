@@ -6,12 +6,14 @@ package check
 
 import (
 	"fmt"
+	"io"
 	"maps"
 	"path"
 	"regexp"
 	"slices"
 	"sort"
 	"strings"
+	"text/template"
 
 	"github.com/horchestra/pack/sdk/compute"
 	"github.com/horchestra/pack/sdk/packschema"
@@ -196,6 +198,18 @@ func Run(c Component) ([]Problem, error) {
 	}
 	if cycle := findCycle(reads); len(cycle) > 0 {
 		add(cycle, "x-pack-compute reads form a cycle")
+	}
+
+	// 2-. the actions: names, parameters of a type, a command whose templates read only the parameters
+	seenAction := map[string]bool{}
+	for _, a := range c.Schema.Root.Actions {
+		if seenAction[a.Name] {
+			add("/", "x-pack-actions: the name %q twice", a.Name)
+		}
+		seenAction[a.Name] = true
+		if err := ActionCommand(a); err != nil {
+			add("/", "x-pack-actions %s: %v", a.Name, err)
+		}
 	}
 
 	// 2-. the diagnoses: a match that compiles, the expressions of their patches too
@@ -580,4 +594,45 @@ func typeAccepts(nodeTypes []string, got string) bool {
 		}
 	}
 	return false
+}
+
+// ActionCommand checks an action as a schema holds it: a name, parameters of the types an action takes, and a command
+// whose templates read nothing but the parameters.
+func ActionCommand(a packschema.Action) error {
+	if !packschema.ActionName.MatchString(a.Name) {
+		return fmt.Errorf("a name of lower case letters, digits and dashes")
+	}
+	if len(a.Command) == 0 {
+		return fmt.Errorf("no command")
+	}
+	params := map[string]any{}
+	if a.Schema != nil {
+		if a.Schema.Type != "object" || a.Schema.AdditionalProperties {
+			return fmt.Errorf("params: an object of the parameters, no other")
+		}
+		for name, p := range a.Schema.Properties {
+			if !packschema.ParamName.MatchString(name) {
+				return fmt.Errorf("parameter %q: a name of lower case letters, digits and underscores", name)
+			}
+			if !slices.Contains(packschema.ParamTypes, p.Type) {
+				return fmt.Errorf("parameter %s: type is one of %v", name, packschema.ParamTypes)
+			}
+			params[name] = ""
+		}
+		for _, r := range a.Schema.Required {
+			if _, ok := a.Schema.Properties[r]; !ok {
+				return fmt.Errorf("params: %s is required and not a parameter", r)
+			}
+		}
+	}
+	for i, w := range a.Command {
+		t, err := template.New("").Option("missingkey=error").Parse(w)
+		if err != nil {
+			return fmt.Errorf("command %d: %v", i, err)
+		}
+		if err := t.Execute(io.Discard, params); err != nil {
+			return fmt.Errorf("command %d: %v", i, err)
+		}
+	}
+	return nil
 }

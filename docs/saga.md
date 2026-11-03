@@ -70,6 +70,7 @@ them; `plan` refuses every plan that does something; `auto` refuses none. The ri
 | `downgrade`    | a key goes back a version                                              |
 | `savepoint`    | an upgrade past a savepoint: a failure keeps what is before it         |
 | `irreversible` | a step that cannot be undone (a hook without compensate)               |
+| `action`       | an action the pack says is never run unasked (`pack run`, `approve`)  |
 
 A plan refused is not begun: the error is `needs_approval`, its risks the problems. The plan says its digest
 (`plan sha256:…`), and `pack apply --approve <digest>` applies that very plan, and refuses one that changed since it
@@ -77,6 +78,10 @@ was shown. `rollback` and `delete` take `--approve` the same way, the digest
 their `--dry-run` says, and a refusal names the command to run again (`pack rollback --to 3 --approve <digest>`).
 Taking an installation away is no risk of itself (the data and the credentials stay), and neither is undoing an
 unfinished saga — recovery is not held back —, so `delete` and that `rollback` ask only under `plan`.
+
+`pack run` is a plan of one step, the action's hook with its command filled in, by its digest (`--dry-run` says it).
+An action that only reads (no `mutating`) is asked for by no policy; a `mutating` one only under `plan`; one the pack
+marks `approve` under `auto-safe` too.
 
 ## Revisions
 

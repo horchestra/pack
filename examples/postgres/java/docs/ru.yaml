@@ -42,3 +42,11 @@
 groups:
   server: Сервер
   packages: Пакеты
+actions:
+  backup: Выгружает базу через pg_dump в файл на экземпляре.
+  backup/to: Файл (или каталог, для формата directory), куда пишется выгрузка.
+  backup/format: Формат выгрузки, как его называет pg_dump.
+  backup/database: База для выгрузки.
+  restore: Восстанавливает базу из выгрузки через pg_restore, сначала удаляя то, что в ней есть.
+  restore/from: Выгрузка для восстановления.
+  restore/database: База, в которую восстанавливать.

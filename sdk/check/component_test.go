@@ -4,6 +4,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/horchestra/pack/sdk/packschema"
 	"github.com/horchestra/pack/sdk/schema"
 )
 
@@ -297,5 +298,34 @@ func TestDiagnosisFixNeedsItsExpr(t *testing.T) {
 	}
 	if !found {
 		t.Errorf("problems = %v", ps)
+	}
+}
+
+func TestActionCommand(t *testing.T) {
+	ok := packschema.Action{Name: "backup", Command: []string{"dump", "--to", "{{ .to }}"},
+		Params: []packschema.Param{{Name: "to", Type: "string", Required: true}}}
+	if err := ok.Seal(); err != nil {
+		t.Fatal(err)
+	}
+	if err := ActionCommand(ok); err != nil {
+		t.Errorf("a command of its parameters: %v", err)
+	}
+	for name, a := range map[string]packschema.Action{
+		"a parameter it has not": {Name: "backup", Command: []string{"dump", "{{ .from }}"}},
+		"a template that breaks": {Name: "backup", Command: []string{"dump", "{{ .to"}},
+		"no command":             {Name: "backup"},
+		"a name of capitals":     {Name: "Backup", Command: []string{"dump"}},
+	} {
+		if err := ActionCommand(a); err == nil {
+			t.Errorf("%s: no problem", name)
+		}
+	}
+	for name, a := range map[string]packschema.Action{
+		"a parameter twice":   {Name: "b", Command: []string{"x"}, Params: []packschema.Param{{Name: "p", Type: "string"}, {Name: "p", Type: "string"}}},
+		"a type it takes not": {Name: "b", Command: []string{"x"}, Params: []packschema.Param{{Name: "p", Type: "object"}}},
+	} {
+		if err := a.Seal(); err == nil {
+			t.Errorf("%s: sealed", name)
+		}
 	}
 }

@@ -32,6 +32,9 @@ type Suggester interface{ PackSuggest() map[string]Suggest }
 // Diagnoser gives what failures of the pack look like and the ways out of them: x-pack-diagnose on the root.
 type Diagnoser interface{ PackDiagnose() []Diagnosis }
 
+// Actioner gives the operations the author names, pack run performs: x-pack-actions on the root.
+type Actioner interface{ PackActions() []Action }
+
 // Ruler gives the validation rules, keyed by JSON Pointer like the formulas:
 // every rule of the list hangs on the node as x-pack-rules and must hold of
 // the values — see Rule.
@@ -113,6 +116,23 @@ func Reflect(defaults any, o Options) (*jsonschema.Schema, error) {
 		}
 		if len(ds) > 0 {
 			extras(s)["x-pack-diagnose"] = slices.Clone(ds)
+		}
+	}
+	if c, ok := defaults.(Actioner); ok {
+		var as []Action
+		seen := map[string]bool{}
+		for _, a := range c.PackActions() {
+			if err := a.Seal(); err != nil {
+				return nil, err
+			}
+			if seen[a.Name] {
+				return nil, fmt.Errorf("x-pack-actions: the name %q twice", a.Name)
+			}
+			seen[a.Name] = true
+			as = append(as, a)
+		}
+		if len(as) > 0 {
+			extras(s)["x-pack-actions"] = as
 		}
 	}
 	if c, ok := defaults.(Suggester); ok {

@@ -29,6 +29,11 @@ public abstract class Pack {
         return Map.of();
     }
 
+    /** Optional: the operations the author names, pack run performs (x-pack-actions). */
+    public List<Action> packActions() {
+        return List.of();
+    }
+
     /** Optional: what failures of the pack look like and the ways out of them (pack diagnose). */
     public List<Diagnosis> packDiagnose() {
         return List.of();

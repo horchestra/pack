@@ -226,6 +226,17 @@ final class Reflect {
             s.put("x-pack-diagnose", diagJson);
             sortExtensions(s);
         }
+        java.util.Set<String> seenAction = new java.util.TreeSet<>();
+        List<Object> actionJson = new ArrayList<>();
+        for (Action a : p.packActions()) {
+            a.check();
+            if (!seenAction.add(a.name)) throw new SchemaException("x-pack-actions: the name \"" + a.name + "\" twice");
+            actionJson.add(a.toJson());
+        }
+        if (!actionJson.isEmpty()) {
+            s.put("x-pack-actions", actionJson);
+            sortExtensions(s);
+        }
         for (Map.Entry<String, Suggest> e : new TreeMap<>(p.packSuggest()).entrySet()) {
             if (e.getValue().expr == null || e.getValue().expr.isEmpty()) throw new SchemaException("x-pack-suggest " + e.getKey() + ": no expression");
             Map<String, Object> node = lookup(s, e.getKey(), "x-pack-suggest");

@@ -109,7 +109,7 @@ type Plan struct {
 	Pack      string   `json:"pack"`
 	From      string   `json:"from,omitempty"` // "" for a first installation
 	To        string   `json:"to"`
-	Direction string   `json:"direction"` // install | upgrade | downgrade | uninstall | undo
+	Direction string   `json:"direction"` // install | upgrade | downgrade | uninstall | undo | action
 	Order     []string `json:"order"`
 	Changes   []Change `json:"changes"`
 	Steps     []Step   `json:"steps"`
