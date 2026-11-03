@@ -8,6 +8,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -18,7 +19,24 @@ import (
 const (
 	RuntimeNative = "native" // the program of .pack/bin, a process of the machine pack runs on
 	RuntimeDocker = "docker" // the target's image, in a container of podman or docker
+	RuntimeK8s    = "k8s"    // the target's image, in a Pod of a cluster behind a Service (pkg/target/remote/kube)
 )
+
+// FromImage says whether a runtime runs the target's image, which the lock pins, rather than its program.
+func FromImage(runtime string) bool { return runtime == RuntimeDocker || runtime == RuntimeK8s }
+
+// Starter starts a target's image in a runtime other than the container runtimes of the machine: the k8s runtime,
+// which registers itself so that the rest of pack does not link what it speaks.
+type Starter struct {
+	// Settings are the names of its settings under runtime: (runtime_<name> of the set) besides type and env.
+	Settings []string
+	Start    func(name, installation string, rt Runtime) (*Plugin, error)
+}
+
+var starters = map[string]Starter{}
+
+// RegisterRuntime makes a runtime known by its type.
+func RegisterRuntime(kind string, s Starter) { starters[kind] = s }
 
 // The labels of a target's image and of the containers pack runs it in.
 const (
@@ -47,7 +65,7 @@ const ImageHome = "/home/pack"
 // Runtime is where a target's program runs: the section runtime of the target's entry in env.yaml.
 //
 //	runtime:
-//	  type: docker                 # native (the default) | docker
+//	  type: docker                 # native (the default) | docker | k8s (pkg/target/remote/kube: its own settings, Extra)
 //	  network: host                # the container's network; host — the machine's
 //	  mounts:                      # what the program reads of the machine: source:destination[:ro]
 //	    - ~/.ssh/known_hosts:/home/pack/.ssh/known_hosts:ro
@@ -64,6 +82,8 @@ type Runtime struct {
 	SSHAgent bool
 	Env      []string
 	User     string // UserHost | UserImage; "" — the machine's default (defaultUser)
+	// Extra are the settings of a registered runtime (Starter.Settings), by name.
+	Extra map[string]string
 }
 
 // Who the program runs as in its container.
@@ -125,8 +145,25 @@ func RuntimeOf(settings map[string]string) (Runtime, map[string]string, error) {
 			}
 			rt.User = v
 		default:
-			return rt, nil, fmt.Errorf("runtime.%s: not a setting of the runtime (type, network, mounts, ssh_agent, env, user)", name)
+			if rt.Extra == nil {
+				rt.Extra = map[string]string{}
+			}
+			rt.Extra[name] = v
 		}
+	}
+	if st, ok := starters[rt.Type]; ok {
+		for name := range rt.Extra {
+			if !slices.Contains(st.Settings, name) {
+				return rt, nil, fmt.Errorf("runtime.%s: not a setting of runtime %s (type, env, %s)", name, rt.Type, strings.Join(st.Settings, ", "))
+			}
+		}
+		if len(rt.Network) > 0 || len(rt.Mounts) > 0 || rt.SSHAgent || len(rt.User) > 0 {
+			return rt, nil, fmt.Errorf("runtime: network, mounts, ssh_agent and user are a container's of the machine, not runtime %s's", rt.Type)
+		}
+		return rt, rest, nil
+	}
+	for name := range rt.Extra {
+		return rt, nil, fmt.Errorf("runtime.%s: not a setting of the runtime (type, network, mounts, ssh_agent, env, user)", name)
 	}
 	switch rt.Type {
 	case RuntimeNative:
@@ -134,8 +171,10 @@ func RuntimeOf(settings map[string]string) (Runtime, map[string]string, error) {
 			return rt, nil, errors.New("runtime: network, mounts, ssh_agent, env and user are a container's: runtime.type: docker")
 		}
 	case RuntimeDocker:
+	case RuntimeK8s:
+		return rt, nil, errors.New("runtime.type: k8s is not in this build of pack")
 	default:
-		return rt, nil, fmt.Errorf("runtime.type: %q is not native or docker", rt.Type)
+		return rt, nil, fmt.Errorf("runtime.type: %q is not native, docker or k8s", rt.Type)
 	}
 	return rt, rest, nil
 }
@@ -153,10 +192,13 @@ func list(v string) []string {
 
 // Start runs the program of the target name in the runtime, for the installation, and shakes hands with it.
 func (rt Runtime) Start(name, installation string) (*Plugin, error) {
+	if FromImage(rt.Type) && len(rt.Image) == 0 {
+		return nil, fmt.Errorf("target %s: runtime %s, and no image for it: name it in release.yaml (targets: %s: {image: oci://…}): %w", name, rt.Type, name, target.ErrNotBrought)
+	}
+	if st, ok := starters[rt.Type]; ok {
+		return st.Start(name, installation, rt)
+	}
 	if rt.Type == RuntimeDocker {
-		if len(rt.Image) == 0 {
-			return nil, fmt.Errorf("target %s: runtime docker, and no image for it: name it in release.yaml (targets: %s: {image: oci://…}): %w", name, name, target.ErrNotBrought)
-		}
 		return startContainer(name, installation, rt)
 	}
 	bin, err := Find(name)
@@ -343,21 +385,36 @@ func imageLabels(containerRuntime, image string) (map[string]string, error) {
 	return labels, nil
 }
 
+// Owner is what a target's container or Pod is labelled with of the pack that runs it: <host>/<pid>.
+func Owner() string {
+	host, _ := os.Hostname()
+	return host + "/" + strconv.Itoa(os.Getpid())
+}
+
+// Orphaned says whether what an owner (<host>/<pid>) left is an orphan: its pack was of this machine and is gone.
+// Another machine's, or a pack's that runs, is not.
+func Orphaned(owner string) bool { return orphaned(owner, hostname(), alive) }
+
+func hostname() string {
+	h, _ := os.Hostname()
+	return h
+}
+
+func orphaned(owner, host string, alive func(int) bool) bool {
+	h, p, ok := strings.Cut(owner, "/")
+	pid, err := strconv.Atoi(p)
+	return ok && err == nil && h == host && !alive(pid)
+}
+
 // orphans are the containers of the target for the installation that a pack of this machine left running when it
 // ended without stopping them: their owner is gone. Another pack's that runs is none of them.
 func orphans(ps string, host string, alive func(int) bool) []string {
 	var out []string
 	for l := range strings.SplitSeq(strings.TrimSpace(ps), "\n") {
 		id, owner, ok := strings.Cut(strings.TrimSpace(l), " ")
-		if !ok {
-			continue
+		if ok && orphaned(owner, host, alive) {
+			out = append(out, id)
 		}
-		h, p, ok := strings.Cut(owner, "/")
-		pid, err := strconv.Atoi(p)
-		if !ok || err != nil || h != host || alive(pid) {
-			continue
-		}
-		out = append(out, id)
 	}
 	return out
 }

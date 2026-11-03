@@ -7,6 +7,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/horchestra/pack/pkg/target"
 )
@@ -212,5 +213,31 @@ func TestDockerRuntime(t *testing.T) {
 	}
 	if _, err := target.Open("fake", "shop", map[string]string{"runtime_type": "docker"}); err == nil || !strings.Contains(err.Error(), "pack refresh") {
 		t.Errorf("no image: %v", err)
+	}
+}
+
+// A target a runtime started where pack has no process of it (a Pod) is taken away when it does not answer.
+func TestConnectStopsWhatDoesNotAnswer(t *testing.T) {
+	port, err := freePort()
+	if err != nil {
+		t.Fatal(err)
+	}
+	stopped := 0
+	_, err = Connect("k8s", "an image in a Pod", "127.0.0.1:"+port, "tok", 300*time.Millisecond, nil, func() { stopped++ })
+	if err == nil || !strings.Contains(err.Error(), "did not answer") || stopped != 1 {
+		t.Errorf("%v, stopped %d", err, stopped)
+	}
+}
+
+func TestOrphaned(t *testing.T) {
+	dead := func(int) bool { return false }
+	live := func(int) bool { return true }
+	for owner, want := range map[string]bool{"h/1": true, "other/1": false, "h/x": false, "h": false} {
+		if got := orphaned(owner, "h", dead); got != want {
+			t.Errorf("%s: %v", owner, got)
+		}
+	}
+	if orphaned("h/1", "h", live) {
+		t.Error("a pack that runs left no orphan")
 	}
 }

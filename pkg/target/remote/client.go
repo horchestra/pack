@@ -43,8 +43,14 @@ const (
 
 	binaryStart = 10 * time.Second
 	imageStart  = 3 * time.Minute // the runtime may pull the image first
-	imagePort   = "7353"          // where a target listens inside its container
+	imagePort   = ImagePort
 )
+
+// ImagePort is where a target listens in its container, its image's EXPOSE.
+const ImagePort = "7353"
+
+// ImageStart is how long an image is given to answer: the runtime may pull it first.
+const ImageStart = imageStart
 
 // Dirs are the directories the programs of targets are searched in: PACK_TARGET_PATH, else .pack/bin here.
 func Dirs() []string {
@@ -81,6 +87,7 @@ type Plugin struct {
 	exited chan error // the process's one Wait
 	dir    string
 	kill   func() // stops what Close could not
+	stop   func() // a runtime with no process of pack's (k8s): takes away what it made, on Close
 	conn   *grpc.ClientConn
 	client remotepb.TargetClient
 	caps   []string
@@ -141,6 +148,23 @@ func (p *Plugin) start(addr, token string, within time.Duration) (*Plugin, error
 	}
 	p.exited = make(chan error, 1)
 	go func() { p.exited <- p.cmd.Wait() }()
+	return p.dial(addr, token, within)
+}
+
+// Connect shakes hands with a target that a runtime started where pack has no process of it — a Pod — at addr:
+// what (the image) names it in messages; exited, when not nil, says it ended before answering; stop takes away
+// what the runtime made, when the plugin is closed or fails to answer.
+func Connect(name, what, addr, token string, within time.Duration, exited chan error, stop func()) (*Plugin, error) {
+	p := &Plugin{name: name, what: what, exited: exited, stop: stop}
+	return p.dial(addr, token, within)
+}
+
+// NewToken is a token a target is given to require of pack.
+func NewToken() (string, error) { return newToken() }
+
+// dial shakes hands with the target at addr, retrying until it answers, it exits, or the time is up.
+func (p *Plugin) dial(addr, token string, within time.Duration) (*Plugin, error) {
+	var err error
 	auth := func(ctx context.Context, method string, req, reply any, cc *grpc.ClientConn, invoker grpc.UnaryInvoker, opts ...grpc.CallOption) error {
 		return invoker(metadata.AppendToOutgoingContext(ctx, TokenKey, token), method, req, reply, cc, opts...)
 	}
@@ -234,7 +258,11 @@ func (p *Plugin) Close() {
 	if p.stdin != nil {
 		_ = p.stdin.Close()
 	}
-	if p.exited != nil {
+	if p.stop != nil {
+		p.stop()
+		p.stop = nil
+	}
+	if p.exited != nil && p.cmd != nil {
 		select {
 		case <-p.exited:
 		case <-time.After(5 * time.Second):

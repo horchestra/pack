@@ -24,8 +24,9 @@ import (
 	"github.com/horchestra/pack/pkg/saga/storage"
 	"github.com/horchestra/pack/pkg/secretstore"
 	"github.com/horchestra/pack/pkg/target"
-	_ "github.com/horchestra/pack/pkg/target/memory" // the targets there are
-	"github.com/horchestra/pack/pkg/target/remote"   // a target that is not compiled in is a program of its own
+	_ "github.com/horchestra/pack/pkg/target/memory"      // the targets there are
+	"github.com/horchestra/pack/pkg/target/remote"        // a target that is not compiled in is a program of its own
+	_ "github.com/horchestra/pack/pkg/target/remote/kube" // runtime k8s: a target's image in a Pod
 )
 
 // Session is what a command works with.
@@ -235,7 +236,8 @@ func pinRuntime(name string, settings map[string]string, lock *release.Lock, pac
 	if _, ok := settings[remote.SettingHome]; ok {
 		return fmt.Errorf("runtime.home: the container's home is pack's, %s/home/%s", packDir, name)
 	}
-	if settings[remote.RuntimePrefix+"type"] != remote.RuntimeDocker {
+	kind := settings[remote.RuntimePrefix+"type"]
+	if !remote.FromImage(kind) {
 		return nil
 	}
 	var tl release.TargetLock
@@ -243,13 +245,16 @@ func pinRuntime(name string, settings map[string]string, lock *release.Lock, pac
 		tl = lock.Targets[name]
 	}
 	if len(tl.Image) == 0 || len(tl.Digest) == 0 {
-		return fmt.Errorf("target %s: runtime docker, and its image is not locked: %w", name, target.ErrNotBrought)
+		return fmt.Errorf("target %s: runtime %s, and its image is not locked: %w", name, kind, target.ErrNotBrought)
 	}
 	pin, err := oci.WithDigest(tl.Image, tl.Digest)
 	if err != nil {
 		return fmt.Errorf("target %s: %w", name, err)
 	}
 	settings[remote.SettingImage] = strings.TrimPrefix(pin, "oci://")
+	if kind != remote.RuntimeDocker {
+		return nil // a Pod has no directory of the machine for its home
+	}
 	home, err := filepath.Abs(filepath.Join(packDir, "home", name))
 	if err != nil {
 		return err

@@ -32,7 +32,7 @@ func init() {
 	initCmd.Flags().StringVar(&initTarget, "target", "", "the target the release is installed on (docker, ansible, k8s, memory); asked when it is a terminal")
 	initCmd.Flags().StringVar(&initSource, "target-source", "", "where the target's program is downloaded from (https://… or oci://…), into release.yaml targets:")
 	initCmd.Flags().StringVar(&initImage, "target-image", "", "the target's image (oci://…), into release.yaml targets:; with --runtime docker the target runs from it")
-	initCmd.Flags().StringVar(&initRuntime, "runtime", "", "where the target's program runs: native (the default) or docker (its image, in a container)")
+	initCmd.Flags().StringVar(&initRuntime, "runtime", "", "where the target's program runs: native (the default), docker (its image, in a container) or k8s (its image, in a Pod)")
 	initCmd.Flags().StringVar(&initLang, "lang", "", "the language of the comments of values.yaml (env.yaml lang:)")
 	initCmd.Flags().BoolVar(&initForce, "force", false, "write the files over the ones there")
 	rootCmd.AddCommand(initCmd)
@@ -146,12 +146,12 @@ func initRelease(ctx context.Context, ref, out string, in io.Reader, ask bool) (
 		if len(initSource) == 0 && len(initImage) > 0 {
 			return nil, errors.New("--runtime native runs the target's program: --target-source names where it comes from (the image is for --runtime docker)")
 		}
-	case remote.RuntimeDocker:
+	case remote.RuntimeDocker, remote.RuntimeK8s:
 		if len(initImage) == 0 {
-			return nil, errors.New("--runtime docker runs the target's image: --target-image oci://… names it")
+			return nil, fmt.Errorf("--runtime %s runs the target's image: --target-image oci://… names it", initRuntime)
 		}
 	default:
-		return nil, fmt.Errorf("--runtime %s: native or docker", initRuntime)
+		return nil, fmt.Errorf("--runtime %s: native, docker or k8s", initRuntime)
 	}
 	envFile := "env.yaml"
 	if len(envName) > 0 {
@@ -182,8 +182,8 @@ func initRelease(ctx context.Context, ref, out string, in io.Reader, ask bool) (
 		rel["targets"] = map[string]any{name: src}
 	}
 	env := map[string]any{"target": name}
-	if initRuntime == remote.RuntimeDocker {
-		env["runtime"] = map[string]any{"type": remote.RuntimeDocker}
+	if remote.FromImage(initRuntime) {
+		env["runtime"] = map[string]any{"type": initRuntime}
 	}
 	if len(initLang) > 0 {
 		env["lang"] = initLang
@@ -224,7 +224,7 @@ func initRelease(ctx context.Context, ref, out string, in io.Reader, ask bool) (
 	}
 	if slices.Contains(target.Names(), name) {
 		// in pack itself: nothing to download
-	} else if _, err := os.Stat(filepath.Join(dir.BinPath(), targets.Binary(name))); err == nil || len(initSource) > 0 || initRuntime == remote.RuntimeDocker {
+	} else if _, err := os.Stat(filepath.Join(dir.BinPath(), targets.Binary(name))); err == nil || len(initSource) > 0 || remote.FromImage(initRuntime) {
 		e, err := environment.Load(ctx, r.Config(), nil)
 		if err != nil {
 			return said, err

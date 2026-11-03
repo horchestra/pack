@@ -98,7 +98,7 @@ targets:
 # env.yaml
 target: ansible
 runtime:
-  type: docker                       # native | docker
+  type: docker                       # native | docker | k8s (below)
   network: host                      # the container's network; host — the machine's (none: a port on 127.0.0.1);
                                      # under Docker Desktop (Mac, Windows) host is its VM's network, not the machine's
   mounts:                            # source:destination[:ro|:rw], ~/ the home, both absolute
@@ -132,6 +132,34 @@ runtime:
   machine left behind (killed, its process gone) is removed when the next one starts — on Linux and macOS, where pack
   can tell its process is gone; elsewhere it stays for `docker rm`. `PACK_CONTAINER_RUNTIME` names
   the runtime; unset — podman, else docker.
+- `k8s` runs the image in a **Pod** of a cluster, behind a Service, spoken to through it (client-go, no kubectl):
+
+  ```yaml
+  runtime:
+    type: k8s
+    kubeconfig: ~/.kube/config       # KUBECONFIG and ~/.kube/config by default — the cluster's own when pack runs in a Pod
+    context: prod                    # the kubeconfig's current one when none
+    namespace: pack                  # the context's, else default; in a Pod — the Pod's own, and an error when it
+                                     # cannot be told
+    service_account: pack-target     # what the target acts as (the k8s target needs its rights in the cluster)
+    connect: auto                    # auto — the Service's name in the cluster when pack runs in one, else a
+                                     # port-forward to the Pod; service; port-forward
+    address: 10.0.0.5:30353          # the Service as pack reaches it from outside (a NodePort, a LoadBalancer)
+    network_policy: true             # only Pods labelled io.horchestra.pack.client=true reach the target
+                                     # (a port-forward is not traffic of the cluster's network)
+    image_pull_secret: regcred       # the Secret the image is pulled with
+    env:                             # by name, as for docker: their values go in a Secret, never the Pod
+      - VAULT_TOKEN
+  ```
+
+  The Pod, its Secret (the token, `env`), its Service and its NetworkPolicy live as long as the command: the Pod owns
+  the rest, and taking it away takes them along. They are labelled with the installation and the target, the Pod
+  annotated with the pack that made it; what a pack of this machine left (killed) is taken away by the next one. The
+  Pod has no home of the release (`.pack/home/<name>` is the machine's): what a target keeps in `~` there lasts the
+  command. A Pod that cannot pull its image, cannot be placed or whose target exits says so, before pack speaks to it; one that
+  ends while pack waits for the handshake ends the wait, and a running Pod's target has 30s to answer. The Pod and
+  the Service are named `pack-target-<name>-<10 hex>`: a target's name there is lower case letters, digits and
+  dashes, a letter first, at most 40.
 - The runtime is pack's, not the target's: the target is configured without it. A target in pack itself (`memory`)
   runs in pack's process and has none. An entry of `targets:` in `env.yaml`
   has a runtime of its own (`targets: {edge: {target: docker, runtime: {type: docker}}}`).

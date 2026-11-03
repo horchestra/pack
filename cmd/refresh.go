@@ -131,15 +131,18 @@ func lockPack(ctx context.Context, d *workdir.Dir, lock *release.Lock, upgrade b
 // source moved.
 func bringTargets(ctx context.Context, d *workdir.Dir, env *environment.Environment, lock *release.Lock, upgrade bool) error {
 	rel := d.Release
-	// a target by the runtimes it runs in: the program for native, the image for docker
+	// a target by what it runs from: its program (native), its image (docker, k8s: remote.FromImage)
 	used := map[string]map[string]bool{}
 	use := func(name string, settings map[string]string) {
 		if len(name) == 0 {
 			return
 		}
 		rt := settings[remote.RuntimePrefix+"type"]
-		if len(rt) == 0 {
+		switch {
+		case len(rt) == 0:
 			rt = remote.RuntimeNative
+		case remote.FromImage(rt):
+			rt = remote.RuntimeDocker // the image, whichever runtime runs it
 		}
 		if used[name] == nil {
 			used[name] = map[string]bool{}

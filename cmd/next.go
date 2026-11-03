@@ -211,7 +211,7 @@ func unbrought(ctx context.Context) ([]apiError, error) {
 		if len(name) == 0 || slices.Contains(target.Names(), name) {
 			return
 		}
-		if settings[remote.RuntimePrefix+"type"] == remote.RuntimeDocker {
+		if remote.FromImage(settings[remote.RuntimePrefix+"type"]) {
 			if tl := lock.Targets[name]; len(tl.Digest) == 0 {
 				add("target %s: its image is not locked", name)
 			}

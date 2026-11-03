@@ -33,7 +33,7 @@ Where a pack is installed and how it runs, YAML or JSON. Nested keys flatten wit
 target: k8s                          # the system a pack is installed on
 namespace: data                      # and anything else the target wants
 lang: ru                             # the language of the comments pack writes (values.yaml); $LANG when unset
-runtime: # where the target's program runs: native (default) or docker — its image, see targets.md
+runtime: # where the target's program runs: native (default), docker or k8s — its image in a container or a Pod, see targets.md
   type: docker
 discover: # what pack discover asks the targets of; no hosts — every host
   hosts:
