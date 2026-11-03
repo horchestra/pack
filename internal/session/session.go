@@ -192,8 +192,10 @@ func (s *Session) Run(g *graph.Graph, ex saga.Executor) *saga.Run {
 		Jobs:       s.Env.Run.Jobs,
 		NoRollback: s.Env.Run.NoRollback,
 		Keep:       s.Env.Run.Keep,
-		Journal:    s.Dir.JournalFor(s.ID),
-		Events:     func(line string) { fmt.Println(line) },
+		// as many revisions as sagas in the journal: each has its log there
+		HistoryKeep: s.Env.Run.JournalKeep,
+		Journal:     s.Dir.JournalFor(s.ID),
+		Events:      func(line string) { fmt.Println(line) },
 	}
 }
 

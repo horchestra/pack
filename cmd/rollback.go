@@ -1,27 +1,41 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/spf13/cobra"
 
 	"github.com/horchestra/pack/internal/interrupt"
+	"github.com/horchestra/pack/internal/session"
 	"github.com/horchestra/pack/pkg/adapter"
+	"github.com/horchestra/pack/pkg/bundle"
 	"github.com/horchestra/pack/pkg/graph"
 	"github.com/horchestra/pack/pkg/plan"
+	"github.com/horchestra/pack/pkg/render"
+	"github.com/horchestra/pack/pkg/saga"
 )
 
 func init() {
 	rollbackCmd.Flags().BoolVar(&rollbackDry, "dry-run", false, "say what would be done, do nothing")
+	rollbackCmd.Flags().IntVar(&rollbackTo, "to", 0, "go back to this revision of pack history, its pack and its values; a revision that was not installed is refused")
 	rootCmd.AddCommand(rollbackCmd)
 }
 
-var rollbackDry bool
+var (
+	rollbackDry bool
+	rollbackTo  int
+)
 
 var rollbackCmd = &cobra.Command{
 	Use:   "rollback",
-	Short: "take an installation back: undo an unfinished saga, or a saga back to the version replaced",
-	Args:  cobra.NoArgs,
+	Short: "take an installation back: undo an unfinished saga, or a saga back to the version replaced (--to: to a revision)",
+	Long: `With no saga unfinished, runs a saga back to the version the last one replaced — or, with
+--to <n>, to revision n of pack history: its pack (by digest) and the values it was installed
+with, through the same saga as an apply, the hooks of the version transition with it; a
+savepoint limits what is taken back as it does in apply. An unfinished saga is taken back
+first (pack rollback, without --to).`,
+	Args: cobra.NoArgs,
 	Run: run(func(*cobra.Command, []string) error {
 		ctx, stop := interrupt.Context()
 		defer stop()
@@ -34,8 +48,11 @@ var rollbackCmd = &cobra.Command{
 		if err != nil {
 			return err
 		}
-		if rec == nil || (len(rec.Pack) == 0 && !rec.Unfinished()) {
+		if rec == nil || (len(rec.Pack) == 0 && !rec.Unfinished() && (rollbackTo == 0 || len(rec.History) == 0)) {
 			return fmt.Errorf("nothing is installed on %s", s.Target)
+		}
+		if rollbackTo != 0 {
+			return rollbackToRevision(ctx, s, rec, curB, curRel, rollbackTo)
 		}
 		if rec.Unfinished() {
 			sg := rec.Saga
@@ -62,26 +79,53 @@ var rollbackCmd = &cobra.Command{
 			return nil
 		}
 
-		prev := rec.Previous
-		if prev == nil {
+		if rec.Previous == nil {
 			return fmt.Errorf("no previous version is recorded — nothing to roll back to")
 		}
-		prevB, prevRel, err := s.Version(*prev)
-		if err != nil {
-			return fmt.Errorf("the previous version %s: %w", prev.Pack, err)
-		}
-		p, err := plan.Build(plan.Input{From: curB, To: prevB, FromOut: curRel, ToOut: prevRel})
-		if err != nil {
-			return err
-		}
-		fmt.Print(p.Text())
-		if rollbackDry {
-			return nil
-		}
-		if err := s.RollForward(ctx, p, curRel, prevRel, *prev); err != nil {
-			return err
-		}
-		fmt.Printf("back to %s %s\n", prev.Pack, prev.Version)
-		return nil
+		return rollForwardTo(ctx, s, curB, curRel, *rec.Previous, "the previous version")
 	}),
+}
+
+// rollbackToRevision runs a saga to revision n: what it installed, with its values.
+func rollbackToRevision(ctx context.Context, s *session.Session, rec *saga.Record, curB *bundle.Bundle, curRel *render.Release, n int) error {
+	if rec.Unfinished() {
+		return fmt.Errorf("a saga towards %s %s is unfinished: pack rollback, without --to, takes it back first", rec.Saga.Pack, rec.Saga.Version)
+	}
+	rev := rec.Revision(n)
+	if rev == nil {
+		return fmt.Errorf("no revision %d in the history (pack history)", n)
+	}
+	if rev.Outcome != saga.RevInstalled {
+		return fmt.Errorf("revision %d was %s, not installed: there is nothing of it to go back to", n, rev.Outcome)
+	}
+	if cur := rec.Current(); cur != nil && cur.N == n {
+		fmt.Printf("revision %d is what is installed: nothing to do\n", n)
+		return nil
+	} else if rec.State == saga.Installed && rev.Same(rec.Installation) {
+		fmt.Printf("revision %d is the same as what is installed (%s %s): nothing to do\n", n, rec.Pack, rec.Version)
+		return nil
+	}
+	return rollForwardTo(ctx, s, curB, curRel, rev.Installation, fmt.Sprintf("revision %d", n))
+}
+
+// rollForwardTo runs a saga from what is installed to in — planned and run as an apply is — or, with --dry-run, says
+// its plan. what names in for the messages.
+func rollForwardTo(ctx context.Context, s *session.Session, curB *bundle.Bundle, curRel *render.Release, in saga.Installation, what string) error {
+	toB, toRel, err := s.Version(in)
+	if err != nil {
+		return fmt.Errorf("%s, %s: %w", what, in.Pack, err)
+	}
+	p, err := plan.Build(plan.Input{From: curB, To: toB, FromOut: curRel, ToOut: toRel})
+	if err != nil {
+		return err
+	}
+	fmt.Print(p.Text())
+	if rollbackDry {
+		return nil
+	}
+	if err := s.RollForward(ctx, p, curRel, toRel, in); err != nil {
+		return err
+	}
+	fmt.Printf("back to %s: %s %s\n", what, in.Pack, in.Version)
+	return nil
 }

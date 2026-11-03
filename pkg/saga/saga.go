@@ -15,6 +15,7 @@ import (
 	"errors"
 	"fmt"
 	"slices"
+	"strings"
 	"sync"
 	"time"
 
@@ -67,6 +68,76 @@ type Record struct {
 	Saga  *Progress `json:"saga,omitempty"`
 	// Previous is what the last finished saga replaced.
 	Previous *Installation `json:"previous,omitempty"`
+	// History are the revisions of the installation, the oldest first: every saga that ended, and the removals.
+	History []Revision `json:"history,omitempty"`
+}
+
+// The outcomes of a revision.
+const (
+	RevInstalled = "installed" // the saga ended with its version installed
+	RevUndone    = "undone"    // the saga was taken back: the version before it stayed
+	RevRemoved   = "removed"   // the installation was taken away
+)
+
+// Revision is one saga that ended: what it went to, when, and how it ended. A revision that is installed can be gone
+// back to: its pack (by digest) and its values (references to credentials, never credentials) are kept whole.
+type Revision struct {
+	N  int       `json:"n"`
+	At time.Time `json:"at"`
+	Installation
+	Outcome string `json:"outcome"`
+	Saga    string `json:"saga,omitempty"`  // the saga's id in the journal
+	Error   string `json:"error,omitempty"` // why an undone saga failed
+}
+
+// Same says whether two installations are one: the same pack and version, and values that mean the same, however
+// the record wrote them.
+func (in Installation) Same(other Installation) bool {
+	return in.Pack == other.Pack && in.Version == other.Version && sameJSON(in.Values, other.Values)
+}
+
+// DefaultHistoryKeep is how many revisions a record keeps when the run says nothing.
+const DefaultHistoryKeep = 20
+
+// Revision is the one numbered n; nil when the history has it not (any more).
+func (r *Record) Revision(n int) *Revision {
+	for i := range r.History {
+		if r.History[i].N == n {
+			return &r.History[i]
+		}
+	}
+	return nil
+}
+
+// Current is the revision installed now: the newest one that installed what the record says is installed; nil when
+// nothing is, or no revision of it is kept.
+func (r *Record) Current() *Revision {
+	if r.State != Installed || len(r.Pack) == 0 {
+		return nil
+	}
+	for i := len(r.History) - 1; i >= 0; i-- {
+		if h := &r.History[i]; h.Outcome == RevInstalled && h.Same(r.Installation) {
+			return h
+		}
+	}
+	return nil
+}
+
+// revise adds a revision, numbered after the last, and drops the oldest beyond keep (0 — the default, below 0 —
+// none dropped).
+func (r *Record) revise(rev Revision, keep int) {
+	rev.N = 1
+	if n := len(r.History); n > 0 {
+		rev.N = r.History[n-1].N + 1
+	}
+	rev.At = time.Now().UTC().Truncate(time.Second)
+	r.History = append(r.History, rev)
+	if keep == 0 {
+		keep = DefaultHistoryKeep
+	}
+	if keep > 0 && len(r.History) > keep {
+		r.History = slices.Clone(r.History[len(r.History)-keep:])
+	}
 }
 
 // Progress is a saga under way, or the last one that failed.
@@ -105,6 +176,8 @@ type Run struct {
 	// Keep are the nodes a rollback after a failure leaves as they are, whatever is behind a savepoint — a database
 	// whose schema was migrated is not taken back by itself. Undo, the explicit take-back, ignores it.
 	Keep []string
+	// HistoryKeep is how many revisions the record keeps (Record.History): 0 — DefaultHistoryKeep, below 0 — all.
+	HistoryKeep int
 	// Events hears what happens, a line at a time; calls are serialised.
 	Events func(string)
 	// Journal keeps the history: the stages of the saga and the logs of its nodes. Nil — none is kept.
@@ -270,6 +343,7 @@ func (r *Run) finish() error {
 		rec.Previous = &prev
 	}
 	rec.Installation, rec.State, rec.Saga = sg.Installation, Installed, nil
+	rec.revise(Revision{Installation: sg.Installation, Outcome: RevInstalled, Saga: sg.ID}, r.HistoryKeep)
 	err := r.save()
 	r.note(KindEnd, "", "installed "+rec.Pack+" "+rec.Version, err)
 	return err
@@ -399,8 +473,9 @@ func (r *Run) Undo(ctx context.Context) error {
 		r.note(KindFail, "", "undo failed", err)
 		return fmt.Errorf("%w — the record keeps what is still in effect: undo again", err)
 	}
+	rec.revise(Revision{Installation: sg.Installation, Outcome: RevUndone, Saga: sg.ID, Error: sg.Error}, r.HistoryKeep)
 	if len(rec.Pack) == 0 { // a first installation taken back: nothing is installed
-		err = r.clear(rec.ID)
+		err = r.clear(rec)
 		r.note(KindEnd, "", "nothing is installed", err)
 		return err
 	}
@@ -424,22 +499,30 @@ func (r *Run) Remove(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("the installation's record: %w", err)
 	}
-	var id string
-	if rec != nil {
-		id = rec.ID
+	if rec == nil {
+		rec = &Record{}
 	}
-	err = r.clear(id)
+	if rec.Saga != nil {
+		// the removal takes an unfinished saga away with the rest: the history says so
+		rec.revise(Revision{Installation: rec.Saga.Installation, Outcome: RevUndone, Saga: rec.Saga.ID,
+			Error: strings.TrimPrefix(strings.Join([]string{rec.Saga.Error, "removed unfinished"}, "; "), "; ")}, r.HistoryKeep)
+	}
+	if len(rec.Pack) > 0 {
+		rec.revise(Revision{Installation: rec.Installation, Outcome: RevRemoved}, r.HistoryKeep)
+	}
+	err = r.clear(rec)
 	r.note(KindEnd, "", "removed", err)
 	return err
 }
 
-// clear takes the installation off the record but keeps its id: the passwords and objects the installation
-// made are known by it, and what stays after a removal must be found again by the next install.
-func (r *Run) clear(id string) error {
-	if len(id) == 0 {
+// clear takes the installation off the record but keeps its id and its history: the passwords and objects the
+// installation made are known by it, what stays after a removal must be found again by the next install, and a
+// revision can still be gone back to.
+func (r *Run) clear(rec *Record) error {
+	if len(rec.ID) == 0 && len(rec.History) == 0 {
 		return r.Store.Delete()
 	}
-	return r.Store.Save(&Record{ID: id})
+	return r.Store.Save(&Record{ID: rec.ID, History: rec.History})
 }
 
 // RemoveNodes undoes every node of the graph, dependents first, and leaves the record: what an upgrade does

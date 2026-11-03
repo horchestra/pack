@@ -52,10 +52,24 @@ The record is written after every change. A saga that was cut short (Ctrl-C twic
 
 - `pack apply` with the same pack and values **continues** it: the nodes in effect stay, the ones that were under way
   are undone and run again; with other values it refuses and says so;
-- `pack rollback` takes it back whole (`Undo`), and for a first installation that leaves an empty record with the
-  installation's id.
+- `pack rollback` takes it back whole (`Undo`), and for a first installation that leaves a record with the
+  installation's id and its history, nothing installed.
 
 `pack rollback` with nothing unfinished runs a saga **to the version the last one replaced**.
+
+## Revisions
+
+Every saga that ends is a **revision** of the installation, in the record's `history`: its number, when, the pack (by
+digest, a directory by its path), the version, the values (references to credentials, never credentials) and how it
+ended — `installed`, `undone` (taken back by `rollback`, with why it failed; a saga `pack delete` takes away unfinished
+is `undone` too), or `removed` (`pack delete`). The record
+keeps as many as `run.journal_keep` keeps sagas of the journal (20 by default); a removal keeps them too.
+
+`pack history` lists them, the one installed now marked `*` (`--json`: `"current": true`) — the newest that installed
+what is installed. `pack rollback --to <n>` goes back to a revision that was
+installed: a saga from what is installed (or from nothing, after a delete) to its pack and its values, planned and run
+as an apply is — the hooks of the version transition run, a savepoint limits what a failure takes back — and itself a
+revision of its own. A revision of a directory pack is the directory as it is now.
 
 A key the new version dropped is removed *before* the record says the new version is installed, so a failure there
 leaves

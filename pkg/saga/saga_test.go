@@ -3,7 +3,9 @@ package saga
 import (
 	"context"
 	"errors"
+	"fmt"
 	"slices"
+	"strings"
 	"sync"
 	"testing"
 
@@ -306,8 +308,10 @@ func TestUndoTakesBackWholeSaga(t *testing.T) {
 	if want := []string{"undo dn", "undo nn", "undo zk"}; !slices.Equal(e.log, want) {
 		t.Fatalf("log = %v", e.log)
 	}
-	if s.rec != nil {
-		t.Fatalf("a first installation taken back leaves no record: %+v", s.rec)
+	// a first installation taken back leaves nothing installed, and the revision that says so
+	if s.rec == nil || len(s.rec.Pack) > 0 || s.rec.Saga != nil || len(s.rec.History) != 1 || s.rec.History[0].Outcome != RevUndone ||
+		!strings.Contains(s.rec.History[0].Error, "boom") {
+		t.Fatalf("record = %+v", s.rec)
 	}
 	if last := j.Entries[len(j.Entries)-1]; last.Kind != KindEnd {
 		t.Fatalf("last = %+v", last)
@@ -426,5 +430,42 @@ func TestRollbackInParallel(t *testing.T) {
 		if !slices.Contains(e.log, "undo "+n) {
 			t.Fatalf("no undo of %s in %v", n, e.log)
 		}
+	}
+}
+
+func TestHistory(t *testing.T) {
+	rec := &Record{}
+	for i := 0; i < 5; i++ {
+		rec.revise(Revision{Installation: Installation{Pack: "p", Version: fmt.Sprint(i)}, Outcome: RevInstalled}, 3)
+	}
+	if len(rec.History) != 3 || rec.History[0].N != 3 || rec.History[2].N != 5 || rec.Revision(4).Version != "3" || rec.Revision(1) != nil {
+		t.Fatalf("history = %+v", rec.History)
+	}
+	for i := 0; i < DefaultHistoryKeep+5; i++ {
+		rec.revise(Revision{Outcome: RevInstalled}, 0)
+	}
+	if len(rec.History) != DefaultHistoryKeep {
+		t.Fatalf("keep 0 is the default: %d", len(rec.History))
+	}
+	rec.History = rec.History[:3]
+	rec.revise(Revision{Outcome: RevRemoved}, -1)
+	if len(rec.History) != 4 || rec.History[3].At.IsZero() || rec.History[3].N != rec.History[2].N+1 {
+		t.Fatalf("keep all: %+v", rec.History)
+	}
+}
+
+func TestCurrent(t *testing.T) {
+	a := Installation{Pack: "p", Version: "1", Values: []byte(`{"a":1}`)}
+	b := Installation{Pack: "p", Version: "1", Values: []byte(`{"a":2}`)}
+	rec := &Record{State: Installed, Installation: Installation{Pack: "p", Version: "1", Values: []byte("{\n  \"a\": 1\n}")}}
+	rec.revise(Revision{Installation: a, Outcome: RevInstalled}, 0)
+	rec.revise(Revision{Installation: b, Outcome: RevInstalled}, 0)
+	rec.revise(Revision{Installation: a, Outcome: RevUndone}, 0)
+	if c := rec.Current(); c == nil || c.N != 1 {
+		t.Fatalf("current = %+v: the newest installed revision of what is installed, however its values were written", c)
+	}
+	rec.State = InProgress
+	if rec.Current() != nil {
+		t.Error("a saga under way: none is current")
 	}
 }
