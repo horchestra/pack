@@ -30,8 +30,17 @@ const (
 // before the target is configured.
 const RuntimePrefix = "runtime_"
 
-// SettingImage is the setting pack itself puts into a target's set: the image its lock pins, host/repo@sha256:….
-const SettingImage = RuntimePrefix + "image"
+// The settings pack itself puts into a target's set: the image its lock pins (host/repo@sha256:…), and the directory
+// of the release the container has for its home — what the program keeps in ~ (the ansible target's state) outlives
+// the container.
+const (
+	SettingImage = RuntimePrefix + "image"
+	SettingHome  = RuntimePrefix + "home"
+)
+
+// ImageHome is the home of a target's program in its image: HOME of the image, where pack mounts the release's
+// directory for it.
+const ImageHome = "/home/pack"
 
 // Runtime is where a target's program runs: the section runtime of the target's entry in env.yaml.
 //
@@ -43,13 +52,36 @@ const SettingImage = RuntimePrefix + "image"
 //	  ssh_agent: true              # the agent of the machine, in the container
 //	  env:                         # variables passed in, by name — never their values in the file
 //	    - ANSIBLE_VAULT_PASSWORD
+//	  user: host                   # host — pack's uid:gid (Linux's default), image — the image's (elsewhere)
 type Runtime struct {
 	Type     string
 	Image    string // docker: what the lock pins (SettingImage)
+	Home     string // docker: the release's directory for the container's home (SettingHome)
 	Network  string
 	Mounts   []string
 	SSHAgent bool
 	Env      []string
+	User     string // UserHost | UserImage; "" — the machine's default (defaultUser)
+}
+
+// Who the program runs as in its container.
+const (
+	// UserHost is pack's own uid and gid, with the groups of the sockets mounted: where a mount is the user's files
+	// as they are (an engine on Linux itself), the home pack made, a key of 0600 and the engine's socket are the
+	// program's only so. A rootless runtime gets the same by its own means (rootlessOf).
+	UserHost = "host"
+	// UserImage is the image's user: Docker Desktop (a Mac, Windows) gives a mount to any user of the container, and
+	// its engine's socket to root alone. On Linux the image's user cannot write the home pack made.
+	UserImage = "image"
+)
+
+// defaultUser is UserHost on Linux, where the engine is usually the machine's own, and UserImage elsewhere, where it
+// is Docker Desktop's VM. Docker Desktop for Linux is a VM too: runtime.user: image says so for it.
+func defaultUser() string {
+	if runtime.GOOS == "linux" {
+		return UserHost
+	}
+	return UserImage
 }
 
 // RuntimeOf reads the runtime out of a target's set and gives the rest of the set: what the target is configured
@@ -71,6 +103,8 @@ func RuntimeOf(settings map[string]string) (Runtime, map[string]string, error) {
 			rt.Type = v
 		case "image":
 			rt.Image = v
+		case "home":
+			rt.Home = v
 		case "network":
 			rt.Network = v
 		case "mounts":
@@ -83,14 +117,19 @@ func RuntimeOf(settings map[string]string) (Runtime, map[string]string, error) {
 			rt.SSHAgent = b
 		case "env":
 			rt.Env = list(v)
+		case "user":
+			if v != UserHost && v != UserImage {
+				return rt, nil, fmt.Errorf("runtime.user: %q is not host or image", v)
+			}
+			rt.User = v
 		default:
-			return rt, nil, fmt.Errorf("runtime.%s: not a setting of the runtime (type, network, mounts, ssh_agent, env)", name)
+			return rt, nil, fmt.Errorf("runtime.%s: not a setting of the runtime (type, network, mounts, ssh_agent, env, user)", name)
 		}
 	}
 	switch rt.Type {
 	case RuntimeNative:
-		if len(rt.Network) > 0 || len(rt.Mounts) > 0 || rt.SSHAgent || len(rt.Env) > 0 {
-			return rt, nil, errors.New("runtime: network, mounts, ssh_agent and env are a container's: runtime.type: docker")
+		if len(rt.Network) > 0 || len(rt.Mounts) > 0 || rt.SSHAgent || len(rt.Env) > 0 || len(rt.User) > 0 {
+			return rt, nil, errors.New("runtime: network, mounts, ssh_agent, env and user are a container's: runtime.type: docker")
 		}
 	case RuntimeDocker:
 	default:
@@ -129,9 +168,12 @@ func (rt Runtime) Start(name, installation string) (*Plugin, error) {
 type container struct {
 	name, installation string
 	cname, port, token string
-	owner              string            // <host>/<pid>
-	sshSock            string            // the agent's socket as the container runtime reaches it; "" — none
-	lookup             func(string) bool // whether a variable is set
+	owner              string                        // <host>/<pid>
+	sshSock            string                        // the agent's socket as the container runtime reaches it; "" — none
+	rootless           string                        // "podman" | "docker": the runtime is rootless (rootlessOf)
+	lookup             func(string) bool             // whether a variable is set
+	uid, gid           int                           // pack's, for UserHost
+	group              func(path string) (int, bool) // the group of a unix socket of the machine; false — not one
 }
 
 // containerArgs is the command line of the container runtime that runs the target's image: where it listens and how
@@ -149,6 +191,44 @@ func containerArgs(c container, rt Runtime) (args []string, addr string, err err
 		args = append(args, "-p", "127.0.0.1:"+c.port+":"+imagePort, "-e", EnvAddress+"=tcp://0.0.0.0:"+imagePort)
 	}
 	args = append(args, "-e", EnvToken+"="+c.token)
+	user := rt.User
+	if len(user) == 0 {
+		user = defaultUser()
+	}
+	switch {
+	case user != UserHost:
+	case c.rootless == "podman":
+		// the user's own uid and groups, mapped as they are: in a rootless userns a --user of the machine's maps to a
+		// subuid that owns nothing
+		args = append(args, "--userns=keep-id", "--group-add", "keep-groups")
+	case c.rootless == "docker":
+		// rootless docker maps the container's root to the user who runs the engine: the machine's files are root's
+		args = append(args, "--user", "0:0")
+	default:
+		args = append(args, "--user", strconv.Itoa(c.uid)+":"+strconv.Itoa(c.gid))
+		// a socket mounted (the engine's, the agent's) is reached by its group
+		var socks []string
+		for _, m := range rt.Mounts {
+			src, err := source(strings.SplitN(m, ":", 2)[0])
+			if err != nil {
+				return nil, "", fmt.Errorf("runtime.mounts: %w", err)
+			}
+			socks = append(socks, src)
+		}
+		if rt.SSHAgent && len(c.sshSock) > 0 {
+			socks = append(socks, c.sshSock)
+		}
+		seen := map[int]bool{c.gid: true}
+		for _, s := range socks {
+			if g, ok := c.group(s); ok && !seen[g] {
+				seen[g] = true
+				args = append(args, "--group-add", strconv.Itoa(g))
+			}
+		}
+	}
+	if len(rt.Home) > 0 {
+		args = append(args, "-v", rt.Home+":"+ImageHome, "-e", "HOME="+ImageHome)
+	}
 	for _, m := range rt.Mounts {
 		v, err := mount(m)
 		if err != nil {
@@ -177,17 +257,47 @@ func mount(m string) (string, error) {
 	if len(parts) < 2 || len(parts) > 3 || len(parts) == 3 && parts[2] != "ro" && parts[2] != "rw" {
 		return "", fmt.Errorf("%q: source:destination, :ro or :rw after", m)
 	}
-	if rest, ok := strings.CutPrefix(parts[0], "~/"); ok {
-		home, err := os.UserHomeDir()
-		if err != nil {
-			return "", err
-		}
-		parts[0] = filepath.Join(home, rest)
+	src, err := source(parts[0])
+	if err != nil {
+		return "", err
 	}
+	parts[0] = src
 	if !filepath.IsAbs(parts[0]) || !strings.HasPrefix(parts[1], "/") {
 		return "", fmt.Errorf("%q: both paths absolute (~/ is the home)", m)
 	}
 	return strings.Join(parts, ":"), nil
+}
+
+// source is the source of a mount as the machine has it: ~/ the home.
+func source(s string) (string, error) {
+	rest, ok := strings.CutPrefix(s, "~/")
+	if !ok {
+		return s, nil
+	}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(home, rest), nil
+}
+
+// rootlessOf says whether the container runtime runs rootless — its root is the user who runs it — and which:
+// "podman", "docker", or "" when it is not (or cannot tell).
+func rootlessOf(containerRuntime string) string {
+	name := filepath.Base(containerRuntime)
+	switch {
+	case strings.Contains(name, "podman"):
+		out, err := exec.Command(containerRuntime, "info", "--format", "{{.Host.Security.Rootless}}").Output()
+		if err == nil && strings.TrimSpace(string(out)) == "true" {
+			return "podman"
+		}
+	case strings.Contains(name, "docker"):
+		out, err := exec.Command(containerRuntime, "info", "--format", "{{json .SecurityOptions}}").Output()
+		if err == nil && strings.Contains(string(out), "name=rootless") {
+			return "docker"
+		}
+	}
+	return ""
 }
 
 // sshAgentSocket is the machine's agent as a container reaches it: Docker Desktop on a Mac has its own socket for it.
@@ -289,6 +399,7 @@ func startContainer(name, installation string, rt Runtime) (*Plugin, error) {
 		name: name, installation: installation, cname: Prefix + name + "-" + token[:12], port: port, token: token,
 		owner: host + "/" + strconv.Itoa(os.Getpid()), sshSock: sshAgentSocket(cr),
 		lookup: func(n string) bool { _, ok := os.LookupEnv(n); return ok },
+		uid:    os.Getuid(), gid: os.Getgid(), group: socketGroup, rootless: rootlessOf(cr),
 	}
 	args, addr, err := containerArgs(c, rt)
 	if err != nil {

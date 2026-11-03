@@ -206,6 +206,28 @@ func TestFromOSPackages(t *testing.T) {
 				}
 			})
 
+			t.Run("docker, the target from its image", func(t *testing.T) {
+				if os.name != "debian" {
+					t.Skip("one OS is enough to see the target run in a container")
+				}
+				image := s.targetImage(t, "ansible")
+				c4, port4 := startHost(t, os.name, strings.TrimSpace(string(pub)))
+				addr, network := hostFromAContainer()
+				r := s.imageRelease(t, "docker:1.0.0", "ansible", image, ansibleInAContainerEnv(key, addr, network, map[string]string{"host": port4}), dockerValues)
+				out := run(t, r.dir, journal(c4), s.pack, "apply")
+				if !strings.Contains(out, "installed docker 1.0.0") {
+					t.Errorf("apply:\n%s", out)
+				}
+				if got := hostExec(t, c4, "systemctl", "is-active", "docker"); strings.TrimSpace(got) != "active" {
+					t.Errorf("docker = %q", got)
+				}
+				// the container's home is the release's: what ansible keeps in ~ is there, and outlives the container
+				if _, err := stat(filepath.Join(r.dir, ".pack", "home", "ansible", ".ansible")); err != nil {
+					t.Errorf("ansible kept nothing in the home pack gave the container: %v", err)
+				}
+				run(t, r.dir, journal(c4), s.pack, "delete")
+			})
+
 			t.Run("delete", func(t *testing.T) {
 				c3, port3 := startHost(t, os.name, strings.TrimSpace(string(pub)))
 				r := s.packRelease(t, "docker:1.0.0", "ansible", fill(dockerEnv, map[string]string{"host": port3}), dockerValues)

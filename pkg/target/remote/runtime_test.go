@@ -44,8 +44,9 @@ func TestRuntimeOf(t *testing.T) {
 
 func TestContainerArgs(t *testing.T) {
 	c := container{name: "ansible", installation: "id1", cname: "pack-target-ansible-x", port: "4000", token: "tok", owner: "h/1",
-		sshSock: "/run/agent", lookup: func(n string) bool { return n == "VAULT_PASS" }}
-	args, addr, err := containerArgs(c, Runtime{Type: RuntimeDocker, Image: "reg/ansible@sha256:1", Mounts: []string{"/etc/hosts:/etc/hosts:ro"},
+		sshSock: "/run/agent", lookup: func(n string) bool { return n == "VAULT_PASS" }, uid: 1001, gid: 1001,
+		group: func(p string) (int, bool) { return 999, p == "/var/run/docker.sock" }}
+	args, addr, err := containerArgs(c, Runtime{Type: RuntimeDocker, Image: "reg/ansible@sha256:1", Home: "/rel/.pack/home/ansible", Mounts: []string{"/etc/hosts:/etc/hosts:ro"},
 		SSHAgent: true, Env: []string{"VAULT_PASS"}})
 	if err != nil {
 		t.Fatal(err)
@@ -55,7 +56,7 @@ func TestContainerArgs(t *testing.T) {
 		"run -i --rm --name pack-target-ansible-x",
 		"--label " + LabelInstallation + "=id1", "--label " + LabelTarget + "=ansible", "--label " + LabelOwner + "=h/1",
 		"-p 127.0.0.1:4000:7353 -e " + EnvAddress + "=tcp://0.0.0.0:7353", "-e " + EnvToken + "=tok",
-		"-v /etc/hosts:/etc/hosts:ro", "-v /run/agent:/run/pack/ssh-agent.sock -e SSH_AUTH_SOCK=/run/pack/ssh-agent.sock",
+		"-v /rel/.pack/home/ansible:/home/pack -e HOME=/home/pack", "-v /etc/hosts:/etc/hosts:ro", "-v /run/agent:/run/pack/ssh-agent.sock -e SSH_AUTH_SOCK=/run/pack/ssh-agent.sock",
 		"-e VAULT_PASS reg/ansible@sha256:1",
 	} {
 		if !strings.Contains(line, want) {
@@ -93,6 +94,38 @@ func TestContainerArgs(t *testing.T) {
 		if _, _, err := containerArgs(cc, rt); err == nil {
 			t.Errorf("%s: accepted", name)
 		}
+	}
+}
+
+func TestContainerUser(t *testing.T) {
+	c := container{name: "docker", cname: "x", port: "1", token: "t", uid: 1001, gid: 1001, lookup: func(string) bool { return false },
+		group: func(p string) (int, bool) { return 999, p == "/var/run/docker.sock" }}
+	args, _, err := containerArgs(c, Runtime{Type: RuntimeDocker, Image: "i", User: UserHost, Mounts: []string{"/var/run/docker.sock:/var/run/docker.sock", "/etc/hosts:/etc/hosts:ro"}})
+	if line := strings.Join(args, " "); err != nil || !strings.Contains(line, "--user 1001:1001 --group-add 999") || strings.Count(line, "--group-add") != 1 {
+		t.Errorf("host: %s %v", line, err)
+	}
+	args, _, err = containerArgs(c, Runtime{Type: RuntimeDocker, Image: "i", User: UserImage, Mounts: []string{"/var/run/docker.sock:/var/run/docker.sock"}})
+	if err != nil || len(args) == 0 || slices.Contains(args, "--user") {
+		t.Errorf("image: %v %v", args, err)
+	}
+	home, _ := os.UserHomeDir()
+	c.group = func(p string) (int, bool) { return 998, p == filepath.Join(home, "run/agent.sock") }
+	args, _, err = containerArgs(c, Runtime{Type: RuntimeDocker, Image: "i", User: UserHost, Mounts: []string{"~/run/agent.sock:/run/a.sock"}})
+	if err != nil || !strings.Contains(strings.Join(args, " "), "--group-add 998") {
+		t.Errorf("a socket under ~: %v %v", args, err)
+	}
+	c.rootless = "podman"
+	args, _, err = containerArgs(c, Runtime{Type: RuntimeDocker, Image: "i", User: UserHost})
+	if line := strings.Join(args, " "); err != nil || !strings.Contains(line, "--userns=keep-id --group-add keep-groups") || strings.Contains(line, "--user ") {
+		t.Errorf("rootless podman: %s %v", line, err)
+	}
+	c.rootless = "docker"
+	args, _, err = containerArgs(c, Runtime{Type: RuntimeDocker, Image: "i", User: UserHost})
+	if line := strings.Join(args, " "); err != nil || !strings.Contains(line, "--user 0:0") || strings.Contains(line, "--group-add") {
+		t.Errorf("rootless docker: %s %v", line, err)
+	}
+	if _, _, err := RuntimeOf(map[string]string{"runtime_type": "docker", "runtime_user": "root"}); err == nil {
+		t.Error("user root")
 	}
 }
 

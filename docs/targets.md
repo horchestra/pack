@@ -106,13 +106,28 @@ runtime:
   ssh_agent: true                    # the machine's agent in the container (Docker Desktop's own on a Mac)
   env:                               # variables passed in by name; their values never in a file or a command line
     - ANSIBLE_VAULT_PASSWORD
+  user: host                         # host — pack's uid:gid and the groups of the sockets mounted (Linux's default);
+                                     # image — the image's user (the default under Docker Desktop)
 ```
 
 - `pack refresh` locks the digest the image's tag means (`release.lock.json`: `targets.<name>.image`, `digest`) and every
   command runs that digest, whatever the tag becomes; `--upgrade` takes the new one. The container runtime pulls it.
 - Before it runs, the image's labels must say it is the target's and speaks pack's protocol:
   `io.horchestra.pack.target=<name>`, `io.horchestra.pack.protocol=pack.target.v1`. Its entrypoint is
-  `pack-target-<name>`, listening where `PACK_TARGET_ADDRESS` says (port 7353), asking for `PACK_TARGET_TOKEN`.
+  `pack-target-<name>`, listening where `PACK_TARGET_ADDRESS` says (port 7353), asking for `PACK_TARGET_TOKEN`; its
+  `HOME` is `/home/pack`.
+- The container's home is the release's: pack mounts `.pack/home/<name>` at `/home/pack`, so what a target keeps in
+  `~` — the ansible target's state, the credentials it provisioned — outlives the container. A mount into the home
+  (`~/.ssh/id:/home/pack/.ssh/id:ro`) lies over it.
+- On Linux a mount is the files as they are on the machine: the program runs as pack's user (`user: host`), with the
+  group of every socket mounted (the engine's, the agent's), so the home, a key of `0600` and the socket are its. A
+  rootless runtime gets the same its own way: podman `--userns=keep-id --group-add keep-groups`, docker the container's
+  root, which is the user. Docker Desktop gives a mount to any user and its engine's socket to root alone: there the
+  image's user runs it (`user: image`, the default off Linux; Docker Desktop for Linux wants it said). On Linux with
+  `user: image` the program cannot write the home pack made for it.
+- The images of the targets of github.com/horchestra/targets are `ghcr.io/horchestra/targets/<name>:<version>`
+  (`make images` builds them): docker (the docker CLI; mount the engine's socket), ansible (ansible-core, the ssh
+  client; mount the key or pass the agent), k8s (the program alone; mount the kubeconfig).
 - The container is labelled with the installation, the target and the pack that runs it; a container a pack of this
   machine left behind (killed, its process gone) is removed when the next one starts — on Linux and macOS, where pack
   can tell its process is gone; elsewhere it stays for `docker rm`. `PACK_CONTAINER_RUNTIME` names
