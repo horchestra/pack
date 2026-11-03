@@ -3,6 +3,8 @@ package packschema
 import (
 	"encoding/json"
 	"fmt"
+	"maps"
+	"slices"
 	"path/filepath"
 	"reflect"
 	"strings"
@@ -77,12 +79,24 @@ func Reflect(defaults any, o Options) (*jsonschema.Schema, error) {
 		}
 	}
 	if c, ok := defaults.(Ruler); ok {
-		for ptr, rules := range c.PackRules() {
+		ids := map[string]string{}
+		all := c.PackRules()
+		for _, ptr := range slices.Sorted(maps.Keys(all)) { // in order: the same pair named every run
+			rules := all[ptr]
+			for _, r := range rules {
+				if len(r.ID) == 0 {
+					continue
+				}
+				if other, dup := ids[r.ID]; dup {
+					return nil, fmt.Errorf("x-pack-rules: the id %q is of a rule on %s and on %s", r.ID, other, ptr)
+				}
+				ids[r.ID] = ptr
+			}
 			node, err := lookup(s, ptr)
 			if err != nil {
 				return nil, fmt.Errorf("x-pack-rules %s: %w", ptr, err)
 			}
-			extras(node)["x-pack-rules"] = rules
+			extras(node)["x-pack-rules"] = slices.Clone(rules) // the schema's own: docs writes the messages into it
 		}
 	}
 	return s, nil

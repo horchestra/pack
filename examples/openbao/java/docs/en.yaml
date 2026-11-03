@@ -1,0 +1,59 @@
+/:
+  title: OpenBao
+  description: Secrets management; the storage is raft, or the embedded PostgreSQL.
+/openbao:
+  title: Server
+  description: The server's own configuration, the JSON form of its HCL.
+/openbao/cluster_name:
+  title: Cluster name
+  description: The name of the cluster, in its metrics and its API.
+/openbao/api_addr:
+  title: API address
+  description: The address clients are told to reach the API at.
+  examples:
+    - https://bao.example:8200
+  group: addresses
+/openbao/cluster_addr:
+  title: Cluster address
+  description: The address the nodes reach each other at; raft wants it set.
+  group: addresses
+/openbao/ui:
+  title: Web UI
+  description: Serve the web UI.
+  examples:
+    - true
+/openbao/log_level:
+  title: Log level
+  description: How much the server says; the format is always JSON.
+  examples:
+    - debug
+  group: logging
+/openbao/log_file:
+  title: Log file
+  description: Where the log goes besides the standard output.
+  group: logging
+/openbao/storage:
+  title: Storage
+  description: |
+    The storage backend, by its type: raft, or the embedded postgres, which
+    fills it itself.
+/openbao/listener:
+  title: Listener
+  description: The listeners, by their type (tcp).
+/openbao/seal:
+  title: Seal
+  description: The seal, by its type (static, awskms…).
+/postgres:
+  title: Embedded PostgreSQL
+  description: The PostgreSQL installed with OpenBao as its storage; absent — raft.
+/dev:
+  title: Dev mode
+  description: An in-memory, unsealed server, for trying it out.
+/release_url:
+  title: Release URL
+  description: Where the release archive of OpenBao is downloaded from on a host.
+groups:
+  addresses: Addresses
+  logging: Logging
+rules:
+  storage-from-postgres: storage is filled from the embedded postgres and must not be set

@@ -1,0 +1,44 @@
+/:
+  title: PostgreSQL
+  description: PostgreSQL на одном экземпляре с хуком установки и хуком обновления мажорной версии.
+/database:
+  title: База данных
+  description: База, создаваемая при первом запуске.
+/superuser:
+  title: Суперпользователь
+  description: Роль, с которой инициализируется сервер.
+/superuser/name:
+  title: Имя
+  description: Имя суперпользователя.
+/superuser/password:
+  title: Пароль
+  description: Ссылка на Secret с паролем суперпользователя.
+/conf:
+  title: postgresql.conf
+  description: Настройки postgresql.conf, записываются как есть.
+/conf/max_connections:
+  title: Максимум соединений
+  description: Сколько клиентских соединений сервер принимает одновременно.
+/conf/shared_buffers:
+  title: Разделяемые буферы
+  description: Память кэша разделяемых буферов; если не задана — четверть лимита памяти.
+/conf/listen_addresses:
+  title: Адреса
+  description: Адреса, на которых слушает сервер; * — все.
+/conf/port:
+  title: Порт
+  description: Порт, на котором слушает сервер.
+/pgdg:
+  title: Репозиторий PGDG
+  description: |
+    Откуда берутся пакеты PGDG на хосте: по умолчанию из апстрима,
+    из зеркала, если хосты до него не достают.
+/pgdg_key:
+  title: Ключ PGDG
+  description: Ключ подписи репозитория PGDG.
+/init_extensions:
+  title: Расширения
+  description: Расширения, которые получает каждая база после первого запуска.
+groups:
+  server: Сервер
+  packages: Пакеты

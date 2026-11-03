@@ -128,6 +128,53 @@ Packages: map[string]packschema.OSPackages{
 - **The hooks are `Hooks` of the root,** so a script a hook runs is at one path, with its own content per OS.
 - **The host is taken to be empty:** nothing conflicting is looked for or removed.
 
+## Documentation
+
+What the operator reads about a setting — in a `values.yaml`, in a form built on the schema — is in `docs/<lang>.yaml`,
+next to `content/`, one file a language, keyed by the field's JSON Pointer (`/` is the pack itself). The code says
+nothing of it; the same files serve Go, Python and Java.
+
+```yaml
+# docs/en.yaml — the base language; base: true in another file names another
+/:
+  title: OpenBao
+  description: Secrets management.
+/openbao/log_level:
+  title: Log level
+  description: |
+    How much the server says.
+  examples:
+    - debug
+  group: logging
+groups:
+  logging: Logging
+rules:
+  storage-from-postgres: storage is filled from the embedded postgres and must not be set
+```
+
+```yaml
+# docs/ru.yaml — a translation: titles, descriptions, groups and rules
+/openbao/log_level:
+  title: Уровень журнала
+groups:
+  logging: Журнал
+```
+
+- The base language becomes the schema's own `title`, `description` and `examples` (typed by the field: `8080` of an
+  integer is a number; a number is an integer of int64 or a plain decimal — no exponent, no trailing zero, at most 15
+  significant digits, at least 0.0001 — so that every SDK writes it back as it is); the others `x-pack-i18n: {ru: {title, description}}` beside them. `group` is `x-pack-group` on
+  the field, and the root lists the groups as `x-pack-groups` in the order the fields first use them. A rule's message
+  is said by its `ID` (`Rule.ID`, unique in the pack), translated into the rule's `x-pack-i18n`.
+- A pointer, a group or a rule id the pack has not is an error at generation: a renamed field leaves no stale text.
+  A field of a held pack is documented in that pack's own `docs/`.
+- The YAML is a subset the SDKs read without a library, and read the same: block mappings, lists of scalars, plain,
+  `"double-"` or `'single-quoted'` scalars and `|` blocks; every scalar is a text. Flow `{…}`/`[…]`, anchors and `>` are
+  refused.
+- What is not said is a warning of `pack check` (and of the Go generator's `check`): a field with no description in the
+  base language, a text with no translation, a rule with a message but no id. `--strict` makes them problems.
+  `pack docs skeleton -l ru <dir>` writes the file a language starts from: every field, group and rule, with what the
+  schema says in it and `""` where it says nothing, the base text as a comment above.
+
 ## A pack that holds a pack
 
 A field whose type is a pack holds it: the settings of the two join in one schema (the held one as `pack://name#`), a

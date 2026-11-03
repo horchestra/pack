@@ -58,9 +58,12 @@ class Cel(unittest.TestCase):
             s = json.loads((out / "openbao" / "schema.json").read_text())
         storage = s["properties"]["openbao"]["properties"]["storage"]
         self.assertEqual(pack.pack_compute()["/openbao/storage"], storage["x-pack-compute"])
-        self.assertEqual([r.to_json() for r in pack.pack_rules()["/openbao/storage"]], storage["x-pack-rules"])
+        # the rule as written, and its message in the other languages of docs/
+        written = [{k: v for k, v in r.items() if k != "x-pack-i18n"} for r in storage["x-pack-rules"]]
+        self.assertEqual([r.to_json() for r in pack.pack_rules()["/openbao/storage"]], written)
         (rule,) = storage["x-pack-rules"]
         self.assertNotIn("phases", rule)
+        self.assertIn("ru", rule["x-pack-i18n"])
 
 
 if __name__ == "__main__":

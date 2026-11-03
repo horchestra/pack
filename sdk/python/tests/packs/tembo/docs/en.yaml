@@ -1,0 +1,59 @@
+/:
+  title: Tembo
+  description: PostgreSQL with raft; a node with no peers is a cluster of one.
+/id:
+  title: Node id
+  description: |
+    Lowercase letters, digits and underscores; the hostname, dashes turned
+    into underscores, when unset.
+  examples:
+    - db_1
+/listen:
+  title: Primary proxy
+  description: The client proxy to the primary.
+  group: proxies
+/listen_ro:
+  title: Standby proxy
+  description: The client proxy spread over the standbys.
+  group: proxies
+/db:
+  title: Node database
+  description: The bbolt file of the node.
+  group: storage
+/pg_data:
+  title: Data directory
+  description: The Postgres data directory.
+  group: storage
+/pg_port:
+  title: Postgres port
+  description: The port of Postgres itself, behind the proxies, the same on every node.
+  examples:
+    - 5433
+/pg_password:
+  title: Superuser password
+  description: |
+    The same on every node; it only bootstraps a new cluster, a running one
+    is rotated with `tembo rotate-password`.
+/config:
+  title: Tags file
+  description: "The file of the node's tags: loaded first, the environment wins over it."
+/node:
+  title: Node
+  description: The node's tags and the log it keeps.
+/node/raft_retention_log_size:
+  title: Raft log kept
+  description: Bytes of applied raft log to keep; older entries are compacted into the snapshot.
+/node/nofailover:
+  title: Never primary
+  description: The node is never the primary.
+  examples:
+    - true
+/node/nosync:
+  title: Never synchronous
+  description: The node is never a synchronous standby.
+/node/failover_priority:
+  title: Failover priority
+  description: Higher is preferred as a failover candidate.
+groups:
+  proxies: Proxies
+  storage: Storage

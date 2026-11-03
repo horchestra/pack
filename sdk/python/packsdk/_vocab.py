@@ -192,13 +192,15 @@ class Root:
 
 @dataclass
 class Rule:
-    """x-pack-rules on a node: a CEL expression that must hold of the values."""
+    """x-pack-rules on a node: a CEL expression that must hold of the values. id names it among the pack's rules, so
+    that docs/<lang>.yaml can say its message in other languages (rules: {<id>: …})."""
     rule: str
     message: str = ""
     phases: list[str] = _field(default_factory=list)
+    id: str = ""
 
     def to_json(self) -> dict:
-        return {"rule": self.rule, **_drop({"message": self.message, "phases": self.phases})}
+        return {**_drop({"id": self.id}), "rule": self.rule, **_drop({"message": self.message, "phases": self.phases})}
 
 
 @dataclass

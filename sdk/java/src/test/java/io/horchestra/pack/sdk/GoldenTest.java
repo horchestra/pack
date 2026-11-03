@@ -9,6 +9,7 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Stream;
 
 /**
@@ -32,6 +33,8 @@ public final class GoldenTest {
         pathsComeFromTheFields();
         refusals();
         escapes();
+        docsSubset();
+        docsExamples();
         if (failed > 0) {
             System.err.println(failed + " failed");
             System.exit(1);
@@ -90,5 +93,59 @@ public final class GoldenTest {
 
     private static void refusals() {
         check(PackSdk.packs(new OpenBao()).stream().map(p -> p.meta().name).toList().equals(List.of("openbao", "tembo")), "packs lists what is held once");
+    }
+
+    /** The YAML of docs/ is read here the way the Go sdk reads it (sdk/docs): the same documents, the same refusals. */
+    @SuppressWarnings("unchecked")
+    private static void docsSubset() {
+        String src = "# a comment\nbase: true\n/a/b:\n  title: Plain text # a comment\n  description: |\n    Two lines,\n\n"
+                + "    and a blank one between.\n\n  examples:\n    - \"quoted: with a colon\"\n    - 'it''s'\n    - 5432\n"
+                + "\"/q~1k\":\n  title: \"\\u00e9\\t\\\"x\\\"\"\ngroups:\n  g: G\n";
+        Map<String, Object> m = Docs.parse(src);
+        check(new ArrayList<>(m.keySet()).equals(List.of("base", "/a/b", "/q~1k", "groups")), "docs keys " + m.keySet());
+        Map<String, Object> ab = (Map<String, Object>) m.get("/a/b");
+        check("Plain text".equals(ab.get("title")), "docs plain " + ab.get("title"));
+        check("Two lines,\n\nand a blank one between.".equals(ab.get("description")), "docs block " + ab.get("description"));
+        check(List.of("quoted: with a colon", "it's", "5432").equals(ab.get("examples")), "docs list " + ab.get("examples"));
+        check("\u00e9\t\"x\"".equals(((Map<String, Object>) m.get("/q~1k")).get("title")), "docs quoted");
+        for (String bad : List.of("a: {b: c}\n", "a: [b]\n", "a: &x b\n", "a: >\n  b\n", "a: b: c\n", "a: b\na: c\n",
+                "a:\n\tb: c\n", "a:\n", "a: b\n  c: d\n", "a:\n  - b: c\n", "a: \"b\n", "a: \"b\" c\n", "a: \"\\q\"\n", "- a\n")) {
+            boolean refused = false;
+            try {
+                Docs.parse(bad);
+            } catch (SchemaException e) {
+                refused = true;
+            }
+            check(refused, "docs parsed " + bad);
+        }
+    }
+
+    /** Typed by the field, written back as the file says, or refused - as in the Go sdk (sdk/docs). */
+    @SuppressWarnings("unchecked")
+    private static void docsExamples() {
+        Map<String, Object> number = new java.util.LinkedHashMap<>(Map.of("type", "number"));
+        for (String ok : List.of("0", "-3", "1.5", "0.25", "-0.0001", "123456789012.345", "9223372036854775807")) {
+            Map<String, Object> root = new java.util.LinkedHashMap<>(Map.of("properties", new java.util.LinkedHashMap<>(Map.of("x", new java.util.LinkedHashMap<>(number)))));
+            Docs.File f = Docs.parseFile("en", "/x:\n  examples:\n    - " + ok + "\n");
+            f.base = true;
+            Docs.apply(root, List.of(f));
+            Map<String, Object> x = (Map<String, Object>) ((Map<String, Object>) root.get("properties")).get("x");
+            check(Json.write(x.get("examples")).equals("[" + ok + "]"), ok + " written as " + Json.write(x.get("examples")));
+        }
+        for (String bad : List.of("nan", "inf", "-inf", "1e3", "1e999", "1.50", "1.0", ".5", "01.5", "0.00001", "1234567890123.456",
+                "9223372036854775808", "+1")) {
+            Map<String, Object> root = new java.util.LinkedHashMap<>(Map.of("properties", new java.util.LinkedHashMap<>(Map.of("x", new java.util.LinkedHashMap<>(number)))));
+            boolean refused = false;
+            Docs.File f = Docs.parseFile("en", "/x:\n  examples:\n    - " + bad + "\n");
+            f.base = true;
+            try {
+                Docs.apply(root, List.of(f));
+            } catch (SchemaException e) {
+                refused = e.getMessage().startsWith("docs/en.yaml: /x: ");
+            }
+            check(refused, "docs example accepted, or without its place: " + bad);
+        }
+        check(Json.number(0.0001).equals("0.0001") && Json.number(12345678.5).equals("12345678.5") && Json.number(1e-7).equals("1e-07"),
+                "Json.number as encoding/json: " + Json.number(0.0001) + " " + Json.number(12345678.5) + " " + Json.number(1e-7));
     }
 }

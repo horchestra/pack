@@ -47,6 +47,7 @@ func (o *OpenBao) PackRules() map[string][]packschema2.Rule {
 	pg, storage := packschema2.Dotted(o, &o.Postgres), packschema2.Dotted(o, &o.Bao.Storage)
 	return map[string][]packschema2.Rule{
 		packschema2.Pointer(o, &o.Bao.Storage): {{
+			ID:      "storage-from-postgres",
 			Rule:    fmt.Sprintf("!has(pack.values.%s) || !has(values.%s) || size(values.%[2]s) == 0", pg, storage),
 			Message: "storage is filled from the embedded postgres and must not be set",
 		}},

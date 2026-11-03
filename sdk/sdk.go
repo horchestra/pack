@@ -30,6 +30,7 @@ import (
 
 	packer "github.com/arenadata/oci-packer/types"
 	"github.com/horchestra/pack/sdk/check"
+	"github.com/horchestra/pack/sdk/docs"
 	packschema2 "github.com/horchestra/pack/sdk/packschema"
 	"github.com/horchestra/pack/sdk/schema"
 	"github.com/spf13/cobra"
@@ -133,6 +134,19 @@ func Schema(p Pack) ([]byte, error) {
 	}})
 	if err != nil {
 		return nil, err
+	}
+	dir, err := dirOf(p)
+	if err != nil {
+		return nil, err
+	}
+	d, err := docs.Load(dir)
+	if err != nil {
+		return nil, err
+	}
+	if d != nil {
+		if err := d.Apply(s); err != nil {
+			return nil, err
+		}
 	}
 	return json.Marshal(s)
 }
@@ -307,6 +321,20 @@ func Verify(p Pack) ([]check.Problem, error) {
 	return check.Run(check.Component{Name: p.Meta().Name, Schema: s, Templates: ts})
 }
 
+// VerifyDocs lists what the pack's docs/ does not say: a field without a description in the base language, a text
+// without its translation. Warnings, not problems: a pack works undocumented.
+func VerifyDocs(p Pack) ([]docs.Gap, error) {
+	raw, err := Schema(p)
+	if err != nil {
+		return nil, err
+	}
+	s, err := schema.Parse(raw)
+	if err != nil {
+		return nil, err
+	}
+	return docs.Gaps(s), nil
+}
+
 // Command is the generator CLI of an author's main package: a cobra command with one subcommand per job, to which
 // the author adds his own (the values of a stand, a graph) before running it.
 //
@@ -365,8 +393,9 @@ func Command(roots ...Pack) *cobra.Command {
 	generate.Flags().StringVarP(&out, "output", "o", ".", "directory to write the artifacts under")
 	generate.Flags().StringVar(&repo, "repo", DefaultRepo, "the prefix of the repositories the pack and the packs it holds are published under")
 
+	var strict bool
 	checkCmd := &cobra.Command{
-		Use: "check", Short: "run the author checks on every pack", Args: cobra.NoArgs,
+		Use: "check", Short: "run the author checks on every pack; what docs/ does not say is a warning (--strict: a problem)", Args: cobra.NoArgs,
 		Run: run(func(*cobra.Command, []string) error {
 			if err := load(); err != nil {
 				return err
@@ -381,6 +410,18 @@ func Command(roots ...Pack) *cobra.Command {
 					fmt.Printf("%s: %s\n", n, p)
 					problems++
 				}
+				gaps, err := VerifyDocs(byName[n])
+				if err != nil {
+					return fmt.Errorf("%s: %w", n, err)
+				}
+				for _, g := range gaps {
+					if strict {
+						fmt.Printf("%s: %s\n", n, g)
+						problems++
+					} else {
+						fmt.Printf("%s: warning: %s\n", n, g)
+					}
+				}
 			}
 			if problems > 0 {
 				return fmt.Errorf("%d problem(s)", problems)
@@ -389,6 +430,8 @@ func Command(roots ...Pack) *cobra.Command {
 			return nil
 		}),
 	}
+
+	checkCmd.Flags().BoolVar(&strict, "strict", false, "what docs/ does not say is a problem, not a warning")
 
 	schemaCmd := &cobra.Command{
 		Use: "schema <name>", Short: "print one pack's schema.json", Args: cobra.ExactArgs(1),

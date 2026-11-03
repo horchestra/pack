@@ -50,9 +50,17 @@ final class Json {
         }
     }
 
-    private static String number(double d) {
+    /** A float the way encoding/json writes a float64: the shortest digits, without an exponent from 1e-6 to 1e21. */
+    static String number(double d) {
         if (d == Math.rint(d) && Math.abs(d) < 1e15) return Long.toString((long) d);
-        return Double.toString(d);
+        if (Double.isNaN(d) || Double.isInfinite(d)) throw new SchemaException("cannot write " + d + " as JSON");
+        java.math.BigDecimal b = new java.math.BigDecimal(Double.toString(d)).stripTrailingZeros();
+        double a = Math.abs(d);
+        if (a >= 1e-6 && a < 1e21) return b.toPlainString();
+        String digits = b.unscaledValue().abs().toString();
+        int exp = digits.length() - 1 - b.scale();
+        String mant = digits.length() > 1 ? digits.charAt(0) + "." + digits.substring(1) : digits;
+        return (d < 0 ? "-" : "") + mant + "e" + (exp < 0 ? "-" : "+") + (Math.abs(exp) < 10 ? "0" : "") + Math.abs(exp);
     }
 
     private static void string(StringBuilder sb, String s) {

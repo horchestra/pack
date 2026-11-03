@@ -59,12 +59,13 @@ public class OpenBao extends Pack {
         String pg = Paths.dotted(OpenBao.class, "postgres"), storage = Paths.dotted(OpenBao.class, "bao", "storage");
         return Map.of(Paths.pointer(OpenBao.class, "bao", "storage"), List.of(
                 new Rule("!has(pack.values." + pg + ") || !has(values." + storage + ") || size(values." + storage + ") == 0")
-                        .message("storage is filled from the embedded postgres and must not be set")));
+                        .message("storage is filled from the embedded postgres and must not be set").id("storage-from-postgres")));
     }
 
     @Override
     public Meta meta() {
-        return new Meta("openbao", version).description("secrets").license("MPL-2.0").image(image).annotation("example.org/tier", "core");
+        return new Meta("openbao", version).description("secrets").license("MPL-2.0").image(image).annotation("example.org/tier", "core")
+                .dir("src/test/packs/openbao");
     }
 
     @Override

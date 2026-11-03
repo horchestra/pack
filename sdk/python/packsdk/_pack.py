@@ -12,7 +12,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
-from . import _yaml
+from . import _docs, _yaml
 from ._reflect import SchemaError, hints, is_pack, json_name, reflect, tags, unwrap
 from ._vocab import Meta, Root, Rule
 
@@ -89,8 +89,12 @@ def packs(root: Pack) -> list[Pack]:
 # ---- the artifact
 
 def schema(p: Pack) -> bytes:
-    """The pack's schema.json."""
-    text = json.dumps(reflect(p), separators=(",", ":"), ensure_ascii=False)
+    """The pack's schema.json, with its docs/ written into it."""
+    s = reflect(p)
+    d = _docs.load(_dir(p))
+    if d is not None:
+        _docs.apply(s, *d)
+    text = json.dumps(s, separators=(",", ":"), ensure_ascii=False)
     # encoding/json escapes these in strings; the artifact is the same byte for byte whichever SDK wrote it
     for ch, esc in (("<", "\\u003c"), (">", "\\u003e"), ("&", "\\u0026"), ("\u2028", "\\u2028"), ("\u2029", "\\u2029")):
         text = text.replace(ch, esc)

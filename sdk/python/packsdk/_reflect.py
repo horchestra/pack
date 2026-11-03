@@ -187,7 +187,13 @@ def reflect(p: Any) -> dict:
             _lookup(s, ptr)["x-pack-compute"] = expr
         except SchemaError as e:
             raise SchemaError(f"x-pack-compute {ptr}: {e}") from None
+    ids: dict[str, str] = {}
     for ptr, rules in p.pack_rules().items():
+        for r in rules:
+            if r.id and r.id in ids:
+                raise SchemaError(f'x-pack-rules: the id "{r.id}" is of a rule on {ids[r.id]} and on {ptr}')
+            if r.id:
+                ids[r.id] = ptr
         try:
             _lookup(s, ptr)["x-pack-rules"] = [r.to_json() for r in rules]
         except SchemaError as e:

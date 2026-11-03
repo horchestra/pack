@@ -204,7 +204,7 @@ public class OpenBao extends Pack {
         String pg = Paths.dotted(OpenBao.class, "postgres"), storage = Paths.dotted(OpenBao.class, "bao", "storage");
         return Map.of(Paths.pointer(OpenBao.class, "bao", "storage"), List.of(
                 new Rule("!has(pack.values." + pg + ") || !has(values." + storage + ") || size(values." + storage + ") == 0")
-                        .message("storage is filled from the embedded postgres and must not be set")));
+                        .message("storage is filled from the embedded postgres and must not be set").id("storage-from-postgres")));
     }
 
     public static void main(String[] args) {

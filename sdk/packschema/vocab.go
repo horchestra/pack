@@ -171,9 +171,14 @@ var RulePhases = []Phase{PreMutate, PostMutate}
 // Empty Phases means preMutate: the document as the operator wrote it, so a
 // rule never trips on what a formula filled in.
 type Rule struct {
+	// ID names the rule among the pack's, so that docs/<lang>.yaml can say its message (rules: {<id>: …}) in other
+	// languages; unique in the pack.
+	ID      string  `json:"id,omitempty"`
 	Rule    string  `json:"rule" jsonschema:"required,minLength=1"`
 	Message string  `json:"message,omitempty"`
 	Phases  []Phase `json:"phases,omitempty"`
+	// I18n is the message in the other languages of docs/, by language — written by the sdk, not the author.
+	I18n map[string]map[string]string `json:"x-pack-i18n,omitempty"`
 }
 
 // IsInstall says whether the phase belongs to the first installation rather

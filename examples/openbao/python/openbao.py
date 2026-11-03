@@ -148,6 +148,7 @@ class OpenBao(Pack):
     def pack_rules(self):
         pg, storage = dotted(self, lambda o: o.postgres), dotted(self, lambda o: o.bao.storage)
         return {pointer(self, lambda o: o.bao.storage): [Rule(
+            id="storage-from-postgres",
             rule=f"!has(pack.values.{pg}) || !has(values.{storage}) || size(values.{storage}) == 0",
             message="storage is filled from the embedded postgres and must not be set")]}
 

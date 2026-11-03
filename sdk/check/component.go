@@ -27,9 +27,16 @@ type fileAt struct {
 type Problem struct {
 	Path    string
 	Message string
+	// Warning is something to say that does not make the pack wrong — what its docs/ does not say.
+	Warning bool
 }
 
-func (p Problem) String() string { return p.Path + ": " + p.Message }
+func (p Problem) String() string {
+	if p.Warning {
+		return p.Path + ": warning: " + p.Message
+	}
+	return p.Path + ": " + p.Message
+}
 
 // Component is what the checks see of one component.
 type Component struct {
@@ -45,7 +52,7 @@ var nodeOwned = []string{"/etc/resolv.conf", "/etc/passwd", "/etc/group", "/etc/
 // Run performs the author checks of spec §2.6 on one component.
 func Run(c Component) ([]Problem, error) {
 	var ps []Problem
-	add := func(ptr, format string, args ...any) { ps = append(ps, Problem{ptr, fmt.Sprintf(format, args...)}) }
+	add := func(ptr, format string, args ...any) { ps = append(ps, Problem{Path: ptr, Message: fmt.Sprintf(format, args...)}) }
 
 	root, err := c.Schema.Root.RootAnnotation()
 	if err != nil {

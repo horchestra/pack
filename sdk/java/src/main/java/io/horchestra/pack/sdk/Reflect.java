@@ -207,13 +207,22 @@ final class Reflect {
             node.put("x-pack-compute", e.getValue());
             sortExtensions(node);
         }
+        Map<String, String> ids = new TreeMap<>();
         for (Map.Entry<String, List<Rule>> e : new TreeMap<>(p.packRules()).entrySet()) {
             List<Object> rules = new ArrayList<>();
-            for (Rule r : e.getValue()) rules.add(r.toJson());
+            for (Rule r : e.getValue()) {
+                if (!r.id.isEmpty() && ids.containsKey(r.id)) {
+                    throw new SchemaException("x-pack-rules: the id \"" + r.id + "\" is of a rule on " + ids.get(r.id) + " and on " + e.getKey());
+                }
+                if (!r.id.isEmpty()) ids.put(r.id, e.getKey());
+                rules.add(r.toJson());
+            }
             Map<String, Object> node = lookup(s, e.getKey(), "x-pack-rules");
             node.put("x-pack-rules", rules);
             sortExtensions(node);
         }
+        List<Docs.File> docs = Docs.load(java.nio.file.Path.of(p.meta().dir.isEmpty() ? "." : p.meta().dir));
+        if (docs != null) Docs.apply(s, docs);
         return s;
     }
 

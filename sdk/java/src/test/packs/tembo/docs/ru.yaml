@@ -1,0 +1,49 @@
+/:
+  title: Tembo
+  description: PostgreSQL с raft; узел без соседей — кластер из одного.
+/id:
+  title: Идентификатор узла
+  description: |
+    Строчные буквы, цифры и подчёркивания; если не задан — имя хоста,
+    дефисы заменены подчёркиваниями.
+/listen:
+  title: Прокси к первичному
+  description: Клиентский прокси к первичному узлу.
+/listen_ro:
+  title: Прокси к резервным
+  description: Клиентский прокси, распределяющий по резервным узлам.
+/db:
+  title: База узла
+  description: Файл bbolt узла.
+/pg_data:
+  title: Каталог данных
+  description: Каталог данных Postgres.
+/pg_port:
+  title: Порт Postgres
+  description: Порт самого Postgres за прокси, одинаковый на всех узлах.
+/pg_password:
+  title: Пароль суперпользователя
+  description: |
+    Одинаковый на всех узлах; задаёт только новый кластер, у работающего
+    меняется командой `tembo rotate-password`.
+/config:
+  title: Файл тегов
+  description: "Файл тегов узла: читается первым, окружение важнее."
+/node:
+  title: Узел
+  description: Теги узла и журнал, который он хранит.
+/node/raft_retention_log_size:
+  title: Хранимый журнал raft
+  description: Сколько байт применённого журнала raft хранить; более старое сжимается в снимок.
+/node/nofailover:
+  title: Никогда не первичный
+  description: Узел никогда не становится первичным.
+/node/nosync:
+  title: Никогда не синхронный
+  description: Узел никогда не становится синхронным резервным.
+/node/failover_priority:
+  title: Приоритет переключения
+  description: Больший приоритет предпочтительнее при переключении.
+groups:
+  proxies: Прокси
+  storage: Хранилище
