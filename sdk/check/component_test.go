@@ -284,3 +284,18 @@ func TestHookPhasesAreTheSagas(t *testing.T) {
 		}
 	}
 }
+
+// A hand-written diagnosis whose fix has a patch and no expr is a problem, as generation would refuse it.
+func TestDiagnosisFixNeedsItsExpr(t *testing.T) {
+	ps := run(t, `{"type":"object","properties":{"port":{"type":"integer"}},
+		"x-pack-diagnose":[{"id":"d","match":"x","cause":"c","fix":[{"patch":"/port"}]}]}`)
+	found := false
+	for _, p := range ps {
+		if strings.Contains(p.Message, "a patch with its expr, or a command") {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("problems = %v", ps)
+	}
+}

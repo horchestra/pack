@@ -191,6 +191,31 @@ class Root:
 
 
 @dataclass
+class Fix:
+    """A way out of a failure: a value for a setting (patch, its pointer, and expr, CEL) or a command to run."""
+    patch: str = ""
+    expr: str = ""
+    command: str = ""
+    why: str = ""
+
+    def to_json(self) -> dict:
+        return _drop({"patch": self.patch, "expr": self.expr, "command": self.command, "why": self.why})
+
+
+@dataclass
+class Diagnosis:
+    """One of x-pack-diagnose on the root: what a failure looks like (match, RE2 over the step's error and logs), what
+    it is (cause), the ways out (fix)."""
+    id: str
+    match: str
+    cause: str
+    fix: list[Fix] = _field(default_factory=list)
+
+    def to_json(self) -> dict:
+        return {"id": self.id, "match": self.match, "cause": self.cause, **_drop({"fix": [f.to_json() for f in self.fix]})}
+
+
+@dataclass
 class Suggest:
     """x-pack-suggest on a node: a CEL expression pack fill offers the answer of for a setting not given, with why —
     never a value by itself, as a formula's."""

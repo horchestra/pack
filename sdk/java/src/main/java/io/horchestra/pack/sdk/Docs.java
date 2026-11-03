@@ -53,6 +53,7 @@ final class Docs {
             "dependentRequired", "format", "contentEncoding", "contentMediaType", "contentSchema", "title", "description",
             "default", "deprecated", "readOnly", "writeOnly", "examples");
     private static final List<String> RULE_ORDER = List.of("id", "rule", "message", "phases", I18N);
+    private static final List<String> DIAG_ORDER = List.of("id", "match", "cause", "fix", I18N);
 
     private Docs() {
     }
@@ -278,6 +279,7 @@ final class Docs {
         final Map<String, Entry> fields = new LinkedHashMap<>();
         Map<String, String> groups = new LinkedHashMap<>();
         Map<String, String> rules = new LinkedHashMap<>();
+        Map<String, String> diagnose = new LinkedHashMap<>();
 
         File(String lang) {
             this.lang = lang;
@@ -293,16 +295,17 @@ final class Docs {
             if (k.equals("base")) {
                 if (!"true".equals(v)) throw new SchemaException("base: true or nothing");
                 f.base = true;
-            } else if (k.equals("groups") || k.equals("rules")) {
+            } else if (k.equals("groups") || k.equals("rules") || k.equals("diagnose")) {
                 if (!(v instanceof Map<?, ?> m) || !m.values().stream().allMatch(x -> x instanceof String)) {
                     throw new SchemaException(k + ": a mapping of an id to its text");
                 }
                 if (k.equals("groups")) f.groups = (Map<String, String>) m;
-                else f.rules = (Map<String, String>) m;
+                else if (k.equals("rules")) f.rules = (Map<String, String>) m;
+                else f.diagnose = (Map<String, String>) m;
             } else if (k.startsWith("/")) {
                 f.fields.put(k, entry(k, v));
             } else {
-                throw new SchemaException("\"" + k + "\": a key is a JSON Pointer of a field (/…, / the pack), base, groups or rules");
+                throw new SchemaException("\"" + k + "\": a key is a JSON Pointer of a field (/…, / the pack), base, groups, rules or diagnose");
             }
         }
         return f;
@@ -530,6 +533,28 @@ final class Docs {
                     ((Map<String, Object>) r.computeIfAbsent(I18N, k -> new TreeMap<>())).put(f.lang, new TreeMap<>(Map.of("message", kv.getValue())));
                 }
                 canonical(r, RULE_ORDER);
+            }
+        }
+        Map<String, Map<String, Object>> diags = new LinkedHashMap<>();
+        if (root.get("x-pack-diagnose") instanceof List<?> dl) {
+            for (Object d : dl) {
+                Map<String, Object> dm = (Map<String, Object>) d;
+                diags.put((String) dm.get("id"), dm);
+            }
+        }
+        for (File f : files) {
+            for (Map.Entry<String, String> kv : f.diagnose.entrySet()) {
+                Map<String, Object> d = diags.get(kv.getKey());
+                if (d == null) {
+                    throw new SchemaException(DIR + "/" + f.lang + ".yaml: diagnose: \"" + kv.getKey() + "\" is not the id of a diagnosis of the pack");
+                }
+                if (kv.getValue().isEmpty()) continue;
+                if (f.base) {
+                    d.put("cause", kv.getValue());
+                } else {
+                    ((Map<String, Object>) d.computeIfAbsent(I18N, k -> new TreeMap<>())).put(f.lang, new TreeMap<>(Map.of("cause", kv.getValue())));
+                }
+                canonical(d, DIAG_ORDER);
             }
         }
         List<String> langs = new ArrayList<>();

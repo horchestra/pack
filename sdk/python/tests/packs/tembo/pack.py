@@ -2,7 +2,7 @@
 
 from dataclasses import dataclass
 
-from packsdk import File, Meta, Pack, Readiness, Root, Secret, Suggest, Volume, field, pointer
+from packsdk import Diagnosis, File, Fix, Meta, Pack, Readiness, Root, Secret, Suggest, Volume, field, pointer
 
 
 @dataclass
@@ -44,6 +44,13 @@ class Tembo(Pack):
         return {pointer(self, lambda o: o.pg_port): Suggest(
             expr="has(facts.hosts) && facts.hosts.exists(h, has(facts.hosts[h].ports) && facts.hosts[h].ports.exists(p, p.port == 5433)) ? 5434 : null",
             why="5433 is taken on a host")}
+
+    # postgres that cannot listen because something on the host already does
+    def pack_diagnose(self):
+        return [Diagnosis(id="port-taken", match="address already in use.*:5433|could not bind .*5433",
+                          cause="postgres cannot listen: something on the host already listens on 5433",
+                          fix=[Fix(patch=pointer(self, lambda o: o.pg_port), expr="5434", why="the port next to it"),
+                               Fix(command="pack discover", why="see what listens on the hosts")])]
 
     def pack_root(self):
         return Root(

@@ -47,3 +47,5 @@
 groups:
   proxies: Прокси
   storage: Хранилище
+diagnose:
+  port-taken: "postgres не может слушать: на хосте 5433 уже занят"

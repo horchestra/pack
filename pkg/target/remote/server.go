@@ -50,6 +50,10 @@ const (
 	CapObserve = "observe"
 	// CapDiscover: the target tells the facts of where it installs (target.Discoverer).
 	CapDiscover = "discover"
+	// CapLogs: the target gives the tail of a key's logs (target.Logger).
+	CapLogs = "logs"
+	// CapHealth: the target says how the keys are (target.Checker).
+	CapHealth = "health"
 )
 
 // MaxMessage bounds one message between pack and a target: a unit carries the files of the pack — an archive of
@@ -284,6 +288,52 @@ func (s *server) Discover(ctx context.Context, req *remotepb.DiscoverRequest) (*
 		return nil, status.Error(codes.Internal, err.Error())
 	}
 	return &remotepb.DiscoverResponse{Facts: b}, nil
+}
+
+func (s *server) Logs(ctx context.Context, req *remotepb.LogsRequest) (*remotepb.LogsResponse, error) {
+	inst, err := s.installation()
+	if err != nil {
+		return nil, err
+	}
+	l, ok := inst.(target.Logger)
+	if !ok {
+		return nil, status.Errorf(codes.Unimplemented, "target %s gives no logs", s.name)
+	}
+	logs, err := l.Logs(ctx, req.Key, int(req.Lines))
+	if errors.Is(err, target.ErrNoLogs) {
+		return nil, status.Error(codes.Unimplemented, err.Error())
+	}
+	if err != nil {
+		return nil, status.Error(codes.Unavailable, err.Error())
+	}
+	b, err := json.Marshal(logs)
+	if err != nil {
+		return nil, status.Error(codes.Internal, err.Error())
+	}
+	return &remotepb.LogsResponse{Logs: b}, nil
+}
+
+func (s *server) Health(ctx context.Context, _ *remotepb.HealthRequest) (*remotepb.HealthResponse, error) {
+	inst, err := s.installation()
+	if err != nil {
+		return nil, err
+	}
+	c, ok := inst.(target.Checker)
+	if !ok {
+		return nil, status.Errorf(codes.Unimplemented, "target %s does not say how the keys are", s.name)
+	}
+	h, err := c.Health(ctx)
+	if errors.Is(err, target.ErrNoHealth) {
+		return nil, status.Error(codes.Unimplemented, err.Error())
+	}
+	if err != nil {
+		return nil, status.Error(codes.Unavailable, err.Error())
+	}
+	b, err := json.Marshal(h)
+	if err != nil {
+		return nil, status.Error(codes.Internal, err.Error())
+	}
+	return &remotepb.HealthResponse{Health: b}, nil
 }
 
 func (s *server) Observe(ctx context.Context, _ *remotepb.ObserveRequest) (*remotepb.ObserveResponse, error) {

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -50,6 +51,9 @@ func (s *Set) Apply(root *jsonschema.Schema) error {
 		return err
 	}
 	if err := s.rules(root); err != nil {
+		return err
+	}
+	if err := s.diagnoses(root); err != nil {
 		return err
 	}
 	extras(root)[KeyLangs] = s.Langs()
@@ -132,6 +136,30 @@ func (s *Set) rules(root *jsonschema.Schema) error {
 					r.I18n = map[string]map[string]string{}
 				}
 				r.I18n[f.Lang] = map[string]string{"message": msg}
+			}
+		}
+	}
+	return nil
+}
+
+// diagnoses says the causes of the pack's diagnoses by their id.
+func (s *Set) diagnoses(root *jsonschema.Schema) error {
+	ds, _ := root.Extras["x-pack-diagnose"].([]packschema.Diagnosis)
+	for _, f := range append([]*File{s.Base}, s.Others...) {
+		for id, cause := range f.Diagnose {
+			i := slices.IndexFunc(ds, func(d packschema.Diagnosis) bool { return d.ID == id })
+			if i < 0 {
+				return fmt.Errorf("%s/%s.yaml: diagnose: %q is not the id of a diagnosis of the pack", Dir, f.Lang, id)
+			}
+			switch {
+			case len(cause) == 0:
+			case f.Base:
+				ds[i].Cause = cause
+			default:
+				if ds[i].I18n == nil {
+					ds[i].I18n = map[string]map[string]string{}
+				}
+				ds[i].I18n[f.Lang] = map[string]string{"cause": cause}
 			}
 		}
 	}

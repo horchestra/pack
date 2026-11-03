@@ -2,6 +2,7 @@ package io.horchestra.pack.sdk.packs;
 
 import java.util.Map;
 
+import io.horchestra.pack.sdk.Diagnosis;
 import io.horchestra.pack.sdk.Paths;
 import io.horchestra.pack.sdk.Suggest;
 import io.horchestra.pack.sdk.Meta;
@@ -59,6 +60,15 @@ public class Tembo extends Pack {
         return new Meta("tembo", "0.2.0").description("PostgreSQL with raft").license("Apache-2.0")
                 .source("https://example.org/tembo").image("images/tembo:0.2.0")
                 .dir("src/test/packs/tembo");
+    }
+
+    /** Postgres that cannot listen because something on the host already does. */
+    @Override
+    public java.util.List<Diagnosis> packDiagnose() {
+        return java.util.List.of(new Diagnosis("port-taken", "address already in use.*:5433|could not bind .*5433",
+                "postgres cannot listen: something on the host already listens on 5433")
+                .patch(Paths.pointer(Tembo.class, "pgPort"), "5434", "the port next to it")
+                .command("pack discover", "see what listens on the hosts"));
     }
 
     /** The port next to the agent's own when a host of the target already listens on it. */

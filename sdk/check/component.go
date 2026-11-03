@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"maps"
 	"path"
+	"regexp"
 	"slices"
 	"sort"
 	"strings"
@@ -195,6 +196,23 @@ func Run(c Component) ([]Problem, error) {
 	}
 	if cycle := findCycle(reads); len(cycle) > 0 {
 		add(cycle, "x-pack-compute reads form a cycle")
+	}
+
+	// 2-. the diagnoses: a match that compiles, the expressions of their patches too
+	for _, d := range c.Schema.Root.Diagnoses {
+		if _, err := regexp.Compile(d.Match); err != nil {
+			add("/", "x-pack-diagnose %s: match: %v", d.ID, err)
+		}
+		for i, f := range d.Fix {
+			if (len(f.Patch) > 0) == (len(f.Command) > 0) || len(f.Patch) > 0 && len(f.Expr) == 0 {
+				add("/", "x-pack-diagnose %s: fix %d: a patch with its expr, or a command", d.ID, i)
+			}
+			if len(f.Expr) > 0 {
+				if _, err := compute.Compile(env, f.Expr); err != nil {
+					add(f.Patch, "x-pack-diagnose %s: fix %d does not compile: %v", d.ID, i, err)
+				}
+			}
+		}
 	}
 
 	// 2a. suggestions compile and type-check; one is no password's (a credential is a reference, never a value

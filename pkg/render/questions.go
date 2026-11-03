@@ -7,6 +7,7 @@ import (
 	"sort"
 
 	"github.com/horchestra/pack/pkg/bundle"
+	"github.com/horchestra/pack/sdk/compute"
 	"github.com/horchestra/pack/sdk/packschema"
 	"github.com/horchestra/pack/sdk/schema"
 )
@@ -161,4 +162,30 @@ func Ask(b *bundle.Bundle, v Values, ctx Context) (*Questions, error) {
 	}
 	sort.Slice(out.Questions, func(i, j int) bool { return out.Questions[i].Pointer < out.Questions[j].Pointer })
 	return out, nil
+}
+
+// Eval works an expression out as a formula of the key would be — with its values (the subtree of the key's pack),
+// the facts of its target, the other keys — on the values rendered as far as they go: what a diagnosis's fix reads.
+func Eval(b *bundle.Bundle, v Values, ctx Context, key, expr string) (any, error) {
+	r, err := newRender(b, ctx)
+	if err != nil {
+		return nil, err
+	}
+	if err := r.configure(v); err != nil {
+		return nil, err
+	}
+	if err := r.resolve(); err != nil {
+		return nil, err
+	}
+	if err := r.collect(); err != nil {
+		return nil, err
+	}
+	if err := r.mutate(); err != nil {
+		return nil, err
+	}
+	a, err := compute.Compile(r.env, expr)
+	if err != nil {
+		return nil, err
+	}
+	return r.eval(&formula{ptr: "/" + key, root: "/" + key, key: key, ast: a, reads: compute.Reads(a)}, r.doc, nil)
 }

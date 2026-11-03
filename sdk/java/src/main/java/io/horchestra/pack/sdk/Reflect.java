@@ -207,6 +207,25 @@ final class Reflect {
             node.put("x-pack-compute", e.getValue());
             sortExtensions(node);
         }
+        List<Diagnosis> diags = p.packDiagnose();
+        java.util.Set<String> seenDiag = new java.util.TreeSet<>();
+        List<Object> diagJson = new ArrayList<>();
+        for (Diagnosis d : diags) {
+            if (d.id.isEmpty() || d.match.isEmpty() || d.cause.isEmpty()) throw new SchemaException("x-pack-diagnose: a diagnosis needs an id, a match and a cause");
+            if (!seenDiag.add(d.id)) throw new SchemaException("x-pack-diagnose: the id \"" + d.id + "\" twice");
+            for (int i = 0; i < d.fix.size(); i++) {
+                Diagnosis.Fix f = d.fix.get(i);
+                if (f.patch().isEmpty() == f.command().isEmpty() || !f.patch().isEmpty() && f.expr().isEmpty()) {
+                    throw new SchemaException("x-pack-diagnose " + d.id + ": fix " + i + ": a patch with its expr, or a command");
+                }
+                if (!f.patch().isEmpty()) lookup(s, f.patch(), "x-pack-diagnose " + d.id);
+            }
+            diagJson.add(d.toJson());
+        }
+        if (!diagJson.isEmpty()) {
+            s.put("x-pack-diagnose", diagJson);
+            sortExtensions(s);
+        }
         for (Map.Entry<String, Suggest> e : new TreeMap<>(p.packSuggest()).entrySet()) {
             if (e.getValue().expr == null || e.getValue().expr.isEmpty()) throw new SchemaException("x-pack-suggest " + e.getKey() + ": no expression");
             Map<String, Object> node = lookup(s, e.getKey(), "x-pack-suggest");

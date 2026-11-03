@@ -77,6 +77,17 @@ func Gaps(s *schema.Schema) []Gap {
 			}
 		}
 	})
+	diags, _ := s.Root.Raw["x-pack-diagnose"].([]any)
+	for _, d := range diags {
+		dm, _ := d.(map[string]any)
+		id, _ := dm["id"].(string)
+		tr := translations(dm[KeyI18n])
+		for _, l := range others {
+			if len(tr[l]["cause"]) == 0 {
+				add("/", "diagnosis %s: no cause in %s", id, l)
+			}
+		}
+	}
 	groups, _ := s.Root.Raw[KeyGroups].([]any)
 	for _, g := range groups {
 		gm, _ := g.(map[string]any)
@@ -203,6 +214,19 @@ func Skeleton(s *schema.Schema, lang string) []byte {
 			}
 		}
 	})
+	if diags, _ := s.Root.Raw["x-pack-diagnose"].([]any); len(diags) > 0 {
+		b.WriteString("diagnose:\n")
+		for _, d := range diags {
+			dm, _ := d.(map[string]any)
+			id, _ := dm["id"].(string)
+			t, hint := text(dm, "cause")
+			if len(hint) > 0 {
+				writeComment(&b, base+": "+hint, 2)
+			}
+			writeKey(&b, id, 2)
+			writeScalar(&b, t, 2)
+		}
+	}
 	if len(ids) > 0 {
 		b.WriteString("rules:\n")
 		for _, id := range ids {

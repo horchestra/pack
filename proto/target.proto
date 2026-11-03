@@ -42,6 +42,10 @@ service Target {
   // Discover tells the facts of where the target installs — its hosts as they are — and changes nothing. Requires
   // the "discover" capability.
   rpc Discover(DiscoverRequest) returns (DiscoverResponse);
+  // Logs gives the tail of what a key's instances wrote, by instance. Requires the "logs" capability.
+  rpc Logs(LogsRequest) returns (LogsResponse);
+  // Health says how the keys of the installation are, by key. Requires the "health" capability.
+  rpc Health(HealthRequest) returns (HealthResponse);
   // Execute performs one step of the saga on the target and reports as it goes; the last event says whether the
   // step succeeded.
   rpc Execute(ExecuteRequest) returns (stream ExecuteEvent);
@@ -126,6 +130,24 @@ message DiscoverRequest {
 message DiscoverResponse {
   // target.Facts as JSON
   bytes facts = 1;
+}
+
+message LogsRequest {
+  string key = 1;
+  // how many lines of each instance, the last ones
+  int64 lines = 2;
+}
+
+message LogsResponse {
+  // map[instance][]line as JSON
+  bytes logs = 1;
+}
+
+message HealthRequest {}
+
+message HealthResponse {
+  // map[key]target.Health as JSON
+  bytes health = 1;
 }
 
 message Observed {

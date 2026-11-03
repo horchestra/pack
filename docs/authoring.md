@@ -87,6 +87,24 @@ func (c *Config) PackSuggest() map[string]packschema.Suggest {
 
 A suggestion on a password, or beside a formula, is a problem of `pack check`.
 
+A **diagnosis** (`PackDiagnose`, `pack_diagnose`, `packDiagnose`) says what a failure of the pack looks like — `Match`,
+RE2 over the failed step's error and the lines of its logs — what it is (`Cause`) and the ways out: a value for a
+setting (`Patch`, its pointer, and `Expr`, CEL with the facts) or a command. `pack diagnose` tries the pack's before
+the kinds every pack shares, and offers the fix:
+
+```go
+func (c *Config) PackDiagnose() []packschema.Diagnosis {
+	return []packschema.Diagnosis{{
+		ID:    "port-taken",
+		Match: `address already in use.*:5433`,
+		Cause: "postgres cannot listen: something on the host already listens on 5433",
+		Fix:   []packschema.Fix{{Patch: packschema.Pointer(c, &c.PGPort), Expr: "5434", Why: "the port next to it"}},
+	}}
+}
+```
+
+The cause is said in other languages by `diagnose: {<id>: …}` of `docs/<lang>.yaml`.
+
 The expression sees `values` (the whole document), `pack.values.<key>` and `pack.keys.<key>` (another key's values
 and address), `limits` and `me`. A field that is not there is an error at generation, not a broken schema; so is a name
 an expression cannot select (a dash, a dot).
@@ -167,6 +185,8 @@ groups:
   logging: Logging
 rules:
   storage-from-postgres: storage is filled from the embedded postgres and must not be set
+diagnose:
+  port-taken: "postgres cannot listen: the port is taken"
 ```
 
 ```yaml

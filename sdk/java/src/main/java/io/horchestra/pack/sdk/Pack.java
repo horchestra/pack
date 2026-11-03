@@ -29,6 +29,11 @@ public abstract class Pack {
         return Map.of();
     }
 
+    /** Optional: what failures of the pack look like and the ways out of them (pack diagnose). */
+    public List<Diagnosis> packDiagnose() {
+        return List.of();
+    }
+
     /** Optional: {pointer: suggestion} that pack fill offers for a setting not given. */
     public Map<String, Suggest> packSuggest() {
         return Map.of();

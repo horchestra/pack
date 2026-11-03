@@ -57,3 +57,5 @@
 groups:
   proxies: Proxies
   storage: Storage
+diagnose:
+  port-taken: "postgres cannot listen: something on the host already listens on 5433"

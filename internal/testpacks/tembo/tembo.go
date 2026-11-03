@@ -81,3 +81,16 @@ func (c *Config) PackSuggest() map[string]packschema.Suggest {
 		},
 	}
 }
+
+// PackDiagnose: postgres that cannot listen because something on the host already does.
+func (c *Config) PackDiagnose() []packschema.Diagnosis {
+	return []packschema.Diagnosis{{
+		ID:    "port-taken",
+		Match: `address already in use.*:5433|could not bind .*5433`,
+		Cause: "postgres cannot listen: something on the host already listens on 5433",
+		Fix: []packschema.Fix{
+			{Patch: packschema.Pointer(c, &c.PGPort), Expr: "5434", Why: "the port next to it"},
+			{Command: "pack discover", Why: "see what listens on the hosts"},
+		},
+	}}
+}

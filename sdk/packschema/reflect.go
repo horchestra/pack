@@ -6,6 +6,7 @@ import (
 	"maps"
 	"path/filepath"
 	"reflect"
+	"regexp"
 	"slices"
 	"strings"
 
@@ -27,6 +28,9 @@ type Computer interface{ PackCompute() map[string]string }
 // Suggester gives the suggestions, keyed by JSON Pointer like the formulas: a value pack fill offers for a setting
 // the operator did not give — never one it takes by itself, as a formula's.
 type Suggester interface{ PackSuggest() map[string]Suggest }
+
+// Diagnoser gives what failures of the pack look like and the ways out of them: x-pack-diagnose on the root.
+type Diagnoser interface{ PackDiagnose() []Diagnosis }
 
 // Ruler gives the validation rules, keyed by JSON Pointer like the formulas:
 // every rule of the list hangs on the node as x-pack-rules and must hold of
@@ -80,6 +84,35 @@ func Reflect(defaults any, o Options) (*jsonschema.Schema, error) {
 				return nil, fmt.Errorf("x-pack-compute %s: %w", ptr, err)
 			}
 			extras(node)["x-pack-compute"] = expr
+		}
+	}
+	if c, ok := defaults.(Diagnoser); ok {
+		ds := c.PackDiagnose()
+		seen := map[string]bool{}
+		for _, d := range ds {
+			if len(d.ID) == 0 || len(d.Match) == 0 || len(d.Cause) == 0 {
+				return nil, fmt.Errorf("x-pack-diagnose: a diagnosis needs an id, a match and a cause: %+v", d)
+			}
+			if seen[d.ID] {
+				return nil, fmt.Errorf("x-pack-diagnose: the id %q twice", d.ID)
+			}
+			seen[d.ID] = true
+			if _, err := regexp.Compile(d.Match); err != nil {
+				return nil, fmt.Errorf("x-pack-diagnose %s: match: %w", d.ID, err)
+			}
+			for i, f := range d.Fix {
+				if (len(f.Patch) > 0) == (len(f.Command) > 0) || len(f.Patch) > 0 && len(f.Expr) == 0 {
+					return nil, fmt.Errorf("x-pack-diagnose %s: fix %d: a patch with its expr, or a command", d.ID, i)
+				}
+				if len(f.Patch) > 0 {
+					if _, err := lookup(s, f.Patch); err != nil {
+						return nil, fmt.Errorf("x-pack-diagnose %s: fix %d: %s: %w", d.ID, i, f.Patch, err)
+					}
+				}
+			}
+		}
+		if len(ds) > 0 {
+			extras(s)["x-pack-diagnose"] = slices.Clone(ds)
 		}
 	}
 	if c, ok := defaults.(Suggester); ok {

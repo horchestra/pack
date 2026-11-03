@@ -237,6 +237,7 @@ class File:
         self.fields: dict[str, dict] = {}  # pointer → {title, description, examples, group}, in the order of the file
         self.groups: dict[str, str] = {}
         self.rules: dict[str, str] = {}
+        self.diagnose: dict[str, str] = {}
 
 
 def parse_file(lang: str, src: str) -> File:
@@ -246,17 +247,14 @@ def parse_file(lang: str, src: str) -> File:
             if v != "true":
                 raise SchemaError("base: true or nothing")
             f.base = True
-        elif k in ("groups", "rules"):
+        elif k in ("groups", "rules", "diagnose"):
             if not isinstance(v, dict) or not all(isinstance(x, str) for x in v.values()):
                 raise SchemaError(f"{k}: a mapping of an id to its text")
-            if k == "groups":
-                f.groups = v
-            else:
-                f.rules = v
+            setattr(f, k, v)
         elif k.startswith("/"):
             f.fields[k] = _entry(k, v)
         else:
-            raise SchemaError(f'"{k}": a key is a JSON Pointer of a field (/…, / the pack), base, groups or rules')
+            raise SchemaError(f'"{k}": a key is a JSON Pointer of a field (/…, / the pack), base, groups, rules or diagnose')
     return f
 
 
@@ -437,4 +435,16 @@ def apply(root: dict, base: File, others: list[File]) -> None:
                 r["message"] = msg
             else:
                 r.setdefault(KEY_I18N, {})[f.lang] = {"message": msg}
+    diags = {d["id"]: d for d in root.get("x-pack-diagnose", [])}
+    for f in [base, *others]:
+        for did, cause in f.diagnose.items():
+            d = diags.get(did)
+            if d is None:
+                raise SchemaError(f'{DIR}/{f.lang}.yaml: diagnose: "{did}" is not the id of a diagnosis of the pack')
+            if not cause:
+                continue
+            if f.base:
+                d["cause"] = cause
+            else:
+                d.setdefault(KEY_I18N, {})[f.lang] = {"cause": cause}
     root[KEY_LANGS] = [base.lang, *(f.lang for f in others)]

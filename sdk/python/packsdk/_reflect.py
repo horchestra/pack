@@ -187,6 +187,24 @@ def reflect(p: Any) -> dict:
             _lookup(s, ptr)["x-pack-compute"] = expr
         except SchemaError as e:
             raise SchemaError(f"x-pack-compute {ptr}: {e}") from None
+    diags = p.pack_diagnose()
+    seen: set[str] = set()
+    for d in diags:
+        if not d.id or not d.match or not d.cause:
+            raise SchemaError(f"x-pack-diagnose: a diagnosis needs an id, a match and a cause: {d}")
+        if d.id in seen:
+            raise SchemaError(f'x-pack-diagnose: the id "{d.id}" twice')
+        seen.add(d.id)
+        for i, fx in enumerate(d.fix):
+            if bool(fx.patch) == bool(fx.command) or (fx.patch and not fx.expr):
+                raise SchemaError(f"x-pack-diagnose {d.id}: fix {i}: a patch with its expr, or a command")
+            if fx.patch:
+                try:
+                    _lookup(s, fx.patch)
+                except SchemaError as e:
+                    raise SchemaError(f"x-pack-diagnose {d.id}: fix {i}: {fx.patch}: {e}") from None
+    if diags:
+        s["x-pack-diagnose"] = [d.to_json() for d in diags]
     for ptr, sg in p.pack_suggest().items():
         if not sg.expr:
             raise SchemaError(f"x-pack-suggest {ptr}: no expression")

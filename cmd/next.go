@@ -17,6 +17,7 @@ import (
 	"github.com/horchestra/pack/internal/oci"
 	"github.com/horchestra/pack/internal/release"
 	"github.com/horchestra/pack/internal/session"
+	"github.com/horchestra/pack/pkg/diagnose"
 	"github.com/horchestra/pack/pkg/environment"
 	"github.com/horchestra/pack/pkg/render"
 	"github.com/horchestra/pack/pkg/target"
@@ -58,7 +59,7 @@ model that follows it instead of planning: with --json it is {state, blocking, n
   unrefreshed  the pack or a target is not brought    pack refresh
   unfilled     settings the pack requires not given   pack fill, pack answer, pack check
   invalid      values the schema or a rule refuses    edit values.yaml, pack check
-  failed       a saga failed or was cut short         pack log, pack apply, pack rollback
+  failed       a saga failed or was cut short         pack diagnose, pack apply, pack rollback
   planned      what is wanted is not what is there    pack plan, pack apply
   applied      what is there is what is wanted        —`,
 	Args: cobra.NoArgs,
@@ -125,8 +126,16 @@ func stateNow(ctx context.Context) nextState {
 		if len(rec.Saga.Error) > 0 {
 			msg += ": " + rec.Saga.Error
 		}
-		return nextState{State: StateFailed, Blocking: []apiError{{Code: CodeSagaUnfinished, Message: msg}},
-			Next: []string{"pack log", "pack apply", "pack rollback"}}
+		next := []string{"pack diagnose", "pack log", "pack apply", "pack rollback"}
+		if c, err := caseOf(ctx, s, rec, false); err == nil { // the journal's alone: next asks no target for logs
+			msg += " — " + c.Class + ": " + c.Cause
+			if c.Class == diagnose.Unknown || len(c.Remedies) == 0 {
+				next = append(next, "a person should look: pack diagnose cannot tell what this is")
+			} else if len(c.Remedies) > 0 {
+				next = append([]string{"pack diagnose", "pack diagnose --apply " + c.Remedies[0].ID}, next[1:]...)
+			}
+		}
+		return nextState{State: StateFailed, Blocking: []apiError{{Code: CodeSagaUnfinished, Message: msg}}, Next: next}
 	}
 	c, err := s.Prepare(false)
 	if err != nil {

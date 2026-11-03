@@ -80,7 +80,7 @@ func TestNextFailed(t *testing.T) {
 		t.Fatal(err)
 	}
 	n := whatNext(context.Background())
-	if n.State != StateFailed || n.Blocking[0].Code != CodeSagaUnfinished || !strings.Contains(n.Blocking[0].Message, "boom") || n.Next[0] != "pack log" {
+	if n.State != StateFailed || n.Blocking[0].Code != CodeSagaUnfinished || !strings.Contains(n.Blocking[0].Message, "boom") || n.Next[0] != "pack diagnose" {
 		t.Errorf("a failed saga: %+v", n)
 	}
 }

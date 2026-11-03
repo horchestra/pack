@@ -350,6 +350,44 @@ func (r *remote) Discover(ctx context.Context, hosts []string) (*target.Facts, e
 	return &f, nil
 }
 
+// Logs asks the target the tail of a key's logs; a target that did not declare CapLogs gives none.
+func (r *remote) Logs(ctx context.Context, key string, lines int) (map[string][]string, error) {
+	if !slices.Contains(r.p.caps, CapLogs) {
+		return nil, target.ErrNoLogs
+	}
+	resp, err := r.p.client.Logs(ctx, &remotepb.LogsRequest{Key: key, Lines: int64(lines)})
+	if err != nil {
+		if s, ok := status.FromError(err); ok && s.Code() == codes.Unimplemented {
+			return nil, target.ErrNoLogs
+		}
+		return nil, unwrap(err)
+	}
+	out := map[string][]string{}
+	if err := json.Unmarshal(resp.Logs, &out); err != nil {
+		return nil, fmt.Errorf("the logs of target %s: %w", r.p.name, err)
+	}
+	return out, nil
+}
+
+// Health asks the target how the keys are; a target that did not declare CapHealth cannot tell.
+func (r *remote) Health(ctx context.Context) (map[string]target.Health, error) {
+	if !slices.Contains(r.p.caps, CapHealth) {
+		return nil, target.ErrNoHealth
+	}
+	resp, err := r.p.client.Health(ctx, &remotepb.HealthRequest{})
+	if err != nil {
+		if s, ok := status.FromError(err); ok && s.Code() == codes.Unimplemented {
+			return nil, target.ErrNoHealth
+		}
+		return nil, unwrap(err)
+	}
+	out := map[string]target.Health{}
+	if err := json.Unmarshal(resp.Health, &out); err != nil {
+		return nil, fmt.Errorf("the health of target %s: %w", r.p.name, err)
+	}
+	return out, nil
+}
+
 // Observe asks the target what it holds; a target that did not declare CapObserve cannot tell.
 func (r *remote) Observe(ctx context.Context) (map[string]target.Observed, error) {
 	if !slices.Contains(r.p.caps, CapObserve) {
@@ -409,4 +447,6 @@ var (
 	_ target.Recorder     = (*remote)(nil)
 	_ target.Observer     = (*remote)(nil)
 	_ target.Discoverer   = (*remote)(nil)
+	_ target.Logger       = (*remote)(nil)
+	_ target.Checker      = (*remote)(nil)
 )

@@ -24,6 +24,7 @@ func init() {
 			t.observe = systemOf(installation)
 		}
 		t.facts = settings["facts"]
+		t.logs = settings["logs"]
 		return t, nil
 	})
 }
@@ -42,6 +43,47 @@ type Target struct {
 	observe *system
 	// facts is the file of the facts it tells (facts: <path>, target.Facts as JSON): a stand of hosts written down.
 	facts string
+	// logs is the file of the logs it gives (logs: <path>, {key: {instance: [line]}} as JSON).
+	logs string
+}
+
+// Logs gives the last lines of the key's of the file the settings name (logs:); none named — it gives none.
+func (t *Target) Logs(_ context.Context, key string, lines int) (map[string][]string, error) {
+	if len(t.logs) == 0 {
+		return nil, target.ErrNoLogs
+	}
+	b, err := os.ReadFile(t.logs)
+	if err != nil {
+		return nil, err
+	}
+	var all map[string]map[string][]string
+	if err := json.Unmarshal(b, &all); err != nil {
+		return nil, fmt.Errorf("logs %s: %w", t.logs, err)
+	}
+	out := map[string][]string{}
+	for inst, ls := range all[key] {
+		if lines > 0 && len(ls) > lines {
+			ls = ls[len(ls)-lines:]
+		}
+		out[inst] = ls
+	}
+	return out, nil
+}
+
+// Health says every key the target holds is ready: in memory nothing fails by itself. A target not set up with
+// observe: true does not tell.
+func (t *Target) Health(context.Context) (map[string]target.Health, error) {
+	sys := t.observe
+	if sys == nil {
+		return nil, target.ErrNoHealth
+	}
+	sys.mu.Lock()
+	defer sys.mu.Unlock()
+	out := map[string]target.Health{}
+	for k := range sys.held {
+		out[k] = target.Health{Ready: true, Instances: []target.InstanceHealth{{Name: k, Ready: true, State: "held"}}}
+	}
+	return out, nil
 }
 
 // Discover tells the facts of the file the settings name (facts:), of the hosts asked for — all of them when none

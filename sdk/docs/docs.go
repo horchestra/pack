@@ -59,12 +59,13 @@ type Entry struct {
 
 // File is one language.
 type File struct {
-	Lang   string
-	Base   bool
-	Fields map[string]Entry
-	Order  []string // the pointers, in the order of the file
-	Groups map[string]string
-	Rules  map[string]string
+	Lang     string
+	Base     bool
+	Fields   map[string]Entry
+	Order    []string // the pointers, in the order of the file
+	Groups   map[string]string
+	Rules    map[string]string
+	Diagnose map[string]string // the causes of the pack's diagnoses, by id
 }
 
 // Set is the documentation of a pack: the base language and the others, by name.
@@ -164,7 +165,7 @@ func ParseFile(lang string, src []byte) (*File, error) {
 	if err != nil {
 		return nil, err
 	}
-	f := &File{Lang: lang, Fields: map[string]Entry{}, Groups: map[string]string{}, Rules: map[string]string{}}
+	f := &File{Lang: lang, Fields: map[string]Entry{}, Groups: map[string]string{}, Rules: map[string]string{}, Diagnose: map[string]string{}}
 	for _, k := range m.Keys {
 		v := m.Values[k]
 		switch {
@@ -173,15 +174,18 @@ func ParseFile(lang string, src []byte) (*File, error) {
 				return nil, fmt.Errorf("base: true or nothing")
 			}
 			f.Base = true
-		case k == "groups" || k == "rules":
+		case k == "groups" || k == "rules" || k == "diagnose":
 			texts, err := strings2(k, v)
 			if err != nil {
 				return nil, err
 			}
-			if k == "groups" {
+			switch k {
+			case "groups":
 				f.Groups = texts
-			} else {
+			case "rules":
 				f.Rules = texts
+			default:
+				f.Diagnose = texts
 			}
 		case strings.HasPrefix(k, "/"):
 			e, err := entry(k, v)
@@ -191,7 +195,7 @@ func ParseFile(lang string, src []byte) (*File, error) {
 			f.Fields[k] = e
 			f.Order = append(f.Order, k)
 		default:
-			return nil, fmt.Errorf("%q: a key is a JSON Pointer of a field (/…, / the pack), base, groups or rules", k)
+			return nil, fmt.Errorf("%q: a key is a JSON Pointer of a field (/…, / the pack), base, groups, rules or diagnose", k)
 		}
 	}
 	return f, nil

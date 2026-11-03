@@ -165,6 +165,27 @@ var Phases = []Phase{PreInstall, PostInstall, PreUpgrade, PostUpgrade, PreDowngr
 // effective document they produce.
 var RulePhases = []Phase{PreMutate, PostMutate}
 
+// Diagnosis is one of `x-pack-diagnose` on the root of a pack: what a failure of the pack looks like (Match, a regular
+// expression of RE2 over the error of the failed step and the lines of its logs), what it is (Cause, said in other
+// languages by docs/<lang>.yaml's diagnose:), and the ways out pack diagnose offers.
+type Diagnosis struct {
+	ID    string `json:"id" jsonschema:"required,minLength=1"`
+	Match string `json:"match" jsonschema:"required,minLength=1"`
+	Cause string `json:"cause" jsonschema:"required,minLength=1"`
+	Fix   []Fix  `json:"fix,omitempty"`
+	// I18n is the cause in the other languages of docs/ — written by the sdk, not the author.
+	I18n map[string]map[string]string `json:"x-pack-i18n,omitempty"`
+}
+
+// Fix is a way out of a failure: a value for a setting — Patch, the setting's pointer in the pack, and Expr, CEL over
+// what a formula reads (the facts among it) — or a command to run, Command. Why says what it does.
+type Fix struct {
+	Patch   string `json:"patch,omitempty"`
+	Expr    string `json:"expr,omitempty"`
+	Command string `json:"command,omitempty"`
+	Why     string `json:"why,omitempty"`
+}
+
 // Suggest is `x-pack-suggest` on a node: a CEL expression over what a formula reads — the facts of the key's
 // target (facts), the values, the other keys (pack) — whose answer pack fill offers for the setting, with why; null
 // offers nothing. The operator, or a model, takes it or not: a suggestion is never a value by itself.

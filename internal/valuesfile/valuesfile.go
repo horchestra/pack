@@ -39,6 +39,7 @@ const (
 	FromDefault  = "default"
 	FromCompute  = "compute"
 	FromLLM      = "llm"
+	FromDiagnose = "diagnose"
 )
 
 // Source is where a value came from: the value as it was written, so that a value the operator changed since is

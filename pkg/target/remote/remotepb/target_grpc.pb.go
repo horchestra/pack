@@ -46,6 +46,8 @@ const (
 	Target_DeleteInstalled_FullMethodName = "/pack.target.v1.Target/DeleteInstalled"
 	Target_Observe_FullMethodName         = "/pack.target.v1.Target/Observe"
 	Target_Discover_FullMethodName        = "/pack.target.v1.Target/Discover"
+	Target_Logs_FullMethodName            = "/pack.target.v1.Target/Logs"
+	Target_Health_FullMethodName          = "/pack.target.v1.Target/Health"
 	Target_Execute_FullMethodName         = "/pack.target.v1.Target/Execute"
 )
 
@@ -71,6 +73,10 @@ type TargetClient interface {
 	// Discover tells the facts of where the target installs — its hosts as they are — and changes nothing. Requires
 	// the "discover" capability.
 	Discover(ctx context.Context, in *DiscoverRequest, opts ...grpc.CallOption) (*DiscoverResponse, error)
+	// Logs gives the tail of what a key's instances wrote, by instance. Requires the "logs" capability.
+	Logs(ctx context.Context, in *LogsRequest, opts ...grpc.CallOption) (*LogsResponse, error)
+	// Health says how the keys of the installation are, by key. Requires the "health" capability.
+	Health(ctx context.Context, in *HealthRequest, opts ...grpc.CallOption) (*HealthResponse, error)
 	// Execute performs one step of the saga on the target and reports as it goes; the last event says whether the
 	// step succeeded.
 	Execute(ctx context.Context, in *ExecuteRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[ExecuteEvent], error)
@@ -164,6 +170,26 @@ func (c *targetClient) Discover(ctx context.Context, in *DiscoverRequest, opts .
 	return out, nil
 }
 
+func (c *targetClient) Logs(ctx context.Context, in *LogsRequest, opts ...grpc.CallOption) (*LogsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(LogsResponse)
+	err := c.cc.Invoke(ctx, Target_Logs_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *targetClient) Health(ctx context.Context, in *HealthRequest, opts ...grpc.CallOption) (*HealthResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(HealthResponse)
+	err := c.cc.Invoke(ctx, Target_Health_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *targetClient) Execute(ctx context.Context, in *ExecuteRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[ExecuteEvent], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	stream, err := c.cc.NewStream(ctx, &Target_ServiceDesc.Streams[0], Target_Execute_FullMethodName, cOpts...)
@@ -205,6 +231,10 @@ type TargetServer interface {
 	// Discover tells the facts of where the target installs — its hosts as they are — and changes nothing. Requires
 	// the "discover" capability.
 	Discover(context.Context, *DiscoverRequest) (*DiscoverResponse, error)
+	// Logs gives the tail of what a key's instances wrote, by instance. Requires the "logs" capability.
+	Logs(context.Context, *LogsRequest) (*LogsResponse, error)
+	// Health says how the keys of the installation are, by key. Requires the "health" capability.
+	Health(context.Context, *HealthRequest) (*HealthResponse, error)
 	// Execute performs one step of the saga on the target and reports as it goes; the last event says whether the
 	// step succeeded.
 	Execute(*ExecuteRequest, grpc.ServerStreamingServer[ExecuteEvent]) error
@@ -241,6 +271,12 @@ func (UnimplementedTargetServer) Observe(context.Context, *ObserveRequest) (*Obs
 }
 func (UnimplementedTargetServer) Discover(context.Context, *DiscoverRequest) (*DiscoverResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method Discover not implemented")
+}
+func (UnimplementedTargetServer) Logs(context.Context, *LogsRequest) (*LogsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method Logs not implemented")
+}
+func (UnimplementedTargetServer) Health(context.Context, *HealthRequest) (*HealthResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method Health not implemented")
 }
 func (UnimplementedTargetServer) Execute(*ExecuteRequest, grpc.ServerStreamingServer[ExecuteEvent]) error {
 	return status.Error(codes.Unimplemented, "method Execute not implemented")
@@ -410,6 +446,42 @@ func _Target_Discover_Handler(srv interface{}, ctx context.Context, dec func(int
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Target_Logs_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(LogsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(TargetServer).Logs(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Target_Logs_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TargetServer).Logs(ctx, req.(*LogsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Target_Health_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(HealthRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(TargetServer).Health(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Target_Health_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TargetServer).Health(ctx, req.(*HealthRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _Target_Execute_Handler(srv interface{}, stream grpc.ServerStream) error {
 	m := new(ExecuteRequest)
 	if err := stream.RecvMsg(m); err != nil {
@@ -459,6 +531,14 @@ var Target_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "Discover",
 			Handler:    _Target_Discover_Handler,
+		},
+		{
+			MethodName: "Logs",
+			Handler:    _Target_Logs_Handler,
+		},
+		{
+			MethodName: "Health",
+			Handler:    _Target_Health_Handler,
 		},
 	},
 	Streams: []grpc.StreamDesc{

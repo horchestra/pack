@@ -34,14 +34,15 @@ type Node struct {
 	Required             []string
 	AdditionalProperties *bool
 
-	Compute string
-	Suggest *packschema.Suggest
-	Rules   []packschema.Rule
-	File    *packschema.File // the file of Root.Content written from this subtree, when there is one
-	Arg     *packschema.Arg
-	Env     string
-	Mount   string
-	XPack   json.RawMessage // x-pack: Root on a component root, Key on a composition key
+	Compute   string
+	Suggest   *packschema.Suggest
+	Diagnoses []packschema.Diagnosis // on a pack's root
+	Rules     []packschema.Rule
+	File      *packschema.File // the file of Root.Content written from this subtree, when there is one
+	Arg       *packschema.Arg
+	Env       string
+	Mount     string
+	XPack     json.RawMessage // x-pack: Root on a component root, Key on a composition key
 
 	Raw map[string]any
 }
@@ -214,6 +215,19 @@ func parseNodeOrdered(m map[string]any, ptr string, orders map[string][]string) 
 			return nil, fmt.Errorf("%s: x-pack-compute must be a non-empty string", ptr)
 		}
 		n.Compute = s
+	}
+	if ds, ok := m["x-pack-diagnose"]; ok {
+		l, ok := ds.([]any)
+		if !ok {
+			return nil, fmt.Errorf("%s: x-pack-diagnose must be a list", ptr)
+		}
+		for i, d := range l {
+			var dg packschema.Diagnosis
+			if err := strict(d, &dg); err != nil {
+				return nil, fmt.Errorf("%s: x-pack-diagnose/%d: %w", ptr, i, err)
+			}
+			n.Diagnoses = append(n.Diagnoses, dg)
+		}
 	}
 	if sg, ok := m["x-pack-suggest"]; ok {
 		n.Suggest = &packschema.Suggest{}
