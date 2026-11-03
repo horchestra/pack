@@ -155,6 +155,9 @@ func stateNow(ctx context.Context) nextState {
 		return stopped(err)
 	}
 	if len(c.Plan.Steps) > 0 {
+		if err := approved(s, c.Plan, "", howApply); err != nil {
+			return nextState{State: StatePlanned, Blocking: []apiError{classify(err)}, Next: nextOf(err, CodeNeedsApproval)}
+		}
 		return nextState{State: StatePlanned, Next: []string{"pack plan", "pack apply"}}
 	}
 	return nextState{State: StateApplied, Next: []string{}}
@@ -167,7 +170,7 @@ func stopped(err error) nextState {
 	if e.Code == CodeNotRefreshed {
 		state = StateUnrefreshed
 	}
-	next := nextFor(e.Code)
+	next := nextOf(err, e.Code)
 	if next == nil {
 		next = []string{}
 	}

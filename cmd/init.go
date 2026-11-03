@@ -315,6 +315,9 @@ values.yaml its settings. Work through the pack command; do not edit .pack/ or r
 6. ` + "`pack refresh --upgrade`" + ` brings the version the pack's tag has now; ` + "`pack values write`" + ` then
    writes values.yaml for it, the values kept.
 
+An apply refused with needs_approval is a plan with risks (data, credentials, a downgrade …): show
+it to a person; ` + "`--approve`" + ` is theirs to give, not yours.
+
 Stop and ask a person when a plan removes something that holds data, when a problem of pack check is not
 about a value, or when you are not sure what a setting means.
 `

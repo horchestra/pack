@@ -57,6 +57,27 @@ The record is written after every change. A saga that was cut short (Ctrl-C twic
 
 `pack rollback` with nothing unfinished runs a saga **to the version the last one replaced**.
 
+## What an apply does unasked
+
+`run.approve` in `env.yaml` says it. `auto-safe`, the default, applies a plan without a risk and refuses one with
+them; `plan` refuses every plan that does something; `auto` refuses none. The risks of a plan are in it (`pack plan`,
+`--json`'s `risks`):
+
+| risk           | what                                                                   |
+|----------------|------------------------------------------------------------------------|
+| `data`         | a key with data volumes is dropped                                     |
+| `secret`       | a key's credentials change                                             |
+| `downgrade`    | a key goes back a version                                              |
+| `savepoint`    | an upgrade past a savepoint: a failure keeps what is before it         |
+| `irreversible` | a step that cannot be undone (a hook without compensate)               |
+
+A plan refused is not begun: the error is `needs_approval`, its risks the problems. The plan says its digest
+(`plan sha256:…`), and `pack apply --approve <digest>` applies that very plan, and refuses one that changed since it
+was shown. `rollback` and `delete` take `--approve` the same way, the digest
+their `--dry-run` says, and a refusal names the command to run again (`pack rollback --to 3 --approve <digest>`).
+Taking an installation away is no risk of itself (the data and the credentials stay), and neither is undoing an
+unfinished saga — recovery is not held back —, so `delete` and that `rollback` ask only under `plan`.
+
 ## Revisions
 
 Every saga that ends is a **revision** of the installation, in the record's `history`: its number, when, the pack (by

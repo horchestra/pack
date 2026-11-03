@@ -109,7 +109,7 @@ type Plan struct {
 	Pack      string   `json:"pack"`
 	From      string   `json:"from,omitempty"` // "" for a first installation
 	To        string   `json:"to"`
-	Direction string   `json:"direction"` // install | upgrade | downgrade | uninstall
+	Direction string   `json:"direction"` // install | upgrade | downgrade | uninstall | undo
 	Order     []string `json:"order"`
 	Changes   []Change `json:"changes"`
 	Steps     []Step   `json:"steps"`
@@ -119,6 +119,9 @@ type Plan struct {
 	// Rollback says how an apply of a key that changes version is undone
 	// beyond applying the previous unit: the downgrade hooks around it.
 	Rollback map[string]KeyRollback `json:"rollback,omitempty"`
+	// Risks are what an apply should not do unasked, Digest what --approve names (Seal).
+	Risks  []Risk `json:"risks,omitempty"`
+	Digest string `json:"digest,omitempty"`
 }
 
 // KeyRollback is what undoing a key's apply runs around applying its previous
@@ -805,6 +808,12 @@ func (p *Plan) Text() string {
 	}
 	for _, w := range p.Warnings {
 		_, _ = fmt.Fprintf(&b, "warning: %s\n", w)
+	}
+	for _, r := range p.Risks {
+		_, _ = fmt.Fprintf(&b, "risk: %s: %s\n", r.Kind, r.Why)
+	}
+	if len(p.Digest) > 0 {
+		_, _ = fmt.Fprintf(&b, "plan %s\n", p.Digest)
 	}
 	return b.String()
 }

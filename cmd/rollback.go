@@ -3,6 +3,7 @@ package cmd
 import (
 	"context"
 	"fmt"
+	"slices"
 
 	"github.com/spf13/cobra"
 
@@ -18,13 +19,15 @@ import (
 
 func init() {
 	rollbackCmd.Flags().BoolVar(&rollbackDry, "dry-run", false, "say what would be done, do nothing")
+	rollbackCmd.Flags().StringVar(&rollbackApprove, "approve", "", "run the plan of this digest (--dry-run says it), whatever run.approve says")
 	rollbackCmd.Flags().IntVar(&rollbackTo, "to", 0, "go back to this revision of pack history, its pack and its values; a revision that was not installed is refused")
 	rootCmd.AddCommand(rollbackCmd)
 }
 
 var (
-	rollbackDry bool
-	rollbackTo  int
+	rollbackDry     bool
+	rollbackTo      int
+	rollbackApprove string
 )
 
 var rollbackCmd = &cobra.Command{
@@ -65,13 +68,22 @@ first (pack rollback, without --to).`,
 				return err
 			}
 			fmt.Printf("undoing the saga towards %s %s (%s): in effect %v, under way %v\n", sg.Pack, sg.Version, rec.State, sg.Done, sg.Running)
+			// the undoing is a plan of its own, as a removal is: what is taken back, by its digest
+			p := &plan.Plan{Pack: sg.Pack, From: sg.Version, To: rec.Version, Direction: plan.DirUndo,
+				Order: append(slices.Clone(sg.Done), sg.Running...)}
+			plan.Seal(p, nil, nil) // a taking back is recovery: no risk of its own, run.approve: plan asks as for any plan
+			fmt.Println("plan", p.Digest)
 			undone := struct {
 				Undone version `json:"undone"`
 				Back   version `json:"back"`
+				Digest string  `json:"digest"`
 				DryRun bool    `json:"dry_run,omitempty"`
-			}{versionOf("", sg.Version, sg.Pack), versionOf("", rec.Version, rec.Pack), rollbackDry}
+			}{versionOf("", sg.Version, sg.Pack), versionOf("", rec.Version, rec.Pack), p.Digest, rollbackDry}
 			if rollbackDry {
 				return result(undone)
+			}
+			if err := approved(s, p, rollbackApprove, howRollback(0)); err != nil {
+				return err
 			}
 			if err := s.Undo(ctx, g, curRel, toRel); err != nil {
 				return withCode(CodeSagaFailed, err)
@@ -128,9 +140,13 @@ func rollForwardTo(ctx context.Context, s *session.Session, curB *bundle.Bundle,
 	if err != nil {
 		return err
 	}
+	plan.Seal(p, curRel, toRel)
 	fmt.Print(p.Text())
 	if rollbackDry {
 		return result(p)
+	}
+	if err := approved(s, p, rollbackApprove, howRollback(rollbackTo)); err != nil {
+		return err
 	}
 	if err := s.RollForward(ctx, p, curRel, toRel, in); err != nil {
 		return withCode(CodeSagaFailed, err)

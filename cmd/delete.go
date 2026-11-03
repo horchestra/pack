@@ -8,14 +8,19 @@ import (
 	"github.com/horchestra/pack/internal/interrupt"
 	"github.com/horchestra/pack/pkg/adapter"
 	"github.com/horchestra/pack/pkg/graph"
+	"github.com/horchestra/pack/pkg/plan"
 )
 
 func init() {
 	deleteCmd.Flags().BoolVar(&deleteDry, "dry-run", false, "say what would be done, do nothing")
+	deleteCmd.Flags().StringVar(&deleteApprove, "approve", "", "take the installation away, as --dry-run says it by this digest, whatever run.approve says")
 	rootCmd.AddCommand(deleteCmd)
 }
 
-var deleteDry bool
+var (
+	deleteDry     bool
+	deleteApprove string
+)
 
 var deleteCmd = &cobra.Command{
 	Use:   "delete",
@@ -48,13 +53,21 @@ var deleteCmd = &cobra.Command{
 			fmt.Println("remove", n.Name)
 			keys = append(keys, n.Name)
 		}
+		// a removal is a plan of its own: what goes, by its digest
+		p := &plan.Plan{Pack: rec.Pack, From: rec.Version, Direction: plan.DirUninstall, Order: keys}
+		plan.Seal(p, rel, nil)
+		fmt.Println("plan", p.Digest)
 		removed := struct {
 			Removed version  `json:"removed"`
 			Keys    []string `json:"keys"`
+			Digest  string   `json:"digest"`
 			DryRun  bool     `json:"dry_run,omitempty"`
-		}{versionOf(b.Name, rec.Version, rec.Pack), keys, deleteDry}
+		}{versionOf(b.Name, rec.Version, rec.Pack), keys, p.Digest, deleteDry}
 		if deleteDry {
 			return result(removed)
+		}
+		if err := approved(s, p, deleteApprove, howDelete); err != nil {
+			return err
 		}
 		if err := s.Remove(ctx, g, rel); err != nil {
 			return withCode(CodeSagaFailed, err)

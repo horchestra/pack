@@ -14,6 +14,7 @@ const (
 	KindEnvironment = "environment" // the environment's placement of a key: its resources
 	KindCheck       = "check"       // an author check of the pack (pack check)
 	KindWarning     = "warning"     // what does not make the pack wrong: what its docs/ does not say
+	KindRisk        = "risk"        // what a plan does that an apply should not do unasked (run.approve); Rule its kind
 )
 
 // Problem is one thing wrong with the values: where (the operator's pointer, or the environment's setting), what

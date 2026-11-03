@@ -45,6 +45,7 @@ run: # how a saga runs
   no_rollback: false                 # leave what is in effect as it is on a failure
   keep: [ postgres ]                   # keys a rollback after a failure leaves as they are
   journal_keep: 20                   # sagas the journal keeps; below 0 — all (default 20)
+  approve: auto-safe                 # what apply does unasked: auto-safe (default) | plan | auto, see saga.md
 secrets: # where the passwords pack creates come from
   provider: generate                 # generate | env | file:<dir>
   provision: [ /postgres/pg_password ]

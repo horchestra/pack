@@ -84,6 +84,7 @@ func (s *Session) Prepare(provision bool) (*Change, error) {
 		for _, d := range c.Drifts {
 			c.Plan.Warnings = append(c.Plan.Warnings, "drift: "+d.String())
 		}
+		plan.Seal(c.Plan, fromRel, c.ToRel)
 	}
 	return c, err
 }

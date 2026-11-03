@@ -52,6 +52,7 @@ const (
 	CodeNothingInstalled = "nothing_installed" // nothing is installed to remove or roll back
 	CodeForeignComments  = "foreign_comments"  // values.yaml has comments pack did not write
 	CodeTarget           = "target"            // the target refused, or could not be reached
+	CodeNeedsApproval    = "needs_approval"    // run.approve keeps the plan from being applied unasked: --approve <its digest>
 	CodeError            = "error"             // anything else
 )
 
@@ -60,6 +61,7 @@ type coded struct {
 	code     string
 	err      error
 	problems []render.Problem
+	next     []string // what to run next, when the code alone does not say it
 }
 
 func (c *coded) Error() string { return c.err.Error() }
@@ -70,6 +72,11 @@ func withCode(code string, err error) error {
 		return nil
 	}
 	return &coded{code: code, err: err}
+}
+
+// withNext is withCode with what to run next.
+func withNext(code string, err error, next []string) error {
+	return &coded{code: code, err: err, next: next}
 }
 
 // withProblems is withCode with the problems the command found: the error's document carries them.
@@ -113,6 +120,15 @@ func classify(err error) apiError {
 	return out
 }
 
+// nextOf is what to run after the error: what the command said, or what its code says.
+func nextOf(err error, code string) []string {
+	var c *coded
+	if errors.As(err, &c) && len(c.next) > 0 {
+		return c.next
+	}
+	return nextFor(code)
+}
+
 // nextFor is what to run after an error of the code.
 func nextFor(code string) []string {
 	switch code {
@@ -132,6 +148,8 @@ func nextFor(code string) []string {
 		return []string{"pack values write --rewrite"}
 	case CodeNothingInstalled:
 		return []string{"pack plan", "pack apply"}
+	case CodeNeedsApproval:
+		return []string{"pack plan", "pack apply --approve <the plan's digest>"} // the command's own, as a rule (approved)
 	}
 	return nil
 }
@@ -140,7 +158,7 @@ func nextFor(code string) []string {
 func fail(err error) {
 	if jsonOut {
 		e := classify(err)
-		b, _ := json.MarshalIndent(failure{Error: e, Next: nextFor(e.Code)}, "", "  ")
+		b, _ := json.MarshalIndent(failure{Error: e, Next: nextOf(err, e.Code)}, "", "  ")
 		_, _ = stdout.Write(append(b, '\n'))
 	}
 	_, _ = fmt.Fprintln(os.Stderr, "pack:", err)

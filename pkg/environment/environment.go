@@ -105,6 +105,27 @@ type Run struct {
 	// JournalKeep is how many sagas of an installation the journal keeps; an apply drops the older ones. 0 — the
 	// default (DefaultJournalKeep), below 0 — all of them.
 	JournalKeep int `env:"JOURNAL_KEEP"`
+	// Approve is what an apply does unasked: auto-safe (the default) — a plan without a risk; plan — no plan; auto —
+	// any plan. A plan it may not apply unasked needs --approve <its digest>.
+	Approve string `env:"APPROVE"`
+}
+
+// The policies of run.approve.
+const (
+	ApproveAutoSafe = "auto-safe"
+	ApprovePlan     = "plan"
+	ApproveAuto     = "auto"
+)
+
+// ApprovePolicy is run.approve, the default when it says none; a word it does not know is an error.
+func (r Run) ApprovePolicy() (string, error) {
+	switch r.Approve {
+	case "":
+		return ApproveAutoSafe, nil
+	case ApproveAutoSafe, ApprovePlan, ApproveAuto:
+		return r.Approve, nil
+	}
+	return "", fmt.Errorf("run.approve: %q is not auto-safe, plan or auto", r.Approve)
 }
 
 // DefaultJournalKeep is the number of sagas the journal keeps when run.journal_keep says nothing.
@@ -272,7 +293,7 @@ func Load(ctx context.Context, file string, overrides map[string]string) (*Envir
 // Secrets. A key that only begins like one (run_as_user, registry_auth) is its target's.
 var ownSettings = map[string]bool{
 	"store_provider": true, "store_addr": true, "store_mount": true, "store_prefix": true, "store_cacert": true,
-	"run_jobs": true, "run_strict": true, "run_no_rollback": true, "run_keep": true, "run_journal_keep": true,
+	"run_jobs": true, "run_strict": true, "run_no_rollback": true, "run_keep": true, "run_journal_keep": true, "run_approve": true,
 	"secrets_provider": true, "secrets_provision": true,
 	"discover_hosts": true,
 }

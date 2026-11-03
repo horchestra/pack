@@ -10,7 +10,12 @@ import (
 	"github.com/horchestra/pack/pkg/plan"
 )
 
-func init() { rootCmd.AddCommand(applyCmd) }
+func init() {
+	applyCmd.Flags().StringVar(&applyApprove, "approve", "", "apply the plan of this digest (pack plan says it), whatever run.approve says: the plan shown, and no other")
+	rootCmd.AddCommand(applyCmd)
+}
+
+var applyApprove string
 
 var applyCmd = &cobra.Command{
 	Use:   "apply",
@@ -35,6 +40,9 @@ directory, or a registry reference.`,
 			return err
 		}
 		fmt.Print(c.Plan.Text())
+		if err := approved(s, c.Plan, applyApprove, howApply); err != nil {
+			return err
+		}
 		if err := s.Apply(ctx, c); err != nil {
 			return withCode(CodeSagaFailed, err)
 		}
