@@ -11,6 +11,8 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/horchestra/pack/internal/oci"
+	"github.com/horchestra/pack/internal/release"
 	"github.com/horchestra/pack/internal/workdir"
 	"github.com/horchestra/pack/pkg/bundle"
 	"github.com/horchestra/pack/pkg/environment"
@@ -21,7 +23,7 @@ import (
 	"github.com/horchestra/pack/pkg/secretstore"
 	"github.com/horchestra/pack/pkg/target"
 	_ "github.com/horchestra/pack/pkg/target/memory" // the targets there are
-	_ "github.com/horchestra/pack/pkg/target/remote" // a target that is not compiled in is a program of its own
+	"github.com/horchestra/pack/pkg/target/remote"   // a target that is not compiled in is a program of its own
 )
 
 // Session is what a command works with.
@@ -60,6 +62,13 @@ func Open(ctx context.Context, d *workdir.Dir, readOnly bool) (*Session, error) 
 	storeSet := scfg.Settings()
 	maps.Copy(env.Settings, storeSet)
 
+	lock, err := release.ReadLock(d.Release.Dir)
+	if err != nil {
+		return nil, err
+	}
+	if err := pinRuntime(s.Target, env.Settings, lock); err != nil {
+		return nil, err
+	}
 	if s.Inst, err = target.Open(s.Target, id, env.Settings); err != nil {
 		return nil, err
 	}
@@ -68,6 +77,9 @@ func Open(ctx context.Context, d *workdir.Dir, readOnly bool) (*Session, error) 
 	for _, tn := range slices.Sorted(maps.Keys(env.Targets)) {
 		t := env.Targets[tn]
 		maps.Copy(t.Settings, storeSet)
+		if err := pinRuntime(t.Target, t.Settings, lock); err != nil {
+			return nil, fmt.Errorf("targets.%s: %w", tn, err)
+		}
 		oi, err := target.Open(t.Target, id, t.Settings)
 		if err != nil {
 			return nil, fmt.Errorf("targets.%s: %w", tn, err)
@@ -183,4 +195,36 @@ func (s *Session) Run(g *graph.Graph, ex saga.Executor) *saga.Run {
 		Journal:    s.Dir.JournalFor(s.ID),
 		Events:     func(line string) { fmt.Println(line) },
 	}
+}
+
+// pinRuntime gives a target that runs in a container the image its lock pins (pack refresh): the one pack runs,
+// whatever the tag has become. It is pack's to say, not the file's.
+func pinRuntime(name string, settings map[string]string, lock *release.Lock) error {
+	if slices.Contains(target.Names(), name) {
+		for k := range settings {
+			if strings.HasPrefix(k, remote.RuntimePrefix) {
+				return fmt.Errorf("target %s is in pack itself: it runs in pack's process, it has no runtime: (%s)", name, k)
+			}
+		}
+		return nil
+	}
+	if _, ok := settings[remote.SettingImage]; ok {
+		return fmt.Errorf("runtime.image: the image is release.yaml's (targets: %s: {image: oci://…}), locked by pack refresh", name)
+	}
+	if settings[remote.RuntimePrefix+"type"] != remote.RuntimeDocker {
+		return nil
+	}
+	var tl release.TargetLock
+	if lock != nil {
+		tl = lock.Targets[name]
+	}
+	if len(tl.Image) == 0 || len(tl.Digest) == 0 {
+		return fmt.Errorf("target %s: runtime docker, and its image is not locked — run pack refresh", name)
+	}
+	pin, err := oci.WithDigest(tl.Image, tl.Digest)
+	if err != nil {
+		return fmt.Errorf("target %s: %w", name, err)
+	}
+	settings[remote.SettingImage] = strings.TrimPrefix(pin, "oci://")
+	return nil
 }

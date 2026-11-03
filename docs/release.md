@@ -33,6 +33,8 @@ Where a pack is installed and how it runs, YAML or JSON. Nested keys flatten wit
 target: k8s                          # the system a pack is installed on
 namespace: data                      # and anything else the target wants
 lang: ru                             # the language of the comments pack writes (values.yaml); $LANG when unset
+runtime: # where the target's program runs: native (default) or docker — its image, see targets.md
+  type: docker
 run: # how a saga runs
   jobs: 4                            # keys at once; 0 — as many as CPUs, 1 — one by one
   strict: true                       # refuse a plan with an irreversible step

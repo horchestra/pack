@@ -25,21 +25,26 @@ import (
 	"github.com/horchestra/pack/internal/workdir"
 	"github.com/horchestra/pack/pkg/environment"
 	"github.com/horchestra/pack/pkg/target"
+	"github.com/horchestra/pack/pkg/target/remote"
 )
 
 func init() {
 	initCmd.Flags().StringVar(&initTarget, "target", "", "the target the release is installed on (docker, ansible, k8s, memory); asked when it is a terminal")
 	initCmd.Flags().StringVar(&initSource, "target-source", "", "where the target's program is downloaded from (https://… or oci://…), into release.yaml targets:")
+	initCmd.Flags().StringVar(&initImage, "target-image", "", "the target's image (oci://…), into release.yaml targets:; with --runtime docker the target runs from it")
+	initCmd.Flags().StringVar(&initRuntime, "runtime", "", "where the target's program runs: native (the default) or docker (its image, in a container)")
 	initCmd.Flags().StringVar(&initLang, "lang", "", "the language of the comments of values.yaml (env.yaml lang:)")
 	initCmd.Flags().BoolVar(&initForce, "force", false, "write the files over the ones there")
 	rootCmd.AddCommand(initCmd)
 }
 
 var (
-	initTarget string
-	initSource string
-	initLang   string
-	initForce  bool
+	initTarget  string
+	initSource  string
+	initImage   string
+	initRuntime string
+	initLang    string
+	initForce   bool
 )
 
 // The targets a release is likely installed on: pack's own and the ones of github.com/horchestra/targets.
@@ -118,8 +123,24 @@ func initRelease(ctx context.Context, ref, out string, in io.Reader, ask bool) (
 			return nil, err
 		}
 	}
-	if !slices.Contains(targetChoices(), name) && len(initSource) == 0 {
-		return nil, fmt.Errorf("target %q: not one pack knows (%s) — --target-source names where a target of another name comes from", name, strings.Join(targetChoices(), ", "))
+	if !slices.Contains(targetChoices(), name) && len(initSource) == 0 && len(initImage) == 0 {
+		return nil, fmt.Errorf("target %q: not one pack knows (%s) — --target-source or --target-image names where a target of another name comes from", name, strings.Join(targetChoices(), ", "))
+	}
+	if len(initRuntime) == 0 && len(initImage) > 0 && len(initSource) == 0 {
+		initRuntime = remote.RuntimeDocker // an image and no program: the target runs from its image
+	}
+	switch initRuntime {
+	case "":
+	case remote.RuntimeNative:
+		if len(initSource) == 0 && len(initImage) > 0 {
+			return nil, errors.New("--runtime native runs the target's program: --target-source names where it comes from (the image is for --runtime docker)")
+		}
+	case remote.RuntimeDocker:
+		if len(initImage) == 0 {
+			return nil, errors.New("--runtime docker runs the target's image: --target-image oci://… names it")
+		}
+	default:
+		return nil, fmt.Errorf("--runtime %s: native or docker", initRuntime)
 	}
 	envFile := "env.yaml"
 	if len(envName) > 0 {
@@ -139,10 +160,20 @@ func initRelease(ctx context.Context, ref, out string, in io.Reader, ask bool) (
 	}
 
 	rel := map[string]any{"pack": ref}
-	if len(initSource) > 0 {
-		rel["targets"] = map[string]any{name: initSource}
+	if len(initSource) > 0 || len(initImage) > 0 {
+		src := map[string]any{}
+		if len(initSource) > 0 {
+			src["url"] = initSource
+		}
+		if len(initImage) > 0 {
+			src["image"] = initImage
+		}
+		rel["targets"] = map[string]any{name: src}
 	}
 	env := map[string]any{"target": name}
+	if initRuntime == remote.RuntimeDocker {
+		env["runtime"] = map[string]any{"type": remote.RuntimeDocker}
+	}
 	if len(initLang) > 0 {
 		env["lang"] = initLang
 	}
@@ -182,7 +213,7 @@ func initRelease(ctx context.Context, ref, out string, in io.Reader, ask bool) (
 	}
 	if slices.Contains(target.Names(), name) {
 		// in pack itself: nothing to download
-	} else if _, err := os.Stat(filepath.Join(dir.BinPath(), targets.Binary(name))); err == nil || len(initSource) > 0 {
+	} else if _, err := os.Stat(filepath.Join(dir.BinPath(), targets.Binary(name))); err == nil || len(initSource) > 0 || initRuntime == remote.RuntimeDocker {
 		e, err := environment.Load(ctx, r.Config(), nil)
 		if err != nil {
 			return said, err

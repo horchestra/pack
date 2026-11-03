@@ -85,28 +85,8 @@ type Plugin struct {
 	caps   []string
 }
 
-// Launch finds and starts the provider of a target and shakes hands with it.
-func Launch(name string) (*Plugin, error) { return Open(name, "") }
-
-// Open starts the provider of a target from spec: a container image as
-// oci://<host>/<repo>:<tag>, a binary by its path, or — empty — the binary
-// pack-target-<name> wherever Find finds it.
-func Open(name, spec string) (*Plugin, error) {
-	switch {
-	case strings.HasPrefix(spec, "oci://"):
-		if rest := strings.TrimPrefix(spec, "oci://"); !strings.Contains(strings.SplitN(rest, "/", 2)[0], ".") && !strings.Contains(strings.SplitN(rest, "/", 2)[0], ":") && !strings.HasPrefix(rest, "localhost") {
-			return nil, fmt.Errorf("target %s: %s names no registry — a container runtime runs an image from a registry (oci://host/repo:tag)", name, spec)
-		}
-		return StartImage(name, strings.TrimPrefix(spec, "oci://"))
-	case len(spec) > 0:
-		return Start(name, spec)
-	}
-	bin, err := Find(name)
-	if err != nil {
-		return nil, err
-	}
-	return Start(name, bin)
-}
+// Launch finds the program of a target in .pack/bin (Find), starts it and shakes hands with it.
+func Launch(name string) (*Plugin, error) { return Runtime{Type: RuntimeNative}.Start(name, "") }
 
 // Start runs the provider binary at bin for the target name; it listens on
 // a unix socket in a private directory.
@@ -141,33 +121,6 @@ func startTCP(name, bin string) (*Plugin, error) {
 	cmd.Env = append(os.Environ(), EnvAddress+"=tcp://127.0.0.1:"+port, EnvToken+"="+token)
 	p := &Plugin{name: name, what: bin, cmd: cmd}
 	return p.start("127.0.0.1:"+port, token, binaryStart)
-}
-
-// StartImage runs the provider image for the target name in a container:
-// podman or docker (PACK_CONTAINER_RUNTIME), the provider listening on TCP
-// inside, published on a free port of 127.0.0.1 only. The runtime pulls the
-// image when it does not have it.
-func StartImage(name, image string) (*Plugin, error) {
-	runtime, err := containerRuntime()
-	if err != nil {
-		return nil, err
-	}
-	port, err := freePort()
-	if err != nil {
-		return nil, err
-	}
-	token, err := newToken()
-	if err != nil {
-		return nil, err
-	}
-	cname := "pack-target-" + name + "-" + token[:12]
-	cmd := exec.Command(runtime, "run", "-i", "--rm", "--name", cname,
-		"-p", "127.0.0.1:"+port+":"+imagePort,
-		"-e", EnvAddress+"=tcp://0.0.0.0:"+imagePort, "-e", EnvToken+"="+token,
-		image)
-	p := &Plugin{name: name, what: image, cmd: cmd,
-		kill: func() { _ = exec.Command(runtime, "kill", cname).Run() }}
-	return p.start("127.0.0.1:"+port, token, imageStart)
 }
 
 // start runs the process and shakes hands with it at addr, retrying until it
@@ -408,14 +361,18 @@ func unwrap(err error) error {
 }
 
 func init() {
-	// a target not compiled into pack is a program of its own: pack-target-<name>, or what the `provider` setting
-	// names (a binary's path, or oci://host/repo:tag of an image)
+	// a target not compiled into pack is a program of its own: pack-target-<name> of .pack/bin, or its image in a
+	// container — the runtime section of the target's entry says which; the target is configured without it
 	target.Fallback = func(name, installation string, settings map[string]string) (target.Installation, error) {
-		p, err := Open(name, settings["provider"])
+		rt, rest, err := RuntimeOf(settings)
+		if err != nil {
+			return nil, fmt.Errorf("target %s: %w", name, err)
+		}
+		p, err := rt.Start(name, installation)
 		if err != nil {
 			return nil, err
 		}
-		in, err := p.Configure(installation, settings)
+		in, err := p.Configure(installation, rest)
 		if err != nil {
 			p.Close()
 			return nil, err

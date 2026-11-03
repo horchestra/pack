@@ -14,8 +14,10 @@ import (
 
 func initFlags(t *testing.T, target string, force bool) {
 	t.Helper()
-	initTarget, initSource, initLang, initForce = target, "", "", force
-	t.Cleanup(func() { initTarget, initSource, initLang, initForce = "", "", "", false })
+	initTarget, initSource, initImage, initRuntime, initLang, initForce = target, "", "", "", "", force
+	t.Cleanup(func() {
+		initTarget, initSource, initImage, initRuntime, initLang, initForce = "", "", "", "", "", false
+	})
 }
 
 func TestInit(t *testing.T) {
@@ -122,5 +124,25 @@ func TestInitRefusesATargetItDoesNotKnow(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(out, ".pack", "bin", "pack-target-dokcer")); err != nil {
 		t.Errorf("its program: %v", err)
+	}
+}
+
+// An image and no program: the target runs from its image; native with only an image is refused.
+func TestInitTargetImage(t *testing.T) {
+	pk := generated(t)
+	t.Chdir(t.TempDir())
+	initFlags(t, "ansible", false)
+	initImage = "oci://reg.invalid/targets/ansible:1"
+	out := filepath.Join(t.TempDir(), "a")
+	_, _ = initRelease(context.Background(), pk, out, strings.NewReader(""), false) // the image cannot be pinned here: only the files matter
+	raw, err := os.ReadFile(filepath.Join(out, "env.yaml"))
+	if err != nil || !strings.Contains(string(raw), "type: docker") {
+		t.Errorf("env.yaml: %s %v", raw, err)
+	}
+	initFlags(t, "ansible", false)
+	initImage, initRuntime = "oci://reg.invalid/targets/ansible:1", "native"
+	if _, err := initRelease(context.Background(), pk, filepath.Join(t.TempDir(), "b"), strings.NewReader(""), false); err == nil ||
+		!strings.Contains(err.Error(), "--target-source") {
+		t.Errorf("native with an image only: %v", err)
 	}
 }

@@ -277,3 +277,25 @@ func TestRefreshBringsTheTargets(t *testing.T) {
 		t.Errorf("no source, no program: %v", err)
 	}
 }
+
+// A target that runs in a container: refresh locks the digest its image's tag means, and again keeps it.
+func TestRefreshLocksATargetsImage(t *testing.T) {
+	host := regserver.Serve(t, &openbao.OpenBao{})
+	image := "oci://" + host + "/packs/openbao:2.1.0" // any manifest pins: the pack's stands for an image here
+	d := releaseOf(t, generated(t), map[string]any{"target": "fake", "runtime": map[string]any{"type": "docker"}})
+	write(t, d, "release.yaml", map[string]any{
+		"pack":    generated(t),
+		"targets": map[string]any{"fake": map[string]any{"image": image, "plain_http": true}},
+	})
+	out := pack(t, d, "refresh")
+	lock, err := release.ReadLock(d)
+	if err != nil || lock == nil || lock.Targets["fake"].Image != image || !strings.HasPrefix(lock.Targets["fake"].Digest, "sha256:") {
+		t.Fatalf("lock = %+v, %v\n%s", lock, err, out)
+	}
+	if len(lock.Targets["fake"].SHA256) > 0 {
+		t.Errorf("a program downloaded for a target that runs in a container: %+v", lock.Targets["fake"])
+	}
+	if out := pack(t, d, "refresh"); !strings.Contains(out, "locked at "+lock.Targets["fake"].Digest) {
+		t.Errorf("again: %s", out)
+	}
+}

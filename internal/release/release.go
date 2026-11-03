@@ -82,11 +82,14 @@ func (r Registry) Options() (oci.Options, error) {
 }
 
 // TargetSource is where the program of a target comes from: the URL alone (docker: oci://…), or the URL with its
-// options (docker: {url: oci://…, plain_http: true, username_env: …, password_env: …}).
+// options (docker: {url: oci://…, plain_http: true, username_env: …, password_env: …}), and the image the program
+// runs from in a container (image: oci://host/repo:tag — runtime: {type: docker} in env.yaml).
 type TargetSource struct {
 	// URL is an http(s) URL of the program or of an archive that holds it, or oci://host/repo:tag. {os} and {arch}
 	// stand for the machine's.
-	URL string `json:"url"`
+	URL string `json:"url,omitempty"`
+	// Image is the target's image, oci://host/repo:tag: the program and what it needs (ansible, docker's CLI …).
+	Image string `json:"image,omitempty"`
 	// Registry is how the registry of an oci:// URL is read.
 	Registry
 }

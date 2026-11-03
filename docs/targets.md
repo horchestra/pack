@@ -79,10 +79,47 @@ lock has is refused (and the program removed) — `pack refresh --upgrade` takes
 `release.yaml` needs `pack-target-<name>` to be in `.pack/bin` already. `memory` is in pack and needs nothing.
 
 `pack` looks for the programs in the directories `PACK_TARGET_PATH` lists, by default **`.pack/bin` of the release it
-runs in** — nowhere else (not beside itself, not on `PATH`). A `provider:` setting in `env.yaml` names another way for a
-target: a binary's path, or `oci://host/repo:tag` of a container image that podman or docker runs (for a target written
-in a language whose runtime the machine lacks; the port is published on 127.0.0.1 only). The target is stopped when the
-command ends.
+runs in** — nowhere else (not beside itself, not on `PATH`). The target is stopped when the command ends.
+
+## Where a target runs: the runtime
+
+A target's program runs on the machine pack runs on (`native`, the default), or from the target's **image in a
+container** (`docker`): the image carries the program and all it needs — ansible with its collections, the docker
+CLI — so the machine needs pack and podman or docker, nothing else.
+
+```yaml
+# release.yaml
+targets:
+  ansible:
+    image: oci://registry.example/targets/ansible:0.2.0   # beside url:, or instead of it
+```
+
+```yaml
+# env.yaml
+target: ansible
+runtime:
+  type: docker                       # native | docker
+  network: host                      # the container's network; host — the machine's (none: a port on 127.0.0.1);
+                                     # under Docker Desktop (Mac, Windows) host is its VM's network, not the machine's
+  mounts:                            # source:destination[:ro|:rw], ~/ the home, both absolute
+    - ~/.ssh/known_hosts:/home/pack/.ssh/known_hosts:ro
+  ssh_agent: true                    # the machine's agent in the container (Docker Desktop's own on a Mac)
+  env:                               # variables passed in by name; their values never in a file or a command line
+    - ANSIBLE_VAULT_PASSWORD
+```
+
+- `pack refresh` locks the digest the image's tag means (`release.lock.json`: `targets.<name>.image`, `digest`) and every
+  command runs that digest, whatever the tag becomes; `--upgrade` takes the new one. The container runtime pulls it.
+- Before it runs, the image's labels must say it is the target's and speaks pack's protocol:
+  `io.horchestra.pack.target=<name>`, `io.horchestra.pack.protocol=pack.target.v1`. Its entrypoint is
+  `pack-target-<name>`, listening where `PACK_TARGET_ADDRESS` says (port 7353), asking for `PACK_TARGET_TOKEN`.
+- The container is labelled with the installation, the target and the pack that runs it; a container a pack of this
+  machine left behind (killed, its process gone) is removed when the next one starts — on Linux and macOS, where pack
+  can tell its process is gone; elsewhere it stays for `docker rm`. `PACK_CONTAINER_RUNTIME` names
+  the runtime; unset — podman, else docker.
+- The runtime is pack's, not the target's: the target is configured without it. A target in pack itself (`memory`)
+  runs in pack's process and has none. An entry of `targets:` in `env.yaml`
+  has a runtime of its own (`targets: {edge: {target: docker, runtime: {type: docker}}}`).
 
 A target is a module of its own so that what it pulls in (client-go, the docker CLI's helpers, an SSH library) is not
 the

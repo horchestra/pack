@@ -133,7 +133,7 @@ func Names() []string {
 type Settings map[string]string
 
 // Own are the keys of the set that are pack's own, not a target's.
-var Own = []string{"target", "provider", "vault_addr", "vault_paths"}
+var Own = []string{"target", "vault_addr", "vault_paths"}
 
 // Check refuses a setting the target does not know: every key must be pack's own, one of names, or start with one
 // of prefixes. A setting nothing reads is a mistake — a typo, a setting of another target — never something to

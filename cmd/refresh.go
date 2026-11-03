@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"slices"
+	"strings"
 
 	"github.com/spf13/cobra"
 
@@ -18,6 +19,7 @@ import (
 	"github.com/horchestra/pack/internal/workdir"
 	"github.com/horchestra/pack/pkg/environment"
 	"github.com/horchestra/pack/pkg/target"
+	"github.com/horchestra/pack/pkg/target/remote"
 )
 
 var refreshUpgrade bool
@@ -32,9 +34,10 @@ var refreshCmd = &cobra.Command{
 	Short: "bring the targets and the pack of the release into .pack and lock them",
 	Args:  cobra.NoArgs,
 	Long: `Brings what the release needs into .pack: the programs of the targets the environment uses, from the source
-release.yaml names for each (targets: {docker: https://…, k8s: oci://…}), into .pack/bin, and the pack, if it is in a
-registry, with the packs it holds, into .pack/packs. release.lock.json keeps the checksum of each program and
-which digest the tag meant today. apply and plan read the pack from there, so the same
+release.yaml names for each (targets: {docker: https://…, k8s: oci://…}), into .pack/bin; for a target that runs
+from its image (runtime: {type: docker}), the digest the image's tag means (targets: {ansible: {image: oci://…}});
+and the pack, if it is in a registry, with the packs it holds, into .pack/packs. release.lock.json keeps the
+checksum of each program, the digest of each image and which digest the pack's tag meant today. apply and plan read the pack from there, so the same
 release gives the same result whatever the tag becomes. A pack that is a directory has nothing to
 bring. It is safe to run again: what is there with the locked checksum stays (pack init makes a
 release; refresh brings what one names, after a clone or a change of release.yaml).`,
@@ -123,19 +126,50 @@ func lockPack(ctx context.Context, d *workdir.Dir, lock *release.Lock, upgrade b
 // source moved.
 func bringTargets(ctx context.Context, d *workdir.Dir, env *environment.Environment, lock *release.Lock, upgrade bool) error {
 	rel := d.Release
-	used := map[string]bool{}
-	if len(env.Target) > 0 {
-		used[env.Target] = true
-	}
-	for _, t := range env.Targets {
-		if len(t.Target) > 0 {
-			used[t.Target] = true
+	// a target by the runtimes it runs in: the program for native, the image for docker
+	used := map[string]map[string]bool{}
+	use := func(name string, settings map[string]string) {
+		if len(name) == 0 {
+			return
 		}
+		rt := settings[remote.RuntimePrefix+"type"]
+		if len(rt) == 0 {
+			rt = remote.RuntimeNative
+		}
+		if used[name] == nil {
+			used[name] = map[string]bool{}
+		}
+		used[name][rt] = true
+	}
+	use(env.Target, env.Settings)
+	for _, t := range env.Targets {
+		use(t.Target, t.Settings)
 	}
 	builtin := target.Names()
 	bin := d.BinPath()
 	for _, name := range slices.Sorted(maps.Keys(used)) {
 		if slices.Contains(builtin, name) {
+			if used[name][remote.RuntimeDocker] {
+				return fmt.Errorf("target %s is in pack itself: it runs in pack's process, no runtime: says otherwise", name)
+			}
+			continue
+		}
+		// what the target no longer runs from leaves the lock
+		if tl, ok := lock.Targets[name]; ok {
+			if !used[name][remote.RuntimeNative] {
+				tl.Source, tl.SHA256 = "", ""
+			}
+			if !used[name][remote.RuntimeDocker] {
+				tl.Image, tl.Digest = "", ""
+			}
+			lock.Targets[name] = tl
+		}
+		if used[name][remote.RuntimeDocker] {
+			if err := pinImage(ctx, name, rel.Targets[name], lock, upgrade); err != nil {
+				return err
+			}
+		}
+		if !used[name][remote.RuntimeNative] {
 			continue
 		}
 		file := filepath.Join(bin, targets.Binary(name))
@@ -171,8 +205,39 @@ func bringTargets(ctx context.Context, d *workdir.Dir, env *environment.Environm
 		if lock.Targets == nil {
 			lock.Targets = map[string]release.TargetLock{}
 		}
-		lock.Targets[name] = release.TargetLock{Source: source, SHA256: sum}
+		tl := lock.Targets[name]
+		tl.Source, tl.SHA256 = source, sum
+		lock.Targets[name] = tl
 		fmt.Printf("target %s: downloaded from %s (sha256 %s)\n", name, source, sum)
 	}
+	return nil
+}
+
+// pinImage says in the lock which digest the tag of the target's image means: the locked one, unless upgrade asks
+// for the one the registry has now. The container runtime pulls the image when the target starts.
+func pinImage(ctx context.Context, name string, from release.TargetSource, lock *release.Lock, upgrade bool) error {
+	if len(from.Image) == 0 {
+		return fmt.Errorf("target %s: runtime docker, and no image for it in release.yaml (targets: %s: {image: oci://…})", name, name)
+	}
+	tl := lock.Targets[name]
+	if tl.Image == from.Image && len(tl.Digest) > 0 && !upgrade {
+		fmt.Printf("target %s: image %s locked at %s\n", name, from.Image, tl.Digest)
+		return nil
+	}
+	o, err := from.Options()
+	if err != nil {
+		return fmt.Errorf("targets.%s: %w", name, err)
+	}
+	pin, err := oci.Pin(ctx, from.Image, o)
+	if err != nil {
+		return fmt.Errorf("target %s: %w", name, err)
+	}
+	_, dg, _ := strings.Cut(pin, "@")
+	if lock.Targets == nil {
+		lock.Targets = map[string]release.TargetLock{}
+	}
+	tl.Image, tl.Digest = from.Image, dg
+	lock.Targets[name] = tl
+	fmt.Printf("target %s: image %s locked at %s\n", name, from.Image, dg)
 	return nil
 }

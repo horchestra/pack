@@ -19,10 +19,13 @@ type Lock struct {
 	Targets map[string]TargetLock `json:"targets,omitempty"`
 }
 
-// TargetLock is a downloaded program: where it came from, as release.yaml says, and its SHA-256 that day.
+// TargetLock is a downloaded program — where it came from, as release.yaml says, and its SHA-256 that day — and the
+// image the target runs from in a container, with the digest its tag meant.
 type TargetLock struct {
-	Source string `json:"source"`
-	SHA256 string `json:"sha256"`
+	Source string `json:"source,omitempty"`
+	SHA256 string `json:"sha256,omitempty"`
+	Image  string `json:"image,omitempty"`
+	Digest string `json:"digest,omitempty"`
 }
 
 // ReadLock reads the release's lock; nil when there is none.
