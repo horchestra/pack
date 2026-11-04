@@ -45,7 +45,7 @@ final class Docs {
     }
 
     /** The order Go's jsonschema writes the keys of a node in; the x- keys follow, sorted. */
-    private static final List<String> ORDER = Arrays.asList("$schema", "$id", "$anchor", "$ref", "$dynamicRef", "$defs",
+    static final List<String> ORDER = Arrays.asList("$schema", "$id", "$anchor", "$ref", "$dynamicRef", "$defs",
             "$comment", "allOf", "anyOf", "oneOf", "not", "if", "then", "else", "dependentSchemas", "prefixItems", "items",
             "contains", "properties", "patternProperties", "additionalProperties", "propertyNames", "type", "enum", "const",
             "multipleOf", "maximum", "exclusiveMaximum", "minimum", "exclusiveMinimum", "maxLength", "minLength", "pattern",
@@ -605,7 +605,7 @@ final class Docs {
     }
 
     /** Puts the keys of a map in the order given, then the x- keys sorted, then the rest as they were. */
-    private static void canonical(Map<String, Object> m, List<String> order) {
+    static void canonical(Map<String, Object> m, List<String> order) {
         Map<String, Object> copy = new LinkedHashMap<>(m);
         m.clear();
         for (String k : order) {

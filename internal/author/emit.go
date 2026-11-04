@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"go/format"
 	"maps"
+	"math"
 	"reflect"
 	"slices"
 	"strconv"
@@ -133,11 +134,14 @@ func (s *Spec) GoSource(importPath string) (pack, main []byte, err error) {
 			if !f.Required {
 				tag += ",omitempty"
 			}
-			env := ""
+			more := "" // the tags after json
 			if len(f.Env) > 0 {
-				env = fmt.Sprintf(" env:%q", f.Env)
+				more = fmt.Sprintf(" env:%q", f.Env)
 			}
-			w("\t%s %s `json:%q%s`\n", camelUpper(f.Name), goType(f, ptr+"/"+f.Name), tag, env)
+			if c := f.goConstraints(); len(c) > 0 {
+				more += fmt.Sprintf(" jsonschema:%q", c)
+			}
+			w("\t%s %s `json:%q%s`\n", camelUpper(f.Name), goType(f, ptr+"/"+f.Name), tag, more)
 		}
 		w("}\n\n")
 	}
@@ -247,6 +251,49 @@ func (s *Spec) GoSource(importPath string) (pack, main []byte, err error) {
 		return nil, nil, fmt.Errorf("the Go main of %s does not parse (a fault of pack author scaffold): %w", s.Name, err)
 	}
 	return pack, main, nil
+}
+
+// goConstraints is the jsonschema tag of a field's enum, bounds, lengths and pattern: a comma in a value escaped,
+// as the tag is split on the others.
+func (f Field) goConstraints() string {
+	var parts []string
+	esc := func(v string) string { return strings.ReplaceAll(v, ",", `\,`) }
+	for _, e := range f.Enum {
+		parts = append(parts, "enum="+esc(scalarText(e)))
+	}
+	if f.Minimum != nil {
+		parts = append(parts, "minimum="+scalarText(*f.Minimum))
+	}
+	if f.Maximum != nil {
+		parts = append(parts, "maximum="+scalarText(*f.Maximum))
+	}
+	if f.MinLength != nil {
+		parts = append(parts, fmt.Sprintf("minLength=%d", *f.MinLength))
+	}
+	if f.MaxLength != nil {
+		parts = append(parts, fmt.Sprintf("maxLength=%d", *f.MaxLength))
+	}
+	if len(f.Pattern) > 0 {
+		parts = append(parts, "pattern="+esc(f.Pattern))
+	}
+	return strings.Join(parts, ",")
+}
+
+// scalarText is a string as it is, a number as JSON writes it.
+func scalarText(v any) string {
+	if n, ok := number(v); ok {
+		return strconv.FormatFloat(n, 'f', -1, 64)
+	}
+	return fmt.Sprint(v)
+}
+
+// jDouble is a double of an annotation as Java writes it: a whole number past an int's range is no int literal.
+func jDouble(n float64) string {
+	t := scalarText(n)
+	if !strings.Contains(t, ".") && (n > math.MaxInt32 || n < math.MinInt32) {
+		t += ".0"
+	}
+	return t
 }
 
 // goValue is a value of a field as Go writes it.
@@ -484,6 +531,32 @@ func (s *Spec) PythonSource() []byte {
 			}
 			if !f.Required {
 				args = append(args, "omitempty=True")
+			}
+			if len(f.Enum) > 0 {
+				items := make([]string, len(f.Enum))
+				for i, e := range f.Enum {
+					items[i] = pyValue(e)
+				}
+				args = append(args, "enum=["+strings.Join(items, ", ")+"]")
+			}
+			if len(f.Pattern) > 0 {
+				args = append(args, "pattern="+strconv.Quote(f.Pattern))
+			}
+			for _, b := range []struct {
+				arg string
+				v   *float64
+			}{{"minimum", f.Minimum}, {"maximum", f.Maximum}} {
+				if b.v != nil {
+					args = append(args, b.arg+"="+scalarText(*b.v))
+				}
+			}
+			for _, l := range []struct {
+				arg string
+				v   *int
+			}{{"min_length", f.MinLength}, {"max_length", f.MaxLength}} {
+				if l.v != nil {
+					args = append(args, fmt.Sprintf("%s=%d", l.arg, *l.v))
+				}
 			}
 			w("    %s: %s = field(%s)\n", pyAttr(f.Name), typ, strings.Join(args, ", "))
 		}
@@ -738,6 +811,28 @@ func (s *Spec) JavaSource() []byte {
 			}
 			if !f.Required {
 				attrs = append(attrs, "omitempty = true")
+			}
+			if len(f.Enum) > 0 {
+				items := make([]string, len(f.Enum))
+				for i, e := range f.Enum {
+					items[i] = strconv.Quote(scalarText(e))
+				}
+				attrs = append(attrs, "enumOf = {"+strings.Join(items, ", ")+"}")
+			}
+			if len(f.Pattern) > 0 {
+				attrs = append(attrs, "pattern = "+strconv.Quote(f.Pattern))
+			}
+			if f.Minimum != nil {
+				attrs = append(attrs, "minimum = "+jDouble(*f.Minimum))
+			}
+			if f.Maximum != nil {
+				attrs = append(attrs, "maximum = "+jDouble(*f.Maximum))
+			}
+			if f.MinLength != nil {
+				attrs = append(attrs, fmt.Sprintf("minLength = %d", *f.MinLength))
+			}
+			if f.MaxLength != nil {
+				attrs = append(attrs, fmt.Sprintf("maxLength = %d", *f.MaxLength))
 			}
 			if len(attrs) > 0 {
 				w("%s@Setting(%s)\n", indent, strings.Join(attrs, ", "))

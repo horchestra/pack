@@ -26,7 +26,7 @@ public class Tembo extends Pack {
         public int failoverPriority;
     }
 
-    @Setting(env = "TEMBO_ID", omitempty = true)
+    @Setting(env = "TEMBO_ID", omitempty = true, pattern = "^[a-z0-9_]*$", maxLength = 63)
     public String id = "";
     @Setting(env = "TEMBO_LISTEN", omitempty = true)
     public String listen = "";
@@ -36,7 +36,7 @@ public class Tembo extends Pack {
     public String db = "";
     @Setting(json = "pg_data", env = "TEMBO_PG_DATA", omitempty = true)
     public String pgData = "";
-    @Setting(json = "pg_port", env = "TEMBO_PG_PORT", omitempty = true)
+    @Setting(json = "pg_port", env = "TEMBO_PG_PORT", omitempty = true, minimum = 1, maximum = 65535)
     public int pgPort;
     @Setting(json = "pg_password", env = "TEMBO_PG_PASSWORD", omitempty = true)
     public Secret pgPassword = new Secret();

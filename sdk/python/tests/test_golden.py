@@ -78,6 +78,23 @@ class Escapes(unittest.TestCase):
         self.assertIn("a\\u003cb\\u0026c\\u003ed", raw)
         self.assertEqual("a<b&c>d", json.loads(raw)["properties"]["f"]["default"])
 
+    def test_a_constraint_of_another_type_is_refused(self):
+        # a schema no value passes is not written: an enum of another type, a bound of a string, a length of a number
+        from dataclasses import dataclass
+        from packsdk import Meta, Pack, Root, field
+
+        for name, (tp, f) in {"an enum of another type": (int, lambda: field(0, enum=["a"])),
+                              "a bound of a string": (str, lambda: field("", minimum=1)),
+                              "a length of a number": (int, lambda: field(0, max_length=3)),
+                              "a fractional length": (str, lambda: field("", max_length=1.5))}.items():
+            @dataclass
+            class Bad(Pack):
+                v: tp = f()
+                def meta(self): return Meta(name="bad", version="1")
+                def pack_root(self): return Root()
+            with self.subTest(name), self.assertRaises(packsdk.SchemaError):
+                packsdk.schema(Bad())
+
 
 class Refusals(unittest.TestCase):
     def test_a_template_that_is_not_in_content(self):

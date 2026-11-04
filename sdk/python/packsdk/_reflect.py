@@ -25,7 +25,8 @@ class SchemaError(Exception):
 
 def tags(f: dataclasses.Field) -> dict:
     t = {"json": None, "env": None, "read_only": False,
-         "omitempty": False, "skip": False}
+         "omitempty": False, "skip": False, "enum": None, "pattern": None, "minimum": None, "maximum": None,
+         "min_length": None, "max_length": None}
     t.update(f.metadata.get("pack", {}))
     return t
 
@@ -282,11 +283,51 @@ def _annotate(node: dict, tp: type, value: Any, path: str) -> None:
             prop["default"] = to_json(fv)
         if tags(f)["read_only"]:
             prop["readOnly"] = True
+        _constrain(prop, tags(f), f"{path}/{name}")
         env = tags(f)["env"]
         if env and env != "-":
             prop["x-pack-env"] = env
         if is_struct(core):
             _annotate(prop, core, fv, f"{path}/{name}")
+
+
+# what a value may be: the field's argument, and the keyword of the schema it is
+_CONSTRAINTS = (("enum", "enum"), ("pattern", "pattern"), ("minimum", "minimum"), ("maximum", "maximum"),
+                ("min_length", "minLength"), ("max_length", "maxLength"))
+
+
+# the schema types each constraint is of
+_OF = {"enum": ("string", "integer", "number"), "pattern": ("string",), "min_length": ("string",),
+       "max_length": ("string",), "minimum": ("integer", "number"), "maximum": ("integer", "number")}
+
+
+def _is(v: Any, typ: str) -> bool:
+    if isinstance(v, bool):
+        return typ == "boolean"
+    return {"string": isinstance(v, str), "integer": isinstance(v, int) or (isinstance(v, float) and v.is_integer()),
+            "number": isinstance(v, (int, float))}.get(typ, False)
+
+
+def _constrain(prop: dict, t: dict, where: str) -> None:
+    """What a value of the setting may be, onto its node: a constraint its type has not, or an enum value of another
+    type, is refused (a schema no value passes), as the Java sdk refuses it."""
+    typ = prop.get("type")
+    for arg, key in _CONSTRAINTS:
+        v = t[arg]
+        if v is None:
+            continue
+        if typ not in _OF[arg] or prop.get("format") == "password":
+            raise SchemaError(f"{where}: {arg} is of {' or '.join(_OF[arg])}, not of this {typ}")
+        if arg == "enum":
+            bad = [x for x in v if not _is(x, typ)]
+            if bad:
+                raise SchemaError(f"{where}: enum {bad!r} is not of type {typ}")
+            v = list(v)
+        elif arg in ("min_length", "max_length") and (isinstance(v, bool) or not isinstance(v, int) or v < 0):
+            raise SchemaError(f"{where}: {arg} {v!r} is not a length")
+        elif arg in ("minimum", "maximum") and not _is(v, "number"):
+            raise SchemaError(f"{where}: {arg} {v!r} is not a number")
+        prop[key] = v
 
 
 def _lookup(s: dict, ptr: str) -> dict:

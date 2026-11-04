@@ -16,12 +16,12 @@ class Node:
 
 @dataclass
 class Tembo(Pack):
-    id: str = field("", env="TEMBO_ID", omitempty=True)
+    id: str = field("", env="TEMBO_ID", omitempty=True, pattern="^[a-z0-9_]*$", max_length=63)
     listen: str = field("", env="TEMBO_LISTEN", omitempty=True)
     listen_ro: str = field("", env="TEMBO_LISTEN_RO", omitempty=True)
     db: str = field("", env="TEMBO_DB", omitempty=True)
     pg_data: str = field("", env="TEMBO_PG_DATA", omitempty=True)
-    pg_port: int = field(0, env="TEMBO_PG_PORT", omitempty=True)
+    pg_port: int = field(0, env="TEMBO_PG_PORT", omitempty=True, minimum=1, maximum=65535)
     pg_password: Secret = field(factory=Secret, env="TEMBO_PG_PASSWORD", omitempty=True)
     config: str = field("", env="TEMBO_CONFIG", omitempty=True)
     node: Node = field(factory=Node, omitempty=True)

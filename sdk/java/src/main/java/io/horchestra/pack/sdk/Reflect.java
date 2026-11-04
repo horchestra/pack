@@ -292,11 +292,42 @@ final class Reflect {
             Map<String, Object> prop = (Map<String, Object>) properties.get(p.name());
             if (leafWithDefault(fv)) prop.put("default", toJson(fv));
             if (p.tags() != null && p.tags().readOnly()) prop.put("readOnly", true);
+            if (p.tags() != null && constrain(prop, p.tags(), p.field().getType(), path + "/" + p.name())) Docs.canonical(prop, Docs.ORDER);
             if (p.tags() != null && !p.tags().env().isEmpty() && !p.tags().env().equals("-")) {
                 prop.put("x-pack-env", p.tags().env());
             }
             if (isStruct(t)) annotate(prop, (Class<?>) t, fv, path + "/" + p.name());
         }
+    }
+
+    /** What a value of the setting may be, onto its node; whether there was any. */
+    private static boolean constrain(Map<String, Object> prop, Setting t, Class<?> type, String where) {
+        int before = prop.size();
+        if (t.enumOf().length > 0) {
+            List<Object> values = new ArrayList<>();
+            for (String v : t.enumOf()) values.add(enumValue(v, type, where));
+            prop.put("enum", values);
+        }
+        if (!Double.isNaN(t.maximum())) prop.put("maximum", t.maximum());
+        if (!Double.isNaN(t.minimum())) prop.put("minimum", t.minimum());
+        if (t.maxLength() >= 0) prop.put("maxLength", t.maxLength());
+        if (t.minLength() >= 0) prop.put("minLength", t.minLength());
+        if (!t.pattern().isEmpty()) prop.put("pattern", t.pattern());
+        return prop.size() > before;
+    }
+
+    private static Object enumValue(String v, Class<?> type, String where) {
+        try {
+            if (type == int.class || type == Integer.class || type == long.class || type == Long.class) return Long.parseLong(v);
+            if (type == double.class || type == Double.class || type == float.class || type == Float.class) return Double.parseDouble(v);
+        } catch (NumberFormatException e) {
+            throw new SchemaException(where + ": enum " + v + " is not a " + type.getSimpleName());
+        }
+        if (type == boolean.class || type == Boolean.class) {
+            if (!v.equals("true") && !v.equals("false")) throw new SchemaException(where + ": enum " + v + " is not a boolean");
+            return Boolean.parseBoolean(v);
+        }
+        return v;
     }
 
     @SuppressWarnings("unchecked")

@@ -28,7 +28,8 @@ generate("out", OpenBao())     # out/openbao/…, out/tembo/…
 ```
 
 - `field()` takes the Go tags as arguments: `json`, `env`, `read_only`,
-  `omitempty` (without it the field is required), `skip`. The default is the zero value; `set_defaults` sets the rest.
+  `omitempty` (without it the field is required), `skip`, and what a value may be — `enum=[…]`, `pattern`, `minimum`,
+  `maximum`, `min_length`, `max_length`. The default is the zero value; `set_defaults` sets the rest.
 - The files a pack ships are in `content/` next to the class's source; `Root(content=[File(…)])` says which go where.
 - The documentation of the settings is in `docs/<lang>.yaml` beside `content/`, read here without a library the way the
   Go sdk reads it ([../../docs/authoring.md](../../docs/authoring.md#documentation)); `Rule(id=…)` names a rule whose

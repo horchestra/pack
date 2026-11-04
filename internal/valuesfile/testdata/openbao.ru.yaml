@@ -1,4 +1,4 @@
-# pack values: sha256:42948797d8433cc3
+# pack values: sha256:30d589f6f3109240
 # OpenBao 2.1.0 — the values of the release. A line `#key: value` is left to its default: remove the
 # `#` to set it. pack rewrites this file (pack values write); a comment of your own stops it, --rewrite drops it.
 
@@ -10,6 +10,7 @@ openbao:
 
   # Насколько подробно пишет сервер.
   # e.g. debug, info
+  # one of: trace, debug, info, warn, error
   #log_level: info
 
   # Адрес, по которому клиентам сообщают обращаться к API.
@@ -27,6 +28,8 @@ postgres:
   # Строчные буквы, цифры и подчёркивания; если не задан — имя хоста,
   # дефисы заменены подчёркиваниями.
   # e.g. db_1
+  # pattern: ^[a-z0-9_]*$
+  # at most 63 characters
   #id: db_1
 
   # --- Прокси ---
@@ -47,6 +50,7 @@ postgres:
 
   # Порт самого Postgres за прокси, одинаковый на всех узлах.
   # e.g. 5433
+  # from 1 to 65535
   # source: suggest — 5432 is taken on db1
   pg_port: 5440
 

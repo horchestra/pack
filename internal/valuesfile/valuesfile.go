@@ -299,6 +299,12 @@ func (w *writer) hints(n *schema.Node, required bool, indent int) {
 	if p, ok := n.Raw["pattern"].(string); ok {
 		w.doc(indent, "pattern: "+p)
 	}
+	if b := bounds(n.Raw, "minimum", "maximum", ""); len(b) > 0 {
+		w.doc(indent, b)
+	}
+	if b := bounds(n.Raw, "minLength", "maxLength", " characters"); len(b) > 0 {
+		w.doc(indent, b)
+	}
 	if len(n.Compute) > 0 {
 		w.doc(indent, "filled by a formula unless set")
 	}
@@ -395,6 +401,21 @@ func groupTitles(s *schema.Schema, lang string, w *writer) map[string]string {
 		out[id] = w.text(gm, lang, "title")
 	}
 	return out
+}
+
+// bounds is the least and the most of a setting, as a hint: "from 1 to 65535", "at least 1", "at most 63 characters".
+func bounds(raw map[string]any, lo, hi, unit string) string {
+	l, okL := raw[lo]
+	h, okH := raw[hi]
+	switch {
+	case okL && okH:
+		return fmt.Sprintf("from %v to %v%s", l, h, unit)
+	case okL:
+		return fmt.Sprintf("at least %v%s", l, unit)
+	case okH:
+		return fmt.Sprintf("at most %v%s", h, unit)
+	}
+	return ""
 }
 
 func scalars(xs []any) string {

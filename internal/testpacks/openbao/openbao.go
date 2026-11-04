@@ -18,7 +18,7 @@ type OpenBao struct {
 // Config is the part of OpenBao's own configuration the test needs.
 type Config struct {
 	UI       bool           `json:"ui,omitempty"`
-	LogLevel string         `json:"log_level,omitempty"`
+	LogLevel string         `json:"log_level,omitempty" jsonschema:"enum=trace,enum=debug,enum=info,enum=warn,enum=error"`
 	APIAddr  string         `json:"api_addr"`
 	Storage  []StorageBlock `json:"storage,omitempty"`
 }

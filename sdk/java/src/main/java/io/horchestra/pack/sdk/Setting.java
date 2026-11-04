@@ -26,4 +26,20 @@ public @interface Setting {
 
     /** Not a setting (json:"-"). */
     boolean skip() default false;
+
+    /** The values it may be, written as the Go jsonschema tag's enum= are: read as the field's type. */
+    String[] enumOf() default {};
+
+    /** The pattern a string matches (pattern=). */
+    String pattern() default "";
+
+    /** The least and the most a number is (minimum=, maximum=); NaN — none. */
+    double minimum() default Double.NaN;
+
+    double maximum() default Double.NaN;
+
+    /** The least and the most characters of a string (minLength=, maxLength=); -1 — none. */
+    int minLength() default -1;
+
+    int maxLength() default -1;
 }

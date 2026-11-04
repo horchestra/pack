@@ -142,7 +142,19 @@ func TestSpecRefuses(t *testing.T) {
 		"a param of no type":             {Name: "x", Version: "1", Actions: []Action{{Name: "go", Command: []string{"true"}, Params: []Param{{Name: "p", Type: "date"}}}}},
 		"an enum of another type": {Name: "x", Version: "1", Actions: []Action{{Name: "go", Command: []string{"true"},
 			Params: []Param{{Name: "p", Type: TInteger, Enum: []any{"one"}}}}}},
-		"an action twice": {Name: "x", Version: "1", Actions: []Action{{Name: "go", Command: []string{"true"}}, {Name: "go", Command: []string{"true"}}}},
+		"an enum of a boolean":         {Name: "x", Version: "1", Fields: []Field{{Name: "a", Type: TBoolean, Enum: []any{true}}}},
+		"a field enum of another type": {Name: "x", Version: "1", Fields: []Field{{Name: "a", Type: TInteger, Enum: []any{"one"}}}},
+		"a pattern of a number":        {Name: "x", Version: "1", Fields: []Field{{Name: "a", Type: TNumber, Pattern: "^1$"}}},
+		"a pattern that is none":       {Name: "x", Version: "1", Fields: []Field{{Name: "a", Type: TString, Pattern: "(["}}},
+		"a backquote in a pattern":     {Name: "x", Version: "1", Fields: []Field{{Name: "a", Type: TString, Pattern: "^`$"}}},
+		"a minimum of a string":        {Name: "x", Version: "1", Fields: []Field{{Name: "a", Type: TString, Minimum: ptr(1.0)}}},
+		"a minimum above maximum":      {Name: "x", Version: "1", Fields: []Field{{Name: "a", Type: TInteger, Minimum: ptr(2.0), Maximum: ptr(1.0)}}},
+		"a length of an integer":       {Name: "x", Version: "1", Fields: []Field{{Name: "a", Type: TInteger, MaxLength: ptr(1)}}},
+		"a default out of enum":        {Name: "x", Version: "1", Fields: []Field{{Name: "a", Type: TString, Default: "c", Enum: []any{"a", "b"}}}},
+		"a default out of bounds":      {Name: "x", Version: "1", Fields: []Field{{Name: "a", Type: TInteger, Default: 0.0, Minimum: ptr(1.0)}}},
+		"a default not matching":       {Name: "x", Version: "1", Fields: []Field{{Name: "a", Type: TString, Default: "B", Pattern: "^[a-z]+$"}}},
+		"a default too long":           {Name: "x", Version: "1", Fields: []Field{{Name: "a", Type: TString, Default: "abc", MaxLength: ptr(2)}}},
+		"an action twice":              {Name: "x", Version: "1", Actions: []Action{{Name: "go", Command: []string{"true"}}, {Name: "go", Command: []string{"true"}}}},
 	} {
 		if err := s.Check(); err == nil {
 			t.Errorf("%s: no refusal", name)
@@ -152,6 +164,8 @@ func TestSpecRefuses(t *testing.T) {
 		t.Error("a pack that holds another")
 	}
 }
+
+func ptr[T any](v T) *T { return &v }
 
 // A scaffold is written once: a second one into the same directory is refused before a file is written, and Force
 // writes over them.
@@ -182,5 +196,95 @@ func TestScaffoldOnce(t *testing.T) {
 	}
 	if b, _ := os.ReadFile(filepath.Join(dir, "kv.py")); bytes.Equal(b, mine) {
 		t.Error("Force wrote nothing over")
+	}
+}
+
+// What a value may be — enum, pattern, bounds, lengths — is said the same in the three languages: each SDK writes the
+// schema the Go one does, and the schema is read back as the spec.
+func TestScaffoldConstraints(t *testing.T) {
+	lo, hi, frac := 1.0, 65535.0, 0.5
+	short, long := 1, 8
+	spec := &Spec{Name: "kv", Version: "1.0.0", Fields: []Field{
+		{Name: "level", Type: TString, Default: "info", Enum: []any{"debug", "info", "a,b"}},
+		{Name: "port", Type: TInteger, Default: 6380.0, Minimum: &lo, Maximum: &hi},
+		{Name: "ratio", Type: TNumber, Maximum: &frac},
+		{Name: "mode", Type: TInteger, Enum: []any{1.0, 2.0}},
+		{Name: "node", Type: TObject, Fields: []Field{
+			{Name: "id", Type: TString, Required: true, Pattern: `^[a-z]{1,8}\d*$`, MinLength: &short, MaxLength: &long},
+		}},
+	}}
+	schemas := map[string]string{}
+	for _, lang := range Langs {
+		t.Run(lang, func(t *testing.T) {
+			var o Options
+			switch lang {
+			case Python:
+				if _, err := exec.LookPath("python3"); err != nil {
+					t.Skip("no python3")
+				}
+				sdkPython, _ := filepath.Abs(filepath.Join("..", "..", "sdk", "python"))
+				t.Setenv("PYTHONPATH", sdkPython)
+			case Java:
+				o.Classpath = javaSDK(t)
+			}
+			dir := t.TempDir()
+			if lang == Go {
+				var err error
+				if dir, err = os.MkdirTemp(".", "zz_scaffold_"); err != nil {
+					t.Fatal(err)
+				}
+				t.Cleanup(func() { _ = os.RemoveAll(dir) })
+				dir, _ = filepath.Abs(dir)
+			}
+			if _, err := Scaffold(spec, lang, dir, ScaffoldOptions{}); err != nil {
+				t.Fatal(err)
+			}
+			out := t.TempDir()
+			if err := Generate(context.Background(), dir, lang, out, o); err != nil {
+				t.Fatalf("generate: %v", err)
+			}
+			b, err := os.ReadFile(filepath.Join(out, "kv", "schema.json"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			schemas[lang] = string(b)
+			if lang != Go {
+				return
+			}
+			back, err := FromPack(filepath.Join(out, "kv"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !reflect.DeepEqual(back.Fields, spec.Fields) {
+				t.Errorf("read back:\n%+v\nwant\n%+v", back.Fields, spec.Fields)
+			}
+			for _, want := range []string{`"enum":["debug","info","a,b"]`, `"maximum":65535,"minimum":1`, `"maximum":0.5`, `"enum":[1,2]`,
+				`"maxLength":8,"minLength":1,"pattern":"^[a-z]{1,8}\\d*$"`} {
+				if !strings.Contains(string(b), want) {
+					t.Errorf("no %s in\n%s", want, b)
+				}
+			}
+		})
+	}
+	goSchema, ok := schemas[Go]
+	if !ok {
+		return
+	}
+	for lang, got := range schemas {
+		var x, y any
+		if json.Unmarshal([]byte(goSchema), &x) != nil || json.Unmarshal([]byte(got), &y) != nil || !reflect.DeepEqual(x, y) {
+			t.Errorf("%s says another schema:\ngo   %s\n%-4s %s", lang, goSchema, lang, got)
+		}
+		if lang == Java && got != goSchema {
+			t.Errorf("java: not byte for byte:\ngo   %s\njava %s", goSchema, got)
+		}
+	}
+}
+
+// A length that is no whole number is refused as it is read back, not cut to one.
+func TestFromPackRefusesAFractionalLength(t *testing.T) {
+	node := map[string]any{"properties": map[string]any{"id": map[string]any{"type": "string", "maxLength": 1.5}}}
+	if _, err := (&Spec{}).fieldsFrom(node, "", map[string][]string{"": {"id"}}); err == nil || !strings.Contains(err.Error(), "not a whole number") {
+		t.Errorf("maxLength 1.5: %v", err)
 	}
 }

@@ -27,7 +27,7 @@ else the pack's base language) as comments above it.
 
 ```yaml
 # pack values: sha256:73e34aa141b83d4a
-…
+  …
 openbao:
   # Serve the web UI.
   # e.g. true
@@ -45,7 +45,7 @@ postgres:
 - What the release gives is written as it is. A setting it does not give is a commented line — `#log_level: info`, its
   default, an example, or a secret's `secretRef` — to uncomment: the file written again is the same file. A held pack
   not given is commented out whole (named, even empty, it is selected).
-- The description, `e.g.` (examples), `one of`, `pattern`, `filled by a formula` and `required` come from the schema;
+- The description, `e.g.` (examples), `one of`, `pattern`, the bounds (`from 1 to 65535`, `at most 63 characters`), `filled by a formula` and `required` come from the schema;
   groups are headings, `# --- Logging ---`.
 - A value the tool filled says where it came from, `# source: suggest — why`, while it is the value it wrote
   (`.pack/values.sources.json`, which what fills values for the operator saves — not values write itself); a value the
@@ -54,7 +54,8 @@ postgres:
   the operator's own — a line, or at the end of a line — makes `pack values write` refuse, and so does a comment of
   pack's taken away or changed; `--rewrite` writes the file anyway, as pack writes it. A comment is `# text`; `#key:`
   and `#  key:` are commented settings, outside the stamp. A value of the operator's own whose text holds ` #` (a
-  hand-written block scalar) reads as a comment at the end of its line: `--rewrite` writes it as pack does. `--check` says whether the file is what pack would write. A release whose values are
+  hand-written block scalar) reads as a comment at the end of its line: `--rewrite` writes it as pack does. `--check`
+  says whether the file is what pack would write. A release whose values are
   split over files, or a file that is a whole document (`rollout`, `skip`), is not written.
 
 ## pack fill and pack answer
@@ -82,14 +83,14 @@ of `null` leaves the leaf as it was.
 
 ## The CEL environment
 
-| variable                                                                                 |                                                                                                                                      |
-|------------------------------------------------------------------------------------------|--------------------------------------------------------------------------------------------------------------------------------------|
-| `values`                                                                                 | the whole document of the pack                                                                                                       |
-| `limits`                                                                                 | what the target says of the key's limits: `memory` in bytes, `cpu` in millicores; absent where there is none                         |
-| `me`                                                                                     | the key itself: `service`, `instances`, `replicas`, `ports`, and `reach` where its target says how it is reached from another target |
-| `pack.installation`, `pack.component`, `pack.namespace`, `pack.service`, `pack.replicas` | where and as what the key is installed                                                                                               |
-| `pack.values.<key>`                                                                      | any key's own values, read without binding a role                                                                                    |
-| `pack.keys.<key>`                                                                        | any key as `me` describes it: `service`, `instances`, `replicas`, `ports`                                                            |
+| variable                                                                                 |                                                                                                                                                                                          |
+|------------------------------------------------------------------------------------------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `values`                                                                                 | the whole document of the pack                                                                                                                                                           |
+| `limits`                                                                                 | what the target says of the key's limits: `memory` in bytes, `cpu` in millicores; absent where there is none                                                                             |
+| `me`                                                                                     | the key itself: `service`, `instances`, `replicas`, `ports`, and `reach` where its target says how it is reached from another target                                                     |
+| `pack.installation`, `pack.component`, `pack.namespace`, `pack.service`, `pack.replicas` | where and as what the key is installed                                                                                                                                                   |
+| `pack.values.<key>`                                                                      | any key's own values, read without binding a role                                                                                                                                        |
+| `pack.keys.<key>`                                                                        | any key as `me` describes it: `service`, `instances`, `replicas`, `ports`                                                                                                                |
 | `facts`                                                                                  | what the key's target told of where it installs (`pack discover`): `facts.hosts.<name>.memory_mb`, `.cpus`, `.disks`, `.ports` …; `{}` when it told none — guard with `has(facts.hosts)` |
 
 `instances` are names, never addresses: stable under any network mode and known before anything is scheduled. A key on

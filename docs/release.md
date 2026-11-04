@@ -4,13 +4,13 @@ A command runs in a **release**: the directory it is started in (`-C dir` names 
 root module. What a pack is installed from, with which values, into which environment is read from that directory, so
 the same bare command gives the same result on a console and in CI. **The command line adds nothing to a release.**
 
-| file                                      |                                                                                                                                                                                                     |
-|-------------------------------------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| file                                      |                                                                                                                                                                                                        |
+|-------------------------------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | `release.yaml`                            | `pack:` a directory or `oci://host/repo:tag`; `values:` more files or directories; `state: file` (default) or `target`; `id:` the installation's UUID (`state: target` only; `pack refresh` writes it) |
-| `values.yaml`, `*.values.yaml`, `values/` | what the operator wants, in the pack's own words, see [values.md](values.md)                                                                                                                        |
-| `env.yaml`                                | the environment; `--env x` (or `PACK_ENV`) reads `env.x.yaml` instead                                                                                                                               |
-| `release.lock.json`                       | the digest a registry tag meant when `pack init` or `pack refresh` ran; commit it                                                                                                                                     |
-| `.pack/`                                  | the state (`state.json`), the journal, the packs brought from a registry (`packs/<digest>/`); not for version control                                                                               |
+| `values.yaml`, `*.values.yaml`, `values/` | what the operator wants, in the pack's own words, see [values.md](values.md)                                                                                                                           |
+| `env.yaml`                                | the environment; `--env x` (or `PACK_ENV`) reads `env.x.yaml` instead                                                                                                                                  |
+| `release.lock.json`                       | the digest a registry tag meant when `pack init` or `pack refresh` ran; commit it                                                                                                                      |
+| `.pack/`                                  | the state (`state.json`), the journal, the packs brought from a registry (`packs/<digest>/`); not for version control                                                                                  |
 
 ```yaml
 # release.yaml
@@ -72,10 +72,13 @@ keys: # how the environment runs each key of the pack
 
 - `target:` names a target; the core knows none by name. `memory` is in pack (it keeps what it is told in the
   process: what the tests and `plan`/`template` use; `observe: "true"` makes it report what it holds, so drift can be
-  seen). `docker`, `ansible` and `k8s` are programs of their own that `pack refresh` (and `pack init`) downloads and pack starts,
-  `pack-target-<name>`, see [targets.md](targets.md); each one's settings and the entries of `keys:` it reads are in its README.
+  seen). `docker`, `ansible` and `k8s` are programs of their own that `pack refresh` (and `pack init`) downloads and
+  pack starts,
+  `pack-target-<name>`, see [targets.md](targets.md); each one's settings and the entries of `keys:` it reads are in its
+  README.
 - The default target is the one the top-level keys describe; each entry of `targets` is a target of its own, none
-  inherited from the default one. `target:` may name an entry instead (`target: main`, `targets: {main: {target: docker}}`):
+  inherited from the default one. `target:` may name an entry instead (`target: main`,
+  `targets: {main: {target: docker}}`):
   that entry is the default target, and its settings are written there, not at the top.
 - `keys` is where placement lives: **values configure the application, the environment runs it.** `replicas` is how many
   instances run; `resources` are cgroup requests and limits (a pack's `Minimum` is their lower bound); `env` is added to

@@ -12,7 +12,7 @@ import (
 type Config struct {
 	// ID is the node's id: lowercase letters, digits and underscores; the hostname, dashes turned into underscores,
 	// when unset.
-	ID string `json:"id,omitempty" env:"TEMBO_ID"`
+	ID string `json:"id,omitempty" env:"TEMBO_ID" jsonschema:"pattern=^[a-z0-9_]*$,maxLength=63"`
 	// Listen and ListenRO are the client proxies: to the primary, and spread over the standbys.
 	Listen   string `json:"listen,omitempty" env:"TEMBO_LISTEN"`
 	ListenRO string `json:"listen_ro,omitempty" env:"TEMBO_LISTEN_RO"`
@@ -20,7 +20,7 @@ type Config struct {
 	DB     string `json:"db,omitempty" env:"TEMBO_DB"`
 	PGData string `json:"pg_data,omitempty" env:"TEMBO_PG_DATA"`
 	// PGPort is the port of Postgres itself, behind the proxies, the same on every node.
-	PGPort int `json:"pg_port,omitempty" env:"TEMBO_PG_PORT"`
+	PGPort int `json:"pg_port,omitempty" env:"TEMBO_PG_PORT" jsonschema:"minimum=1,maximum=65535"`
 	// PGPassword is the superuser's password, the same on every node; it only bootstraps a new cluster, a running
 	// one is rotated with `tembo rotate-password`.
 	PGPassword sdk.Secret `json:"pg_password,omitempty" env:"TEMBO_PG_PASSWORD"`

@@ -63,14 +63,14 @@ The record is written after every change. A saga that was cut short (Ctrl-C twic
 them; `plan` refuses every plan that does something; `auto` refuses none. The risks of a plan are in it (`pack plan`,
 `--json`'s `risks`):
 
-| risk           | what                                                                   |
-|----------------|------------------------------------------------------------------------|
-| `data`         | a key with data volumes is dropped                                     |
-| `secret`       | a key's credentials change                                             |
-| `downgrade`    | a key goes back a version                                              |
-| `savepoint`    | an upgrade past a savepoint: a failure keeps what is before it         |
-| `irreversible` | a step that cannot be undone (a hook without compensate)               |
-| `action`       | an action the pack says is never run unasked (`pack run`, `approve`)  |
+| risk           | what                                                                 |
+|----------------|----------------------------------------------------------------------|
+| `data`         | a key with data volumes is dropped                                   |
+| `secret`       | a key's credentials change                                           |
+| `downgrade`    | a key goes back a version                                            |
+| `savepoint`    | an upgrade past a savepoint: a failure keeps what is before it       |
+| `irreversible` | a step that cannot be undone (a hook without compensate)             |
+| `action`       | an action the pack says is never run unasked (`pack run`, `approve`) |
 
 A plan refused is not begun: the error is `needs_approval`, its risks the problems. The plan says its digest
 (`plan sha256:…`), and `pack apply --approve <digest>` applies that very plan, and refuses one that changed since it

@@ -7,7 +7,7 @@ artifacts, byte for byte (`sdk/testdata/golden` is the proof the tests compare w
 | method          |                                                                                                                                         |
 |-----------------|-----------------------------------------------------------------------------------------------------------------------------------------|
 | `SetDefaults()` | what a zero value cannot say. It sets, never adds: it may run twice. A field that is not zero afterwards is a setting with that default |
-| `Meta()`        | the identity: `Name`, `Version` (required), `Description`, `License`, `Source`, `Image`, `Annotations` …                    |
+| `Meta()`        | the identity: `Name`, `Version` (required), `Description`, `License`, `Source`, `Image`, `Annotations` …                                |
 | `PackRoot()`    | how it runs, upgrades and rolls back (below)                                                                                            |
 | `PackCompute()` | optional: `{pointer: CEL formula}` that fills a value the operator did not write                                                        |
 | `PackRules()`   | optional: `{pointer: [rule, …]}` that the values must satisfy                                                                           |
@@ -24,10 +24,13 @@ Postgres *tembo.Config `json:"postgres,omitempty"` // a pack of its own; a point
 The fields are the application's own settings: the `json` tag is the key in the schema (use the application's own
 name), **a field without `omitempty` is required**. Other tags:
 
-| tag                  |                                                                                                                                                                                                                        |
-|----------------------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| `env:"NAME"`         | the field is the environment variable `NAME`                                                                                                                                                                           |
-| `jsonschema:"readOnly=true"` | the operator does not set it: a value written for it is refused |
+| tag                                                      |                                                                                  |
+|----------------------------------------------------------|----------------------------------------------------------------------------------|
+| `env:"NAME"`                                             | the field is the environment variable `NAME`                                     |
+| `jsonschema:"readOnly=true"`                             | the operator does not set it: a value written for it is refused                  |
+| `jsonschema:"enum=a,enum=b"`                             | the values it may be (a string, an integer, a number)                            |
+| `jsonschema:"minimum=1,maximum=65535"`                   | the least and the most a number is                                               |
+| `jsonschema:"pattern=^[a-z]+$,minLength=1,maxLength=63"` | what a string matches, its least and most characters; a comma in a value is `\,` — so a value cannot end with a backslash (it would swallow the next clause), and a tag in backquotes holds no backquote: `pack author scaffold` refuses both |
 
 `sdk.Secret` is a credential leaf: the operator gives a reference (`secretRef: {name, key}`), never a value.
 
@@ -76,12 +79,12 @@ discover`) as often as not — and never takes by itself, as a formula does. `nu
 
 ```go
 func (c *Config) PackSuggest() map[string]packschema.Suggest {
-	return map[string]packschema.Suggest{
-		packschema.Pointer(c, &c.PGPort): {
-			Expr: "has(facts.hosts) && facts.hosts.exists(h, has(facts.hosts[h].ports) && facts.hosts[h].ports.exists(p, p.port == 5433)) ? 5434 : null",
-			Why:  "5433 is taken on a host",
-		},
-	}
+return map[string]packschema.Suggest{
+packschema.Pointer(c, &c.PGPort): {
+Expr: "has(facts.hosts) && facts.hosts.exists(h, has(facts.hosts[h].ports) && facts.hosts[h].ports.exists(p, p.port == 5433)) ? 5434 : null",
+Why:  "5433 is taken on a host",
+},
+}
 }
 ```
 
@@ -94,22 +97,24 @@ the kinds every pack shares, and offers the fix:
 
 ```go
 func (c *Config) PackDiagnose() []packschema.Diagnosis {
-	return []packschema.Diagnosis{{
-		ID:    "port-taken",
-		Match: `address already in use.*:5433`,
-		Cause: "postgres cannot listen: something on the host already listens on 5433",
-		Fix:   []packschema.Fix{{Patch: packschema.Pointer(c, &c.PGPort), Expr: "5434", Why: "the port next to it"}},
-	}}
+return []packschema.Diagnosis{{
+ID:    "port-taken",
+Match: `address already in use.*:5433`,
+Cause: "postgres cannot listen: something on the host already listens on 5433",
+Fix:   []packschema.Fix{{Patch: packschema.Pointer(c, &c.PGPort), Expr: "5434", Why: "the port next to it"}},
+}}
 }
 ```
 
 The cause is said in other languages by `diagnose: {<id>: …}` of `docs/<lang>.yaml`.
 
 An **action** (`PackActions`, `pack_actions`, `packActions`) is an operation the author names — a backup, a restore,
-a rotation — that `pack run <name>` performs on a key of the pack: in the key's first instance as it runs — `docker exec`, the
+a rotation — that `pack run <name>` performs on a key of the pack: in the key's first instance as it runs —
+`docker exec`, the
 cluster's exec in the pod, the command on the key's first host — with its files, its data, its network and its
 environment (the secrets the instance has, a password in its variables), into the journal: pack gives it no
-credentials of its own. What it writes outlives it where the key keeps data (a backup under a volume's mount path). The words of `Command` are
+credentials of its own. What it writes outlives it where the key keeps data (a backup under a volume's mount path). The
+words of `Command` are
 templates over the parameters (`{{ .to }}`); a parameter is a scalar (`string`, `integer`, `number`, `boolean`) with
 a default and an enum if need be, written into the schema as the JSON Schema of an object (`params`), for a form to
 be built on it. `Mutating` says it changes the installation — `run.approve: plan` asks for it — and `Approve` that it
@@ -118,19 +123,19 @@ a person or a model runs besides an apply:
 
 ```go
 func (*Postgres) PackActions() []packschema.Action {
-	return []packschema.Action{{
-		Name:    "backup",
-		Command: []string{"pg_dump", "--format={{ .format }}", "--file={{ .to }}", "--dbname={{ .database }}"},
-		Params: []packschema.Param{
-			{Name: "to", Type: "string", Required: true},
-			{Name: "format", Type: "string", Default: "custom", Enum: []any{"custom", "plain", "directory"}},
-			{Name: "database", Type: "string", Default: "postgres"},
-		},
-	}, {
-		Name: "restore", Mutating: true, Approve: true,
-		Command: []string{"pg_restore", "--clean", "--if-exists", "--dbname={{ .database }}", "{{ .from }}"},
-		Params:  []packschema.Param{{Name: "from", Type: "string", Required: true}, {Name: "database", Type: "string", Default: "postgres"}},
-	}}
+return []packschema.Action{{
+Name:    "backup",
+Command: []string{"pg_dump", "--format={{ .format }}", "--file={{ .to }}", "--dbname={{ .database }}"},
+Params: []packschema.Param{
+{Name: "to", Type: "string", Required: true},
+{Name: "format", Type: "string", Default: "custom", Enum: []any{"custom", "plain", "directory"}},
+{Name: "database", Type: "string", Default: "postgres"},
+},
+}, {
+Name: "restore", Mutating: true, Approve: true,
+Command: []string{"pg_restore", "--clean", "--if-exists", "--dbname={{ .database }}", "{{ .from }}"},
+Params:  []packschema.Param{{Name: "from", Type: "string", Required: true}, {Name: "database", Type: "string", Default: "postgres"}},
+}}
 }
 ```
 
@@ -148,17 +153,17 @@ The files a component gets are the `Content` of `PackRoot`, not tags of the fiel
 
 ```go
 Content: []packschema.File{
-    {Path: "/etc/postgresql/postgresql.conf", Values: "conf", Format: "properties"}, // a subtree of the values
-    {Path: "/opt/pack/init-extensions.sh", Template: "init-extensions.sh", Mode: "0755"}, // rendered
-    {Path: "/opt/pack/restore-15.sh", Source: "restore-15.sh", Mode: "0755"},             // byte for byte
+{Path: "/etc/postgresql/postgresql.conf", Values: "conf", Format: "properties"},      // a subtree of the values
+{Path: "/opt/pack/init-extensions.sh", Template: "init-extensions.sh", Mode: "0755"}, // rendered
+{Path: "/opt/pack/restore-15.sh", Source: "restore-15.sh", Mode: "0755"},             // byte for byte
 },
 ```
 
-| from       |                                                                                                                                  |
-|------------|----------------------------------------------------------------------------------------------------------------------------------|
-| `Source`   | a file of `content/`, byte for byte, whatever `{{ }}` it holds: a script, a dump, an archive, a template of the application's own |
+| from       |                                                                                                                                                             |
+|------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `Source`   | a file of `content/`, byte for byte, whatever `{{ }}` it holds: a script, a dump, an archive, a template of the application's own                           |
 | `Template` | a file of `content/`, rendered, [emitters.md](emitters.md#template-data); with `Values`, written only when that value is there; `ParseAs` checks the result |
-| `Values`   | a field's subtree (`conf`, `tls/key`) in `Format`, the name of `Path` saying it when there is none; `secret` mounts a password leaf's key |
+| `Values`   | a field's subtree (`conf`, `tls/key`) in `Format`, the name of `Path` saying it when there is none; `secret` mounts a password leaf's key                   |
 
 `Mode` is the file's mode. The files themselves are in `content/`, next to the source (Go: the file that defines `Meta`;
 Python: the class's file; Java: `Meta.dir`), read from disk, never embedded. Every file `Content` names must be there;
@@ -170,20 +175,21 @@ A target that runs no image (`ansible`) installs what `Packages` of `PackRoot` s
 
 ```go
 Packages: map[string]packschema.OSPackages{
-    "debian": {
-        Prepare:  []string{"ca-certificates"},
-        Repo:     []packschema.File{
-            {Path: "/etc/apt/keyrings/docker.asc", URL: "{{ .mirror }}/debian/gpg", Mode: "0644"},
-            {Path: "/etc/apt/sources.list.d/docker.sources", Template: "docker.sources", Mode: "0644"},
-        },
-        Names:    []string{"docker-ce", "docker-ce-cli", "containerd.io"},
-        Content:  []packschema.File{{Path: "/etc/docker/daemon.json", Values: "daemon", Format: "json"}},
-        Services: []string{"docker"},
-    },
+"debian": {
+Prepare:  []string{"ca-certificates"},
+Repo:     []packschema.File{
+{Path: "/etc/apt/keyrings/docker.asc", URL: "{{ .mirror }}/debian/gpg", Mode: "0644"},
+{Path: "/etc/apt/sources.list.d/docker.sources", Template: "docker.sources", Mode: "0644"},
+},
+Names:    []string{"docker-ce", "docker-ce-cli", "containerd.io"},
+Content:  []packschema.File{{Path: "/etc/docker/daemon.json", Values: "daemon", Format: "json"}},
+Services: []string{"docker"},
+},
 },
 ```
 
-- **The key is any OS.** It is a string, not a field: nothing in pack or the SDK lists the OSes. The target takes the most
+- **The key is any OS.** It is a string, not a field: nothing in pack or the SDK lists the OSes. The target takes the
+  most
   exact one a host goes by (`debian-13`, `debian`, the family). The operator adds an OS the pack does not know, or other
   names, in `keys.<key>.packages` of `env.yaml`, without touching the pack.
 - **Each OS has its own everything.** The same application reads another path and runs another unit there: the order is
@@ -191,7 +197,8 @@ Packages: map[string]packschema.OSPackages{
 - **The version is the OS's.** `Meta.Version` says nothing of a package; a name says its own in the OS's words
   (`postgresql-16=16.4-1.pgdg13+1`), or the name is a URL of a package file.
 - **Where packages come from is a value.** A name and a file's `URL` are templates too: a field of the pack, upstream by
-  default, lets the operator point at a mirror (`oci-proxy` of the ansible target serves a repository kept in the registry). `${os:codename}`, `${os:version}`, `${os:arch}`, `${os:id}` are the target's
+  default, lets the operator point at a mirror (`oci-proxy` of the ansible target serves a repository kept in the
+  registry). `${os:codename}`, `${os:version}`, `${os:arch}`, `${os:id}` are the target's
   to resolve, on each host.
 - **The hooks are `Hooks` of the root,** so a script a hook runs is at one path, with its own content per OS.
 - **The host is taken to be empty:** nothing conflicting is looked for or removed.
@@ -232,7 +239,8 @@ groups:
 
 - The base language becomes the schema's own `title`, `description` and `examples` (typed by the field: `8080` of an
   integer is a number; a number is an integer of int64 or a plain decimal — no exponent, no trailing zero, at most 15
-  significant digits, at least 0.0001 — so that every SDK writes it back as it is); the others `x-pack-i18n: {ru: {title, description}}` beside them. `group` is `x-pack-group` on
+  significant digits, at least 0.0001 — so that every SDK writes it back as it is); the others
+  `x-pack-i18n: {ru: {title, description}}` beside them. `group` is `x-pack-group` on
   the field, and the root lists the groups as `x-pack-groups` in the order the fields first use them. A rule's message
   is said by its `ID` (`Rule.ID`, unique in the pack), translated into the rule's `x-pack-i18n`.
 - A pointer, a group or a rule id the pack has not is an error at generation: a renamed field leaves no stale text.
@@ -248,7 +256,8 @@ groups:
 ## A pack that holds a pack
 
 A field whose type is a pack holds it: the settings of the two join in one schema (the held one as `pack://name#`), a
-held pack is installed **before** the pack that holds it. A pointer (Go), `Optional` (Python) or `null` (Java) makes it optional.
+held pack is installed **before** the pack that holds it. A pointer (Go), `Optional` (Python) or `null` (Java) makes it
+optional.
 A pack that holds itself, however far down, is refused.
 
 ## Generating
@@ -292,6 +301,14 @@ fields:
   - name: port
     type: integer
     default: 6380
+    minimum: 1
+    maximum: 65535
+  - name: mode
+    type: string
+    default: standalone
+    enum:
+      - standalone
+      - cluster
 root:
   ports:
     kv: 6380
@@ -310,7 +327,8 @@ above the directory or `--go-import`; Python: one file; Java: one class), `docs/
 runs on as the environment's requests, an apply that installs. It is written once: a directory that holds any of
 those files already is refused before one is written (`--force` writes over them), and from then on the source is
 the pack, and `pack author check` is what says it is right. The spec itself is checked first — names, types, a
-default of its field's type, a group of the spec's groups, the pointers of formulas and rules naming fields (not the
+default of its field's type and inside its `enum`, `minimum`/`maximum`, `pattern`, `minLength`/`maxLength` (each of
+the types that have it), a group of the spec's groups, the pointers of formulas and rules naming fields (not the
 whole pack: a rule of the root is written in the source), the actions' params — so a model hears of a mistake there
 before any code is written. `--from <generated pack>` takes the spec of a pack already
 generated — the pack written again in another language, its `templates/` for `content/`; the examples go there and
@@ -343,34 +361,34 @@ name: postgres that cannot listen fails, is taken back, and is diagnosed a port 
 facts: fixtures/hosts.json     # pack discover --save-fixture; or {<target>: {hosts: …}} inline
 values:
   database: app
-env:                           # env.yaml, over {target: memory}
+env: # env.yaml, over {target: memory}
   keys:
     postgres:
       resources:
         requests:
           memory: 1Gi
-from:                          # a version installed first: the plan is from it
+from: # a version installed first: the plan is from it
   pack: ../v15                 # another generated pack (a directory); none — the pack under test
   values:
     database: app
 fail_at: postgres/wait         # <key>/<kind> (apply, wait, hook:<name> …): the step fails, its undoing does not
 fail_error: postgres is not ready
-logs:                          # what the target gives of the key's logs
+logs: # what the target gives of the key's logs
   postgres:
     postgres-0:
       - 'could not bind IPv4 address "0.0.0.0": Address already in use'
 expect:
-  suggest:                     # what pack fill offers, by pointer; null — nothing
+  suggest: # what pack fill offers, by pointer; null — nothing
     /pg_port: 5434
-  problems:                    # what the values break: where, kind, rule, a part of the message; [] — nothing
+  problems: # what the values break: where, kind, rule, a part of the message; [] — nothing
     - where: /openbao/storage
       rule: storage-from-postgres
   files: golden/basic          # the rendered files, as pack template -o writes them
   plan: golden/upgrade.plan    # the plan's text
-  apply:                       # how the apply ends: installed or failed, the keys in effect after
+  apply: # how the apply ends: installed or failed, the keys in effect after
     state: failed
-    in_effect: []
-  diagnose:                    # what pack diagnose makes of it
+    in_effect: [ ]
+  diagnose: # what pack diagnose makes of it
     class: port_conflict
     remedies:
       - command: pack discover

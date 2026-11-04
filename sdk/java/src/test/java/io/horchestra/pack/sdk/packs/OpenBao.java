@@ -22,7 +22,7 @@ public class OpenBao extends Pack {
     public static class Config {
         @Setting(omitempty = true)
         public boolean ui;
-        @Setting(json = "log_level", omitempty = true)
+        @Setting(json = "log_level", omitempty = true, enumOf = {"trace", "debug", "info", "warn", "error"})
         public String logLevel = "";
         @Setting(json = "api_addr")
         public String apiAddr = "";

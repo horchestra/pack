@@ -89,6 +89,15 @@ type Field struct {
 	Env      string `json:"env,omitempty"`
 	Default  any    `json:"default,omitempty"`
 
+	// What a value may be: enum (a string, an integer, a number), pattern and lengths (a string), minimum and
+	// maximum (an integer, a number).
+	Enum      []any    `json:"enum,omitempty"`
+	Pattern   string   `json:"pattern,omitempty" jsonschema:"description=string: a regular expression a value matches"`
+	Minimum   *float64 `json:"minimum,omitempty"`
+	Maximum   *float64 `json:"maximum,omitempty"`
+	MinLength *int     `json:"minLength,omitempty"`
+	MaxLength *int     `json:"maxLength,omitempty"`
+
 	Title       string          `json:"title,omitempty"`
 	Description string          `json:"description,omitempty"`
 	Examples    []any           `json:"examples,omitempty"`
@@ -150,8 +159,11 @@ func (s *Spec) Check() error {
 					items = f.Values
 				}
 				if f.Type == TObject || f.Type == TSecret || !fits(f.Type, items, f.Default) {
-					return fmt.Errorf("spec: %s: the default %v is not a %s", ptr, f.Default, f.Type)
+					return fmt.Errorf("spec: %s: the default %v is not of type %s", ptr, f.Default, f.Type)
 				}
+			}
+			if err := f.checkConstraints(ptr); err != nil {
+				return err
 			}
 			switch f.Type {
 			case TString, TInteger, TNumber, TBoolean, TSecret:
@@ -217,16 +229,89 @@ func (s *Spec) Check() error {
 				return fmt.Errorf("spec: %s: type %q is not one of string integer number boolean", at, p.Type)
 			}
 			if p.Default != nil && !fits(p.Type, "", p.Default) {
-				return fmt.Errorf("spec: %s: the default %v is not a %s", at, p.Default, p.Type)
+				return fmt.Errorf("spec: %s: the default %v is not of type %s", at, p.Default, p.Type)
 			}
 			for _, e := range p.Enum {
 				if !fits(p.Type, "", e) {
-					return fmt.Errorf("spec: %s: %v of enum is not a %s", at, e, p.Type)
+					return fmt.Errorf("spec: %s: %v of enum is not of type %s", at, e, p.Type)
 				}
 			}
 		}
 	}
 	return nil
+}
+
+// checkConstraints says what of a field's enum, pattern, bounds and lengths cannot be: one its type has not, one a
+// Go tag cannot hold, its default outside them.
+func (f Field) checkConstraints(ptr string) error {
+	str, num := f.Type == TString, f.Type == TInteger || f.Type == TNumber
+	if len(f.Enum) > 0 && !str && !num {
+		return fmt.Errorf("spec: %s: enum is of a string, an integer or a number, not of type %s", ptr, f.Type)
+	}
+	for _, e := range f.Enum {
+		if !fits(f.Type, "", e) {
+			return fmt.Errorf("spec: %s: %v of enum is not of type %s", ptr, e, f.Type)
+		}
+		if x, ok := e.(string); ok && (strings.Contains(x, "`") || strings.HasSuffix(x, "\\")) {
+			return fmt.Errorf("spec: %s: %q of enum: a backquote, or a backslash at the end, is not written in a Go tag", ptr, x)
+		}
+	}
+	if len(f.Pattern) > 0 || f.MinLength != nil || f.MaxLength != nil {
+		if !str {
+			return fmt.Errorf("spec: %s: pattern, minLength and maxLength are of a string, not of type %s", ptr, f.Type)
+		}
+	}
+	if len(f.Pattern) > 0 {
+		if _, err := regexp.Compile(f.Pattern); err != nil {
+			return fmt.Errorf("spec: %s: pattern: %w", ptr, err)
+		}
+		if strings.Contains(f.Pattern, "`") || strings.HasSuffix(f.Pattern, "\\") {
+			return fmt.Errorf("spec: %s: pattern: a backquote, or a backslash at the end, is not written in a Go tag", ptr)
+		}
+	}
+	if (f.Minimum != nil || f.Maximum != nil) && !num {
+		return fmt.Errorf("spec: %s: minimum and maximum are of an integer or a number, not of type %s", ptr, f.Type)
+	}
+	if f.Minimum != nil && f.Maximum != nil && *f.Minimum > *f.Maximum {
+		return fmt.Errorf("spec: %s: minimum %v is above maximum %v", ptr, *f.Minimum, *f.Maximum)
+	}
+	if (f.MinLength != nil && *f.MinLength < 0) || (f.MaxLength != nil && *f.MaxLength < 0) {
+		return fmt.Errorf("spec: %s: a length is not below 0", ptr)
+	}
+	if f.MinLength != nil && f.MaxLength != nil && *f.MinLength > *f.MaxLength {
+		return fmt.Errorf("spec: %s: minLength %d is above maxLength %d", ptr, *f.MinLength, *f.MaxLength)
+	}
+	if f.Default == nil || !fits(f.Type, "", f.Default) {
+		return nil // a default of another type is said by its own check
+	}
+	if len(f.Enum) > 0 && !slices.ContainsFunc(f.Enum, func(e any) bool { return fmt.Sprint(e) == fmt.Sprint(f.Default) }) {
+		return fmt.Errorf("spec: %s: the default %v is not one of enum", ptr, f.Default)
+	}
+	if d, ok := f.Default.(string); ok {
+		if n := len([]rune(d)); (f.MinLength != nil && n < *f.MinLength) || (f.MaxLength != nil && n > *f.MaxLength) {
+			return fmt.Errorf("spec: %s: the default %q is of another length", ptr, d)
+		}
+		if len(f.Pattern) > 0 && !regexp.MustCompile(f.Pattern).MatchString(d) {
+			return fmt.Errorf("spec: %s: the default %q does not match the pattern", ptr, d)
+		}
+	}
+	if d, ok := number(f.Default); ok && ((f.Minimum != nil && d < *f.Minimum) || (f.Maximum != nil && d > *f.Maximum)) {
+		return fmt.Errorf("spec: %s: the default %v is out of minimum and maximum", ptr, f.Default)
+	}
+	return nil
+}
+
+// number is a number as JSON reads it.
+func number(v any) (float64, bool) {
+	switch x := v.(type) {
+	case float64:
+		return x, true
+	case int:
+		return float64(x), true
+	case int64:
+		return float64(x), true
+	}
+	return 0, false
 }
 
 // fits says whether a value, as JSON reads it, is of a type of a spec; items is what a list or a map holds.
@@ -239,18 +324,8 @@ func fits(typ, items string, v any) bool {
 		_, ok := v.(bool)
 		return ok
 	case TNumber, TInteger:
-		var n float64
-		switch x := v.(type) {
-		case float64:
-			n = x
-		case int:
-			n = float64(x)
-		case int64:
-			n = float64(x)
-		default:
-			return false
-		}
-		return typ == TNumber || n == math.Trunc(n)
+		n, ok := number(v)
+		return ok && (typ == TNumber || n == math.Trunc(n))
 	case TList:
 		l, ok := v.([]any)
 		if !ok {
@@ -636,6 +711,7 @@ func keysInOrder(obj json.RawMessage) ([]string, error) {
 
 // known are the keywords of a node that FromPack reads; another is a pack it cannot say yet.
 var known = []string{"type", "properties", "required", "additionalProperties", "items", "default", "title", "description",
+	"enum", "pattern", "minimum", "maximum", "minLength", "maxLength",
 	"examples", "format", "x-pack-env", "x-pack-compute", "x-pack-rules", "x-pack-suggest", "x-pack-group", "x-pack-i18n"}
 
 func (s *Spec) fieldsFrom(node map[string]any, ptr string, order map[string][]string) ([]Field, error) {
@@ -663,6 +739,30 @@ func (s *Spec) fieldsFrom(node map[string]any, ptr string, order map[string][]st
 		f.Title, _ = n["title"].(string)
 		f.Description, _ = n["description"].(string)
 		f.Group, _ = n["x-pack-group"].(string)
+		f.Enum, _ = n["enum"].([]any)
+		f.Pattern, _ = n["pattern"].(string)
+		bound := func(k string) *float64 {
+			if x, ok := number(n[k]); ok {
+				return &x
+			}
+			return nil
+		}
+		var bad error
+		length := func(k string) *int {
+			x, ok := number(n[k])
+			if !ok {
+				return nil
+			}
+			if x != math.Trunc(x) {
+				bad = fmt.Errorf("%s: %s %v is not a whole number", p, k, x)
+			}
+			i := int(x)
+			return &i
+		}
+		f.Minimum, f.Maximum, f.MinLength, f.MaxLength = bound("minimum"), bound("maximum"), length("minLength"), length("maxLength")
+		if bad != nil {
+			return nil, bad
+		}
 		if ex, ok := n["examples"].([]any); ok {
 			f.Examples = ex
 		}

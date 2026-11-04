@@ -17,7 +17,7 @@ class StorageBlock:
 @dataclass
 class Config:
     ui: bool = field(False, omitempty=True)
-    log_level: str = field("", omitempty=True)
+    log_level: str = field("", omitempty=True, enum=["trace", "debug", "info", "warn", "error"])
     api_addr: str = field("")
     storage: list[StorageBlock] = field(factory=list, omitempty=True)
 

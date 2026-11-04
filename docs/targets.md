@@ -18,7 +18,8 @@ and `main.go`, built into a program that pack starts and speaks to over gRPC:
 
 ## Using one
 
-Like terraform's providers, a target is named in the release and **downloaded by `pack refresh`** (and by `pack init`, which makes the release):
+Like terraform's providers, a target is named in the release and **downloaded by `pack refresh`** (and by `pack init`,
+which makes the release):
 
 ```yaml
 # env.yaml
@@ -32,7 +33,8 @@ targets:
   k8s: oci://ghcr.io/horchestra/targets/k8s:0.1.0-{os}-{arch}
 ```
 
-`pack refresh` takes the targets the environment uses (`target:` and the `target:` of each entry of `targets:`), downloads
+`pack refresh` takes the targets the environment uses (`target:` and the `target:` of each entry of `targets:`),
+downloads
 each from its source into `.pack/bin/pack-target-<name>`, and writes the SHA-256 of what came into `release.lock.json`:
 
 ```json
@@ -100,17 +102,18 @@ target: ansible
 runtime:
   type: docker                       # native | docker | k8s (below)
   network: host                      # the container's network; host — the machine's (none: a port on 127.0.0.1);
-                                     # under Docker Desktop (Mac, Windows) host is its VM's network, not the machine's
-  mounts:                            # source:destination[:ro|:rw], ~/ the home, both absolute
+  # under Docker Desktop (Mac, Windows) host is its VM's network, not the machine's
+  mounts: # source:destination[:ro|:rw], ~/ the home, both absolute
     - ~/.ssh/known_hosts:/home/pack/.ssh/known_hosts:ro
   ssh_agent: true                    # the machine's agent in the container (Docker Desktop's own on a Mac)
-  env:                               # variables passed in by name; their values never in a file or a command line
+  env: # variables passed in by name; their values never in a file or a command line
     - ANSIBLE_VAULT_PASSWORD
   user: host                         # host — pack's uid:gid and the groups of the sockets mounted (Linux's default);
-                                     # image — the image's user (the default under Docker Desktop)
+  # image — the image's user (the default under Docker Desktop)
 ```
 
-- `pack refresh` locks the digest the image's tag means (`release.lock.json`: `targets.<name>.image`, `digest`) and every
+- `pack refresh` locks the digest the image's tag means (`release.lock.json`: `targets.<name>.image`, `digest`) and
+  every
   command runs that digest, whatever the tag becomes; `--upgrade` takes the new one. The container runtime pulls it.
 - Before it runs, the image's labels must say it is the target's and speaks pack's protocol:
   `io.horchestra.pack.target=<name>`, `io.horchestra.pack.protocol=pack.target.v1`. Its entrypoint is
@@ -156,7 +159,8 @@ runtime:
   the rest, and taking it away takes them along. They are labelled with the installation and the target, the Pod
   annotated with the pack that made it; what a pack of this machine left (killed) is taken away by the next one. The
   Pod has no home of the release (`.pack/home/<name>` is the machine's): what a target keeps in `~` there lasts the
-  command. A Pod that cannot pull its image, cannot be placed or whose target exits says so, before pack speaks to it; one that
+  command. A Pod that cannot pull its image, cannot be placed or whose target exits says so, before pack speaks to it;
+  one that
   ends while pack waits for the handshake ends the wait, and a running Pod's target has 30s to answer. The Pod and
   the Service are named `pack-target-<name>-<10 hex>`: a target's name there is lower case letters, digits and
   dashes, a letter first, at most 40.
@@ -193,17 +197,17 @@ func main() {
 `factory(installation, settings)` makes the installation (`target.Installation`) for the environment's settings —
 refuse a setting it does not know with `target.Settings(set).Check(...)`:
 
-|                                                  |                                                                                                                                                                                                                                                                                                                                                                                                                    |
-|--------------------------------------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| `Namespace() string`                             | the scope it installs into; empty where it has none                                                                                                                                                                                                                                                                                                                                                                |
-| `Resolve(key, render.Placement)`                 | what the key is on the target: `Service`, `Address`, `Instances` (when the environment gave replicas), `Reach`. `Placement` carries `Replicas`, `Resources`, `Env`, `Labels`, `Annotations`, `Reach` and `Raw` — the rest of the key's entry in `env.yaml`, which only the target reads. Resolve is called for the installed version and the wanted one before any step; keep what the steps need of the placement |
-| `Execute(ctx, target.Step, events func(string))` | one step: `apply`, `wait`, `stop`, `hook`, `remove`, `exec`, with the key's unit in the wanted and the installed version and the credentials. It must be safe to repeat: a saga cut short repeats what it cannot tell was done. `step.Rollback` marks a step that undoes an earlier one; `exec` is an action of the pack (`pack run`): its command in the key's first instance as it runs (`docker exec`, the cluster's exec, the key's first host)                                                                                                                                    |
-| `target.Recorder` (optional, `CapRecord`)        | keeps pack's record of the installation in the target's own system: `state: target`                                                                                                                                                                                                                                                                                                                                |
-| `target.Observer` (optional, `CapObserve`)       | says what it holds by key (image, replicas) so that a change made behind pack's back is seen as drift                                                                                                                                                                                                                                                                                                              |
-| `target.Discoverer` (optional, `CapDiscover`)   | tells the facts of where it installs, read only: its hosts (OS, CPUs, memory, disks and free space, ports listened on, runtimes, DNS, clock) and a cluster's version and storage classes — `pack discover`, and `facts` in formulas. A fact it cannot tell is left out |
-| `target.Logger` (optional, `CapLogs`)           | gives the tail of what a key's instances wrote (container logs, a service's journal, a pod's log), by instance: the evidence of `pack diagnose` |
-| `target.Checker` (optional, `CapHealth`)        | says how each key is: ready when every instance is, with why one is not (exited, unhealthy, `CrashLoopBackOff`, a service inactive) |
-| `io.Closer` (optional)                           | released when the target stops — a tunnel, a connection                                                                                                                                                                                                                                                                                                                                                            |
+|                                                  |                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+|--------------------------------------------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `Namespace() string`                             | the scope it installs into; empty where it has none                                                                                                                                                                                                                                                                                                                                                                                                 |
+| `Resolve(key, render.Placement)`                 | what the key is on the target: `Service`, `Address`, `Instances` (when the environment gave replicas), `Reach`. `Placement` carries `Replicas`, `Resources`, `Env`, `Labels`, `Annotations`, `Reach` and `Raw` — the rest of the key's entry in `env.yaml`, which only the target reads. Resolve is called for the installed version and the wanted one before any step; keep what the steps need of the placement                                  |
+| `Execute(ctx, target.Step, events func(string))` | one step: `apply`, `wait`, `stop`, `hook`, `remove`, `exec`, with the key's unit in the wanted and the installed version and the credentials. It must be safe to repeat: a saga cut short repeats what it cannot tell was done. `step.Rollback` marks a step that undoes an earlier one; `exec` is an action of the pack (`pack run`): its command in the key's first instance as it runs (`docker exec`, the cluster's exec, the key's first host) |
+| `target.Recorder` (optional, `CapRecord`)        | keeps pack's record of the installation in the target's own system: `state: target`                                                                                                                                                                                                                                                                                                                                                                 |
+| `target.Observer` (optional, `CapObserve`)       | says what it holds by key (image, replicas) so that a change made behind pack's back is seen as drift                                                                                                                                                                                                                                                                                                                                               |
+| `target.Discoverer` (optional, `CapDiscover`)    | tells the facts of where it installs, read only: its hosts (OS, CPUs, memory, disks and free space, ports listened on, runtimes, DNS, clock) and a cluster's version and storage classes — `pack discover`, and `facts` in formulas. A fact it cannot tell is left out                                                                                                                                                                              |
+| `target.Logger` (optional, `CapLogs`)            | gives the tail of what a key's instances wrote (container logs, a service's journal, a pod's log), by instance: the evidence of `pack diagnose`                                                                                                                                                                                                                                                                                                     |
+| `target.Checker` (optional, `CapHealth`)         | says how each key is: ready when every instance is, with why one is not (exited, unhealthy, `CrashLoopBackOff`, a service inactive)                                                                                                                                                                                                                                                                                                                 |
+| `io.Closer` (optional)                           | released when the target stops — a tunnel, a connection                                                                                                                                                                                                                                                                                                                                                                                             |
 
 ## The protocol
 
