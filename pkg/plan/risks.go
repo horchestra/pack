@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/horchestra/pack/pkg/render"
 )
@@ -40,7 +41,26 @@ type Risk struct {
 func Seal(p *Plan, from, to *render.Release) {
 	p.Risks, p.Digest = nil, ""
 	p.Risks = Risks(p, from, to)
+	p.RollbackTimeout = rollbackEstimate(p)
 	p.Digest = Digest(p)
+}
+
+// rollbackEstimate is how long undoing the plan may take: the timeouts of its steps, capped at the saga's
+// rollback cap; a step that says none is bounded by the cap it shares. "" when no step says a timeout.
+func rollbackEstimate(p *Plan) string {
+	var total time.Duration
+	for _, s := range p.Steps {
+		if d, err := time.ParseDuration(s.Timeout); err == nil {
+			total += d
+		}
+	}
+	if total == 0 {
+		return ""
+	}
+	if total > RollbackCap {
+		total = RollbackCap
+	}
+	return total.String()
 }
 
 // Digest is the plan's: sha256 of what it does (its JSON, the digest itself and its risks aside).

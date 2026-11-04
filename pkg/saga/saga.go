@@ -381,7 +381,8 @@ func (r *Run) fail(ctx context.Context, res *runner.Result, runErr error) error 
 	if r.NoRollback {
 		return cause
 	}
-	// the rollback runs on a context of its own: ctx done is why we are here
+	// the rollback runs on a context of its own: ctx done is why we are here; the cap is plan.RollbackCap's,
+	// what a plan's rollback_timeout estimates against
 	rbctx := ctx
 	if runErr != nil {
 		var cancel context.CancelFunc

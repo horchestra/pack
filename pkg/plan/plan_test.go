@@ -286,3 +286,26 @@ func TestNoRollbackPolicy(t *testing.T) {
 		t.Fatalf("stopsAt = %+v", p.Units)
 	}
 }
+
+// rollback_timeout: the steps' timeouts, capped at the saga's cap — what a Pod's terminationGracePeriodSeconds
+// is set from.
+func TestRollbackEstimate(t *testing.T) {
+	p := &Plan{Steps: []Step{{N: 1, Timeout: "30s"}, {N: 2, Timeout: "2m"}, {N: 3}}}
+	Seal(p, nil, nil)
+	if p.RollbackTimeout != "2m30s" {
+		t.Fatalf("rollback_timeout = %q", p.RollbackTimeout)
+	}
+	if !strings.Contains(p.Text(), "terminationGracePeriodSeconds") {
+		t.Fatalf("the text says it:\n%s", p.Text())
+	}
+	p = &Plan{Steps: []Step{{N: 1, Timeout: "1h"}}}
+	Seal(p, nil, nil)
+	if p.RollbackTimeout != RollbackCap.String() {
+		t.Fatalf("capped: %q", p.RollbackTimeout)
+	}
+	p = &Plan{Steps: []Step{{N: 1}}}
+	Seal(p, nil, nil)
+	if len(p.RollbackTimeout) > 0 {
+		t.Fatalf("no timeouts, no estimate: %q", p.RollbackTimeout)
+	}
+}

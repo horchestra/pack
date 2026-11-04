@@ -18,6 +18,7 @@ import (
 	"reflect"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/horchestra/pack/pkg/bundle"
 	"github.com/horchestra/pack/pkg/render"
@@ -125,10 +126,16 @@ type Plan struct {
 	// Revision is the revision of the inputs (the commit) the plan was made from — the digest covers it, so a plan
 	// of another revision is another plan, and --approve of its digest is refused.
 	Revision string `json:"revision,omitempty"`
+	// RollbackTimeout is how long undoing the plan may take when the apply is cut short (SIGTERM, Ctrl-C): the
+	// steps' timeouts, capped at RollbackCap — what an operator sets terminationGracePeriodSeconds from (Seal).
+	RollbackTimeout string `json:"rollback_timeout,omitempty"`
 	// Risks are what an apply should not do unasked, Digest what --approve names (Seal).
 	Risks  []Risk `json:"risks,omitempty"`
 	Digest string `json:"digest,omitempty"`
 }
+
+// RollbackCap is how long a saga lets a rollback run after a failure; pkg/saga keeps the same cap.
+const RollbackCap = 10 * time.Minute
 
 // KeyRollback is what undoing a key's apply runs around applying its previous
 // unit: the installed version's hooks for the reverse transition — the
@@ -794,6 +801,9 @@ func (p *Plan) Text() string {
 		irr = "steps " + strings.Join(irreversible, ", ")
 	}
 	_, _ = fmt.Fprintf(&b, "rollback policy: %s; irreversible: %s\n", policy, irr)
+	if len(p.RollbackTimeout) > 0 {
+		_, _ = fmt.Fprintf(&b, "cut short (SIGTERM, Ctrl-C): the rollback takes up to %s — a Pod's terminationGracePeriodSeconds at least that\n", p.RollbackTimeout)
+	}
 	for _, key := range p.Order {
 		kr, ok := p.Rollback[key]
 		if !ok {

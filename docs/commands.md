@@ -39,7 +39,10 @@ see [release.md](release.md)).
 | `version`                                                                                                                                                                                                                                            | the version of the binary; `--json`: `{"version": …, "formats": {"json": 1, "stream": 1}}` — the versions of the documents pack writes, for a program that reads them to check against                                                                                                                                                                                                                                                                                                                                                       |
 
 **Ctrl-C** cancels the command's context: running steps are cut short and the saga is rolled back; a second signal ends
-the process, and the record stays `in-progress` for `rollback` or the next `apply`.
+the process, and the record stays `in-progress` for `rollback` or the next `apply`. **SIGTERM** is its twin — a Pod's
+graceful stop — so a job that runs pack needs a `terminationGracePeriodSeconds` that fits the rollback: the plan's
+`rollback_timeout` (`pack plan --json`, and a line of the plan's text) estimates it from the steps' timeouts, capped
+at the saga's ten minutes.
 
 A command that fails says why (`pack: …`) and exits with 1; no usage follows an error of its own, only a misuse of the
 command line.

@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"syscall"
 	"testing"
 
 	"github.com/horchestra/pack/pkg/api"
@@ -355,5 +356,38 @@ func TestStreamEveryCommand(t *testing.T) {
 	}
 	if strings.Contains(out, "scenario(s) ok") && !strings.Contains(errOut, "scenario(s) ok") {
 		t.Errorf("the text is not on stderr:\n%s", errOut)
+	}
+}
+
+// SIGTERM is Ctrl-C's twin (a Pod's graceful stop): the saga cuts short, rolls back and says result failed.
+func TestStreamInterruptSIGTERM(t *testing.T) {
+	d := releaseOf(t, generated(t), map[string]any{"hold_at": "openbao/apply", "run": map[string]any{"jobs": 1}})
+	cmd := exec.Command(os.Args[0], "-test.run=^TestStreamHelper$")
+	cmd.Env = append(os.Environ(), "PACK_STREAM_HELPER="+strings.Join([]string{"-C", d, "apply", "--stream"}, "\x1f"))
+	out, err := cmd.StdoutPipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	var errOut bytes.Buffer
+	cmd.Stderr = &errOut
+	if err := cmd.Start(); err != nil {
+		t.Fatal(err)
+	}
+	var all strings.Builder
+	sc := bufio.NewScanner(out)
+	for sc.Scan() {
+		all.WriteString(sc.Text() + "\n")
+		if strings.Contains(sc.Text(), "held until cut short") {
+			if err := cmd.Process.Signal(syscall.SIGTERM); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+	_ = cmd.Wait()
+	got := said(events(t, all.String()))
+	i := slices.Index(got, "saga interrupted")
+	if i < 0 || !slices.Equal(got[i:], []string{"saga interrupted", "node openbao failed", "saga failed", "node openbao compensating",
+		"node openbao rolled-back", "result failed"}) {
+		t.Fatalf("events:\n%s\nstderr:\n%s", strings.Join(got, "\n"), errOut.String())
 	}
 }
