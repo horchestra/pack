@@ -154,6 +154,20 @@ func (s *Syncer) Checkout(ctx context.Context, projectID, sha, dest string) erro
 	return fmt.Errorf("no project %s", projectID)
 }
 
+// Head is the last sha the synchronizer processed on the project's branch (empty before the first sync).
+func (s *Syncer) Head(ctx context.Context, projectID string) (string, error) {
+	for _, p := range s.cfg.Projects {
+		if p.ID == projectID {
+			branch := p.Branch
+			if len(branch) == 0 {
+				branch = "main"
+			}
+			return s.knownRef(ctx, projectID, branch)
+		}
+	}
+	return "", fmt.Errorf("no project %s", projectID)
+}
+
 // repo is the project's working copy, cloned on first use.
 func (s *Syncer) repo(ctx context.Context, p *config.Project) (*git.Repo, error) {
 	if r, ok := s.repos[p.ID]; ok {

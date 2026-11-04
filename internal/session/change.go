@@ -2,9 +2,14 @@ package session
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"io/fs"
+	"os"
 	"path/filepath"
+	"slices"
 
 	"github.com/horchestra/pack/internal/adapter"
 	"github.com/horchestra/pack/internal/graph"
@@ -15,6 +20,7 @@ import (
 	"github.com/horchestra/pack/pkg/plan"
 	"github.com/horchestra/pack/pkg/render"
 	"github.com/horchestra/pack/pkg/saga"
+	"github.com/horchestra/pack/pkg/target/remote"
 )
 
 // Change is what apply and plan both work out: the installed version, the wanted one, and the plan between.
@@ -124,7 +130,7 @@ func (s *Session) Apply(ctx context.Context, c *Change) error {
 		return err
 	}
 	run := s.Run(g, &adapter.Exec{Plan: c.Plan, From: c.FromRel, To: c.ToRel, Credentials: c.Credentials, X: s.Inst, Execs: s.Execs})
-	run.To = saga.Installation{Pack: RecordRef(c.Ref), Version: c.ToB.Version, Values: vals}
+	run.To = saga.Installation{Pack: recordRef(c.Ref, c.ToB), Version: c.ToB.Version, Values: vals}
 	run.Finish = func(ctx context.Context) error { return s.RemoveDropped(ctx, c.FromRel, c.ToRel) }
 	return run.Execute(ctx)
 }
@@ -224,4 +230,93 @@ func RecordRef(ref string) string {
 		return abs
 	}
 	return ref
+}
+
+// recordRef is RecordRef that can see the bundle: a directory pack goes into the cache (PACK_CACHE/packs) with
+// the packs it holds beside it, the path named by the digest of the files — a checkout the run was of does not
+// outlive it, the cache does; a later run, on whatever checkout, reads the installed version there.
+func recordRef(ref string, b *bundle.Bundle) string {
+	if oci.IsRef(ref) || b == nil {
+		return RecordRef(ref)
+	}
+	cached, err := cachePack(b)
+	if err != nil {
+		return RecordRef(ref)
+	}
+	return cached
+}
+
+// cachePack copies the bundle's packs into the cache, each a sibling of the others the way the holds resolve,
+// under packs/<digest of every file>/; the record names the root's directory in it.
+func cachePack(b *bundle.Bundle) (string, error) {
+	h := sha256.New()
+	files := map[string][]string{} // pack name → its files
+	var names []string
+	for name, p := range b.Packs {
+		if len(p.Dir) == 0 {
+			return "", fmt.Errorf("pack %q has no directory to cache", name)
+		}
+		names = append(names, name)
+		if err := filepath.WalkDir(p.Dir, func(path string, d fs.DirEntry, err error) error {
+			if err != nil {
+				return err
+			}
+			if d.Type().IsRegular() {
+				files[name] = append(files[name], path)
+			}
+			return nil
+		}); err != nil {
+			return "", err
+		}
+	}
+	slices.Sort(names)
+	for _, name := range names {
+		p := b.Packs[name]
+		slices.Sort(files[name])
+		for _, f := range files[name] {
+			data, err := os.ReadFile(f)
+			if err != nil {
+				return "", err
+			}
+			rel, _ := filepath.Rel(p.Dir, f)
+			fmt.Fprintf(h, "%s/%s %d\n", name, filepath.ToSlash(rel), len(data))
+			_, _ = h.Write(data)
+		}
+	}
+	dest := filepath.Join(remote.CacheDir(), "packs", "dir-"+hex.EncodeToString(h.Sum(nil)))
+	root := filepath.Join(dest, b.Name)
+	if _, err := os.Stat(root); err == nil {
+		return root, nil
+	}
+	if err := os.MkdirAll(filepath.Dir(dest), 0o700); err != nil {
+		return "", err
+	}
+	tmp, err := os.MkdirTemp(filepath.Dir(dest), ".pack-")
+	if err != nil {
+		return "", err
+	}
+	defer os.RemoveAll(tmp)
+	for _, name := range names {
+		for _, f := range files[name] {
+			rel, _ := filepath.Rel(b.Packs[name].Dir, f)
+			to := filepath.Join(tmp, name, rel)
+			if err := os.MkdirAll(filepath.Dir(to), 0o755); err != nil {
+				return "", err
+			}
+			data, err := os.ReadFile(f)
+			if err != nil {
+				return "", err
+			}
+			if err := os.WriteFile(to, data, 0o644); err != nil {
+				return "", err
+			}
+		}
+	}
+	if err := os.Rename(tmp, dest); err != nil {
+		if _, statErr := os.Stat(root); statErr == nil {
+			return root, nil // another run was first: the same digest, the same files
+		}
+		return "", err
+	}
+	return root, nil
 }

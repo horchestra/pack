@@ -62,7 +62,7 @@ func Worker(ctx context.Context, cfg *config.Config, opts WorkerOptions) error {
 	var rt worker.Runtime
 	switch runtime {
 	case "native":
-		rt = worker.Native{}
+		rt = worker.Native{Pack: cfg.Pack}
 	case "docker":
 		image := opts.Image
 		if len(image) == 0 {

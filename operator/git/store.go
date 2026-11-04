@@ -15,6 +15,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"sort"
 	"strings"
 	"time"
 
@@ -129,6 +130,50 @@ func (s *DBSecrets) Credentials(ctx context.Context, ref string) (*Credentials, 
 		}
 		return nil, err
 	}
+	c, err := s.open(blob)
+	if err != nil {
+		return nil, fmt.Errorf("credentials %s: %w", ref, err)
+	}
+	return c, nil
+}
+
+// SecretInfo is a secret without its values (К4: the secrets endpoint lists names and keys only).
+type SecretInfo struct {
+	Name string   `json:"name"`
+	Keys []string `json:"keys"`
+}
+
+// List is the store's secrets of a prefix, values never leaving the store.
+func (s *DBSecrets) List(ctx context.Context, prefix string) ([]SecretInfo, error) {
+	rows, err := s.db.QueryContext(ctx, s.bind(`select name, blob from operator_secrets where name like ? order by name`), prefix+"%")
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []SecretInfo
+	for rows.Next() {
+		var name, blob string
+		if err := rows.Scan(&name, &blob); err != nil {
+			return nil, err
+		}
+		info := SecretInfo{Name: name, Keys: []string{}}
+		if c, err := s.open(blob); err == nil && c != nil {
+			raw, _ := json.Marshal(c)
+			var fields map[string]any
+			if json.Unmarshal(raw, &fields) == nil {
+				for k := range fields {
+					info.Keys = append(info.Keys, k)
+				}
+				sort.Strings(info.Keys)
+			}
+		}
+		out = append(out, info)
+	}
+	return out, rows.Err()
+}
+
+// open decrypts one blob.
+func (s *DBSecrets) open(blob string) (*Credentials, error) {
 	raw, err := base64.StdEncoding.DecodeString(blob)
 	if err != nil {
 		return nil, err
@@ -142,11 +187,11 @@ func (s *DBSecrets) Credentials(ctx context.Context, ref string) (*Credentials, 
 		return nil, err
 	}
 	if len(raw) < gcm.NonceSize() {
-		return nil, fmt.Errorf("credentials %s: the blob is short", ref)
+		return nil, fmt.Errorf("the blob is short")
 	}
 	plain, err := gcm.Open(nil, raw[:gcm.NonceSize()], raw[gcm.NonceSize():], nil)
 	if err != nil {
-		return nil, fmt.Errorf("credentials %s: the key does not open them", ref)
+		return nil, fmt.Errorf("the key does not open it")
 	}
 	var c Credentials
 	if err := json.Unmarshal(plain, &c); err != nil {

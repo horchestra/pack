@@ -13,6 +13,8 @@ import (
 
 // Native is the runtime of the worker's own process (К6): pack runs as a child, a cancel is SIGINT.
 type Native struct {
+	// Pack is the pack binary: a bare "pack" argv[0] resolves to it.
+	Pack string
 	// Log takes the child's stderr lines (the job's log).
 	Log func(line string)
 }
@@ -24,6 +26,9 @@ func (n Native) Run(ctx context.Context, run *Run) (int, error) {
 	argv := run.Job.Argv
 	if len(argv) == 0 {
 		return 1, nil
+	}
+	if n.Pack != "" && argv[0] == "pack" {
+		argv = append([]string{n.Pack}, argv[1:]...)
 	}
 	cmd := exec.CommandContext(ctx, argv[0], argv[1:]...)
 	cmd.Dir = run.Checkout
