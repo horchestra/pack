@@ -16,10 +16,10 @@ import (
 	"github.com/horchestra/pack/internal/interrupt"
 	"github.com/horchestra/pack/internal/session"
 	"github.com/horchestra/pack/internal/values"
-	"github.com/horchestra/pack/internal/valuesfile"
 	"github.com/horchestra/pack/pkg/api"
 	"github.com/horchestra/pack/pkg/bundle"
 	"github.com/horchestra/pack/pkg/environment"
+	"github.com/horchestra/pack/pkg/valuesfile"
 )
 
 func init() {

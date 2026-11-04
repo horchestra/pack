@@ -27,6 +27,7 @@ import (
 	"github.com/horchestra/pack/pkg/bundle"
 	"github.com/horchestra/pack/pkg/environment"
 	"github.com/horchestra/pack/pkg/render"
+	"github.com/horchestra/pack/pkg/scenario"
 	"github.com/horchestra/pack/sdk/docs"
 	"github.com/horchestra/pack/sdk/format"
 	"github.com/horchestra/pack/sdk/schema"
@@ -93,11 +94,11 @@ type authorProblem struct {
 
 // authorChecked is what author check says.
 type authorChecked struct {
-	OK        bool            `json:"ok"`
-	Lang      string          `json:"lang"`
-	Generate  string          `json:"generate,omitempty"` // what the generator said when it failed: a compiler's file:line, the SDK's refusal
-	Problems  []authorProblem `json:"problems,omitempty"`
-	Scenarios []testResult    `json:"scenarios,omitempty"`
+	OK        bool              `json:"ok"`
+	Lang      string            `json:"lang"`
+	Generate  string            `json:"generate,omitempty"` // what the generator said when it failed: a compiler's file:line, the SDK's refusal
+	Problems  []authorProblem   `json:"problems,omitempty"`
+	Scenarios []scenario.Result `json:"scenarios,omitempty"`
 }
 
 var authorCheckCmd = &cobra.Command{
@@ -151,21 +152,21 @@ each fix until it is.`,
 			if tests := testsOf(src, authorTests); len(tests) > 0 && len(root) > 0 {
 				// tests/ found beside the source has scenarios (testsOf saw them); one named that has none is an error,
 				// never an ok of nothing run
-				files, err := scenarioFiles([]string{tests})
+				files, err := scenario.Files([]string{tests})
 				if err != nil {
 					return fmt.Errorf("--tests: %w", err)
 				}
-				on, err := memoryStand(filepath.Join(out, root))
+				on, err := scenario.MemoryStand(filepath.Join(out, root))
 				if err != nil {
 					return err
 				}
 				for _, f := range files {
-					res.Scenarios = append(res.Scenarios, runScenario(ctx, on, f))
+					res.Scenarios = append(res.Scenarios, scenario.RunScenario(ctx, on, f, false))
 				}
 			}
 		}
 		res.OK = len(res.Generate) == 0 && !slices.ContainsFunc(res.Problems, func(p authorProblem) bool { return !p.Warning }) &&
-			!slices.ContainsFunc(res.Scenarios, func(r testResult) bool { return !r.OK })
+			!slices.ContainsFunc(res.Scenarios, func(r scenario.Result) bool { return !r.OK })
 		printChecked(res)
 		if !res.OK {
 			// one document, the error's: what to fix is its detail
@@ -311,9 +312,9 @@ rendered as far as they go: a check of an expression with no generating and no r
 				return fmt.Errorf("%s: %w", authorValues, err)
 			}
 		}
-		rc := render.Context{Installation: TestInstallation, Target: memory.New()}
+		rc := render.Context{Installation: scenario.TestInstallation, Target: memory.New()}
 		if len(authorFacts) > 0 {
-			facts, err := factsOf(authorFacts, func(p string) string { return p })
+			facts, err := scenario.FactsOf(authorFacts, func(p string) string { return p })
 			if err != nil {
 				return err
 			}

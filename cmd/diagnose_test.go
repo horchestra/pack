@@ -9,9 +9,9 @@ import (
 	"testing"
 	"unicode/utf8"
 
-	"github.com/horchestra/pack/internal/diagnose"
 	"github.com/horchestra/pack/internal/storage"
 	"github.com/horchestra/pack/pkg/api"
+	"github.com/horchestra/pack/pkg/diagnose"
 	"github.com/horchestra/pack/pkg/saga"
 )
 

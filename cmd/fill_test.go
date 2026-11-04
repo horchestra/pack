@@ -9,9 +9,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/horchestra/pack/internal/valuesfile"
 	"github.com/horchestra/pack/pkg/api"
 	"github.com/horchestra/pack/pkg/render"
+	"github.com/horchestra/pack/pkg/valuesfile"
 )
 
 // A release whose values lack api_addr, on a stand where 5433 is taken: what fill asks and what it is answered.

@@ -29,7 +29,7 @@ var given = map[string]any{
 	"postgres": map[string]any{"pg_port": float64(5440), "node": map[string]any{"nofailover": true}},
 }
 
-// UPDATE_GOLDEN=1 go test ./internal/valuesfile rewrites testdata after a deliberate change of the file.
+// UPDATE_GOLDEN=1 go test ./pkg/valuesfile rewrites testdata after a deliberate change of the file.
 func TestGolden(t *testing.T) {
 	b := load(t)
 	for _, lang := range []string{"", "ru"} {

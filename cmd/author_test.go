@@ -11,6 +11,7 @@ import (
 	packdocs "github.com/horchestra/pack/docs"
 	packexamples "github.com/horchestra/pack/examples"
 	"github.com/horchestra/pack/internal/author"
+	"github.com/horchestra/pack/pkg/scenario"
 )
 
 // ref is the part of the guide a topic is, with the code of the language asked for alone.
@@ -108,7 +109,7 @@ func TestAuthorTestsNamed(t *testing.T) {
 	if got := testsOf(src, ""); len(got) > 0 {
 		t.Errorf("no tests/: %q", got)
 	}
-	if _, err := scenarioFiles([]string{testsOf(src, filepath.Join(src, "test"))}); err == nil {
+	if _, err := scenario.Files([]string{testsOf(src, filepath.Join(src, "test"))}); err == nil {
 		t.Error("a --tests that is not there")
 	}
 	if !packexamples.IsSource("postgres.py") || packexamples.IsSource("test_postgres.py") || packexamples.IsSource("PostgresTest.java") {

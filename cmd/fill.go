@@ -18,10 +18,10 @@ import (
 
 	"github.com/horchestra/pack/internal/interrupt"
 	"github.com/horchestra/pack/internal/session"
-	"github.com/horchestra/pack/internal/valuesfile"
 	"github.com/horchestra/pack/pkg/api"
 	"github.com/horchestra/pack/pkg/bundle"
 	"github.com/horchestra/pack/pkg/render"
+	"github.com/horchestra/pack/pkg/valuesfile"
 	"github.com/horchestra/pack/sdk/docs"
 	"github.com/horchestra/pack/sdk/schema"
 )

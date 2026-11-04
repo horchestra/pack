@@ -13,12 +13,12 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/horchestra/pack/internal/diagnose"
 	"github.com/horchestra/pack/internal/interrupt"
 	"github.com/horchestra/pack/internal/oci"
 	"github.com/horchestra/pack/internal/release"
 	"github.com/horchestra/pack/internal/session"
 	"github.com/horchestra/pack/pkg/api"
+	"github.com/horchestra/pack/pkg/diagnose"
 	"github.com/horchestra/pack/pkg/environment"
 	"github.com/horchestra/pack/pkg/render"
 	"github.com/horchestra/pack/pkg/target"
@@ -108,7 +108,8 @@ func stateNow(ctx context.Context) api.NextState {
 			msg += ": " + rec.Saga.Error
 		}
 		next := []string{"pack diagnose", "pack log", "pack apply", "pack rollback"}
-		if c, err := caseOf(ctx, s, rec, false); err == nil { // the journal's alone: next asks no target for logs
+		lang, _ := valuesLangOf(ctx)
+		if c, err := diagnose.CaseOf(ctx, dir, s, rec, false, lang); err == nil { // the journal's alone: next asks no target for logs
 			msg += " — " + c.Class + ": " + c.Cause
 			if c.Class == diagnose.Unknown || len(c.Remedies) == 0 {
 				next = append(next, "a person should look: pack diagnose cannot tell what this is")

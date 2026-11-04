@@ -102,10 +102,12 @@ pkg/bundle      a pack read from disk: the virtual composition of the pack and t
 pkg/plan        the plan between two versions (changes, hooks, savepoints, drift)
 pkg/saga        the saga: its record, its history, the entries of its journal; it runs transactionally
 pkg/environment env.yaml
+pkg/valuesfile  a values.yaml written with its schema's comments; pkg/diagnose the case of a failed saga;
+                pkg/scenario the runtime of a pack's scenarios (pack test)
 pkg/secretstore the secret store clients; pkg/logging the log of pack and of the targets
 internal/       the rest: release, session (a command's connection to the world), workdir, oci, values, interrupt,
                 graph (the dependency graph), runner (walks it), adapter (graph nodes ↔ plan steps ↔ target steps),
-                emit (configuration files), diagnose, storage (a saga's record and journal on disk), target/memory
+                emit (configuration files), storage (a saga's record and journal on disk), target/memory
                 (a target that runs nothing), target/kube (the k8s runtime of a target), testpacks
 sdk             author side, a module of its own (github.com/horchestra/pack/sdk): Pack, Meta, schema generation,
                 packschema (PackRoot vocabulary), compute (CEL), format (names of artifacts and annotations)

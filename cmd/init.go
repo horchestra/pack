@@ -23,11 +23,11 @@ import (
 	"github.com/horchestra/pack/internal/release"
 	"github.com/horchestra/pack/internal/session"
 	"github.com/horchestra/pack/internal/targets"
-	"github.com/horchestra/pack/internal/valuesfile"
 	"github.com/horchestra/pack/internal/workdir"
 	"github.com/horchestra/pack/pkg/environment"
 	"github.com/horchestra/pack/pkg/target"
 	"github.com/horchestra/pack/pkg/target/remote"
+	"github.com/horchestra/pack/pkg/valuesfile"
 )
 
 func init() {

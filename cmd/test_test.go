@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/horchestra/pack/pkg/scenario"
 )
 
 // The scenarios of the examples hold: postgres alone, openbao with the postgres it holds.
@@ -24,7 +26,7 @@ func TestExampleScenarios(t *testing.T) {
 func TestScenario(t *testing.T) {
 	packDir := generated(t)
 	d := t.TempDir()
-	scenario := func(name, body string) string {
+	scenarioFile := func(name, body string) string {
 		p := filepath.Join(d, name+".yaml")
 		if err := os.WriteFile(p, []byte(body), 0o644); err != nil {
 			t.Fatal(err)
@@ -43,7 +45,7 @@ env:
         requests:
           memory: 2Gi
 `
-	ok := scenario("port", `name: 5433 taken on a host
+	ok := scenarioFile("port", `name: 5433 taken on a host
 facts:
   default:
     at: 2026-11-03T00:00:00Z
@@ -66,12 +68,12 @@ expect:
     in_effect:
       - postgres
 `)
-	r := runScenario(context.Background(), must(memoryStand(packDir)), ok)
+	r := scenario.RunScenario(context.Background(), must(scenario.MemoryStand(packDir)), ok, testUpdate)
 	if !r.OK {
 		t.Fatalf("%s: %v", r.Name, r.Failures)
 	}
 
-	diag := scenario("diag", values+`fail_at: postgres/wait
+	diag := scenarioFile("diag", values+`fail_at: postgres/wait
 fail_error: "could not bind 0.0.0.0:5433: address already in use"
 expect:
   diagnose:
@@ -81,11 +83,11 @@ expect:
       - patch: /postgres/pg_port
         value: 5434
 `)
-	if r := runScenario(context.Background(), must(memoryStand(packDir)), diag); !r.OK {
+	if r := scenario.RunScenario(context.Background(), must(scenario.MemoryStand(packDir)), diag, testUpdate); !r.OK {
 		t.Errorf("diagnose: %v", r.Failures)
 	}
 
-	bad := scenario("bad", values+`expect:
+	bad := scenarioFile("bad", values+`expect:
   suggest:
     /postgres/pg_port: 5434
   problems:
@@ -93,7 +95,7 @@ expect:
   apply:
     state: failed
 `)
-	r = runScenario(context.Background(), must(memoryStand(packDir)), bad)
+	r = scenario.RunScenario(context.Background(), must(scenario.MemoryStand(packDir)), bad, testUpdate)
 	got := strings.Join(r.Failures, "\n")
 	for _, want := range []string{"suggest /postgres/pg_port: nothing offered, 5434 expected", "problems: none at /openbao/api_addr", "apply: installed"} {
 		if !strings.Contains(got, want) {
@@ -105,7 +107,7 @@ expect:
 	}
 
 	// a render that fails with files expected is a failure, not a pass that compared nothing
-	broken := scenario("broken", `values:
+	broken := scenarioFile("broken", `values:
   openbao:
     api_addr: 42
 expect:
@@ -113,7 +115,7 @@ expect:
     - where: /openbao/api_addr
   files: golden/none
 `)
-	if r := runScenario(context.Background(), must(memoryStand(packDir)), broken); r.OK || !strings.Contains(strings.Join(r.Failures, "\n"), "the values do not render") {
+	if r := scenario.RunScenario(context.Background(), must(scenario.MemoryStand(packDir)), broken, testUpdate); r.OK || !strings.Contains(strings.Join(r.Failures, "\n"), "the values do not render") {
 		t.Errorf("files of values that do not render: %v", r.Failures)
 	}
 }
@@ -148,11 +150,11 @@ expect:
 	}
 	t.Cleanup(func() { testUpdate = false })
 	testUpdate = true
-	if r := runScenario(context.Background(), must(memoryStand(packDir)), sc); !r.OK {
+	if r := scenario.RunScenario(context.Background(), must(scenario.MemoryStand(packDir)), sc, testUpdate); !r.OK {
 		t.Fatalf("--update: %v", r.Failures)
 	}
 	testUpdate = false
-	if r := runScenario(context.Background(), must(memoryStand(packDir)), sc); !r.OK {
+	if r := scenario.RunScenario(context.Background(), must(scenario.MemoryStand(packDir)), sc, testUpdate); !r.OK {
 		t.Fatalf("against what --update wrote: %v", r.Failures)
 	}
 	plan := filepath.Join(d, "golden", "plan.txt")
@@ -172,7 +174,7 @@ expect:
 	if err := os.WriteFile(filepath.Join(d, "golden", "files", "extra"), []byte("x"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	r := runScenario(context.Background(), must(memoryStand(packDir)), sc)
+	r := scenario.RunScenario(context.Background(), must(scenario.MemoryStand(packDir)), sc, testUpdate)
 	got := strings.Join(r.Failures, "\n")
 	for _, want := range []string{"plan differs from " + plan, "line 1:", "differs from " + file, `want "edited"`, "extra is not rendered"} {
 		if !strings.Contains(got, want) {
@@ -181,7 +183,7 @@ expect:
 	}
 
 	empty := t.TempDir()
-	if _, err := scenarioFiles([]string{sc, empty}); err == nil || !strings.Contains(err.Error(), "no *.yaml") {
+	if _, err := scenario.Files([]string{sc, empty}); err == nil || !strings.Contains(err.Error(), "no *.yaml") {
 		t.Errorf("an empty directory of scenarios: %v", err)
 	}
 }
