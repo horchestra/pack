@@ -249,3 +249,65 @@ func InitBare(dir string) error {
 	_, err := git.PlainInit(dir, true)
 	return err
 }
+
+// CommitInfo is what a sync run needs of a commit: its message (the trailers live there), its author, its parents.
+type CommitInfo struct {
+	SHA     string
+	Message string
+	Author  string // "Name <email>"
+	Parents []string
+}
+
+// Inspect reads a commit the repo holds.
+func (r *Repo) Inspect(ctx context.Context, sha string) (CommitInfo, error) {
+	c, err := r.r.CommitObject(plumbing.NewHash(sha))
+	if err != nil {
+		return CommitInfo{}, fmt.Errorf("%s: %w", sha, err)
+	}
+	info := CommitInfo{SHA: sha, Message: c.Message,
+		Author: fmt.Sprintf("%s <%s>", c.Author.Name, c.Author.Email)}
+	for _, p := range c.ParentHashes {
+		info.Parents = append(info.Parents, p.String())
+	}
+	return info, nil
+}
+
+// MergeBase is the best common ancestor of two commits, "" when there is none.
+func (r *Repo) MergeBase(ctx context.Context, a, b string) (string, error) {
+	ca, err := r.r.CommitObject(plumbing.NewHash(a))
+	if err != nil {
+		return "", fmt.Errorf("%s: %w", a, err)
+	}
+	cb, err := r.r.CommitObject(plumbing.NewHash(b))
+	if err != nil {
+		return "", fmt.Errorf("%s: %w", b, err)
+	}
+	bases, err := ca.MergeBase(cb)
+	if err != nil {
+		return "", err
+	}
+	if len(bases) == 0 {
+		return "", nil
+	}
+	return bases[0].Hash.String(), nil
+}
+
+// RemoteBranches are the branches fetch brought (refs/remotes/origin/*): each its name without "origin/" and
+// its sha; the remote's own HEAD is not one of them.
+func (r *Repo) RemoteBranches(ctx context.Context) ([][2]string, error) {
+	refs, err := r.r.References()
+	if err != nil {
+		return nil, err
+	}
+	var branches [][2]string
+	err = refs.ForEach(func(ref *plumbing.Reference) error {
+		name := ref.Name().String()
+		rest, ok := strings.CutPrefix(name, "refs/remotes/origin/")
+		if !ok || rest == "HEAD" {
+			return nil
+		}
+		branches = append(branches, [2]string{rest, ref.Hash().String()})
+		return nil
+	})
+	return branches, err
+}

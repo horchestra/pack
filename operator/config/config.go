@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"path/filepath"
 	"time"
 
 	"sigs.k8s.io/yaml"
@@ -19,6 +20,7 @@ type Config struct {
 	Auth             string    `json:"auth"`               // none; oidc is stage 3
 	DevUser          string    `json:"dev_user"`           // the user of auth: none, admin in every domain
 	Pack             string    `json:"pack"`               // the pack binary; PATH's by default
+	DataDir          string    `json:"data_dir"`           // working copies and checkouts; the user cache's pack-operator by default
 	Secrets          Secrets   `json:"secrets"`            // where git credentials and the projects' secrets live
 	EncryptionKeyEnv string    `json:"encryption_key_env"` // encrypts the git credentials kept in the DB
 	Git              Git       `json:"git"`
@@ -117,6 +119,13 @@ func Load(path string) (*Config, error) {
 	}
 	if len(c.Pack) == 0 {
 		c.Pack = "pack"
+	}
+	if len(c.DataDir) == 0 {
+		cache, err := os.UserCacheDir()
+		if err != nil {
+			return nil, fmt.Errorf("data_dir is empty and the user cache is unknown: %w", err)
+		}
+		c.DataDir = filepath.Join(cache, "pack-operator")
 	}
 	if c.Git.FetchInterval.Duration == 0 {
 		c.Git.FetchInterval = Duration{DefaultFetchInterval}
