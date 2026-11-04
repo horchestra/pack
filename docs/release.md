@@ -50,11 +50,13 @@ secrets: # where the passwords pack creates come from
   provider: generate                 # generate | env | file:<dir>
   provision: [ /postgres/pg_password ]
 store: # where secrets are kept outside of any one target
-  provider: openbao
+  provider: openbao                  # openbao | vault | file
   addr: https://bao.example:8200
   mount: secret
   prefix: pack/prod
   cacert: /etc/pack/ca.crt
+  # provider file keeps them as plaintext files instead: path: <dir> — a secret <dir>/<name>.json, the
+  # directory 0700, the files 0600; for a machine of one's own, not for production (pack says so at every start)
 vault: # a Vault KV read over the file, the last path winning
   addr: https://vault.example:8200   # VAULT_ADDR when the file has none
   paths: [ secret/data/pack/prod ]     # needs VAULT_TOKEN; the token is never in the file

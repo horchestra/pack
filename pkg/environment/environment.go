@@ -93,6 +93,7 @@ type Store struct {
 	Mount    string `env:"MOUNT"`
 	Prefix   string `env:"PREFIX"`
 	CACert   string `env:"CACERT"`
+	Path     string `env:"PATH"` // provider file: the directory the secrets are kept in
 }
 
 // Run is how a saga runs.
@@ -293,7 +294,8 @@ func Load(ctx context.Context, file string, overrides map[string]string) (*Envir
 // Secrets. A key that only begins like one (run_as_user, registry_auth) is its target's.
 var ownSettings = map[string]bool{
 	"store_provider": true, "store_addr": true, "store_mount": true, "store_prefix": true, "store_cacert": true,
-	"run_jobs": true, "run_strict": true, "run_no_rollback": true, "run_keep": true, "run_journal_keep": true, "run_approve": true,
+	"store_path": true,
+	"run_jobs":   true, "run_strict": true, "run_no_rollback": true, "run_keep": true, "run_journal_keep": true, "run_approve": true,
 	"secrets_provider": true, "secrets_provision": true,
 	"discover_hosts": true,
 }

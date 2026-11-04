@@ -64,7 +64,7 @@ func Open(ctx context.Context, d *workdir.Dir, readOnly bool) (*Session, error) 
 	s := &Session{ctx: ctx, Dir: d, ID: id, Env: env, Target: env.Target}
 	// the store is every target's to use: it goes into each one's set, the token with it, in memory
 	scfg := secretstore.Config{Provider: env.Store.Provider, Addr: env.Store.Addr, Mount: env.Store.Mount,
-		Prefix: env.Store.Prefix, CACert: env.Store.CACert}
+		Prefix: env.Store.Prefix, CACert: env.Store.CACert, Path: env.Store.Path}
 	storeSet := scfg.Settings()
 	maps.Copy(env.Settings, storeSet)
 

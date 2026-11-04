@@ -38,6 +38,8 @@ type Config struct {
 	Mount    string
 	Prefix   string
 	CACert   string
+	// Path is provider file's: the directory the secrets are kept in.
+	Path string
 	// Token is not in the file; Open takes it from the environment when it is empty.
 	Token string
 }
@@ -103,7 +105,7 @@ func Open(c Config) (Store, error) {
 
 // SettingKeys are the keys of a target's set that carry the store: the target is told, whole, where secrets are
 // kept — pack never writes them into the provider's environment or arguments.
-var SettingKeys = []string{"store_provider", "store_addr", "store_mount", "store_prefix", "store_cacert", "store_token"}
+var SettingKeys = []string{"store_provider", "store_addr", "store_mount", "store_prefix", "store_cacert", "store_path", "store_token"}
 
 // Settings is the store as keys of a target's set. The token is taken from the environment here, once: a
 // provider is another process and reads none of ours.
@@ -112,7 +114,7 @@ func (c Config) Settings() map[string]string {
 		return nil
 	}
 	out := map[string]string{"store_provider": c.Provider, "store_addr": c.Addr, "store_mount": c.Mount, "store_prefix": c.Prefix,
-		"store_cacert": c.CACert, "store_token": c.Token}
+		"store_cacert": c.CACert, "store_path": c.Path, "store_token": c.Token}
 	if len(out["store_token"]) == 0 {
 		for _, name := range []string{EnvToken, EnvVaultToken} {
 			if out["store_token"] = os.Getenv(name); len(out["store_token"]) > 0 {
@@ -131,7 +133,7 @@ func (c Config) Settings() map[string]string {
 // FromSettings is the store a target's set names; the zero Config when it names none.
 func FromSettings(set func(key string) string) Config {
 	return Config{Provider: set("store_provider"), Addr: set("store_addr"), Mount: set("store_mount"),
-		Prefix: set("store_prefix"), CACert: set("store_cacert"), Token: set("store_token")}
+		Prefix: set("store_prefix"), CACert: set("store_cacert"), Path: set("store_path"), Token: set("store_token")}
 }
 
 // Prefix is where pack keeps its own secrets of an installation: store.prefix, else pack/<installation>.
