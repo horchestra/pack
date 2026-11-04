@@ -106,10 +106,11 @@ func TestWorker(t *testing.T) {
 		Auth:    "none",
 		DevUser: "dev",
 		Pack:    fakePack(t),
+		DataDir: t.TempDir(),
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan error, 1)
-	go func() { done <- Worker(ctx, cfg) }()
+	go func() { done <- Worker(ctx, cfg, WorkerOptions{}) }()
 	select {
 	case err := <-done:
 		t.Fatalf("the worker ended by itself: %v", err)

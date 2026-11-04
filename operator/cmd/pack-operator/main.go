@@ -8,6 +8,7 @@ import (
 	"net"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 
 	"github.com/spf13/cobra"
@@ -43,6 +44,9 @@ var serveCmd = &cobra.Command{
 	},
 }
 
+var workerOpts server.WorkerOptions
+var workerLabels []string
+
 var workerCmd = &cobra.Command{
 	Use:   "worker",
 	Short: "an executor of the operator's jobs",
@@ -52,13 +56,30 @@ var workerCmd = &cobra.Command{
 		if err != nil {
 			return err
 		}
-		return server.Worker(interruptContext(), cfg)
+		workerOpts.Labels = map[string]string{}
+		for _, l := range workerLabels {
+			k, v, ok := strings.Cut(l, "=")
+			if !ok {
+				return fmt.Errorf("a label is key=value: %q", l)
+			}
+			workerOpts.Labels[k] = v
+		}
+		if len(workerOpts.Labels) == 0 {
+			workerOpts.Labels = nil
+		}
+		return server.Worker(interruptContext(), cfg, workerOpts)
 	},
 }
 
 func init() {
 	root.PersistentFlags().StringVarP(&configPath, "config", "f", envOr("PACK_OPERATOR_CONFIG", "operator.yaml"),
 		"the configuration file (PACK_OPERATOR_CONFIG)")
+	workerCmd.Flags().StringVar(&workerOpts.Runtime, "runtime", "native", "the jobs' runtime: native | docker | k8s")
+	workerCmd.Flags().StringArrayVar(&workerLabels, "label", nil, "a label of the set the worker answers (key=value, repeatable)")
+	workerCmd.Flags().StringVar(&workerOpts.Image, "image", "", "docker and k8s: the pack image (\"pack:latest\" for docker by default)")
+	workerCmd.Flags().StringVar(&workerOpts.Kubeconfig, "kubeconfig", "", "k8s: the worker's own kubeconfig; empty — in-cluster")
+	workerCmd.Flags().StringVar(&workerOpts.Namespace, "namespace", "", "k8s: the namespace the Jobs run in")
+	workerCmd.Flags().StringVar(&workerOpts.GitImage, "git-image", "", "k8s: the init container's image (\"alpine/git:latest\" by default)")
 	root.AddCommand(serveCmd, workerCmd)
 }
 

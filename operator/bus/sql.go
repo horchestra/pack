@@ -142,6 +142,56 @@ func (b *SQLBus) GetJob(ctx context.Context, id string) (Job, error) {
 	return job, json.Unmarshal(body, &job)
 }
 
+// JobsByState are the jobs whose state is one of states (a worker's recovery reads starting and running).
+func (b *SQLBus) JobsByState(ctx context.Context, states ...string) ([]Job, error) {
+	rows, err := b.db.QueryContext(ctx, `select body from bus_jobs`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	want := map[string]bool{}
+	for _, s := range states {
+		want[s] = true
+	}
+	var jobs []Job
+	for rows.Next() {
+		var body []byte
+		if err := rows.Scan(&body); err != nil {
+			return nil, err
+		}
+		var job Job
+		if err := json.Unmarshal(body, &job); err != nil {
+			return nil, err
+		}
+		if want[job.State] {
+			jobs = append(jobs, job)
+		}
+	}
+	return jobs, rows.Err()
+}
+
+// SetJobLastSeq moves the job's last_seq without an event: the worker's recovery reads it (К6).
+func (b *SQLBus) SetJobLastSeq(ctx context.Context, id string, seq int64) error {
+	var body []byte
+	if err := b.db.QueryRowContext(ctx, b.bind(`select body from bus_jobs where id = ?`), id).Scan(&body); err != nil {
+		return err
+	}
+	var job Job
+	if err := json.Unmarshal(body, &job); err != nil {
+		return err
+	}
+	if job.LastSeq >= seq {
+		return nil
+	}
+	job.LastSeq = seq
+	raw, err := json.Marshal(job)
+	if err != nil {
+		return err
+	}
+	_, err = b.db.ExecContext(ctx, b.bind(`update bus_jobs set body = ?, updated_at = current_timestamp where id = ?`), raw, id)
+	return err
+}
+
 func (b *SQLBus) Subscribe(ctx context.Context, group string, from int64) (Subscription, error) {
 	if _, err := b.db.ExecContext(ctx, b.bind(`insert into bus_positions (grp, seq) values (?, ?) on conflict (grp) do nothing`), group, from); err != nil {
 		return nil, err
