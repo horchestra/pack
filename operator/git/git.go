@@ -9,6 +9,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 
@@ -377,6 +378,125 @@ func (r *Repo) Merge(ctx context.Context, into, sha, author, message string) (st
 		return "", false, err
 	}
 	return h.String(), true, nil
+}
+
+// CommitFile commits content as path on top of the remote-tracking branch's head (refs/remotes/origin/<branch>),
+// author and committer both the operator (К5) — the pure-plumbing way, no worktree: the head's tree with the one
+// file replaced. The answer is the new commit's sha; Push moves the branch.
+func (r *Repo) CommitFile(ctx context.Context, branch, path string, content []byte, author, message string) (string, error) {
+	head, err := r.Resolve(ctx, "refs/remotes/origin/"+branch)
+	if err != nil {
+		return "", fmt.Errorf("the branch %s: %w", branch, err)
+	}
+	c, err := r.r.CommitObject(plumbing.NewHash(head))
+	if err != nil {
+		return "", err
+	}
+	tree, err := c.Tree()
+	if err != nil {
+		return "", err
+	}
+	name, email, ok := strings.Cut(author, " <")
+	if !ok || !strings.HasSuffix(email, ">") {
+		return "", fmt.Errorf("the author is \"Name <address>\": %q", author)
+	}
+	blob, err := r.writeBlob(content)
+	if err != nil {
+		return "", err
+	}
+	treeHash, err := r.insertBlob(tree, strings.Split(path, "/"), blob)
+	if err != nil {
+		return "", err
+	}
+	who := object.Signature{Name: name, Email: strings.TrimSuffix(email, ">"), When: time.Now()}
+	commit := object.Commit{
+		Author:       who,
+		Committer:    who,
+		Message:      message,
+		TreeHash:     treeHash,
+		ParentHashes: []plumbing.Hash{plumbing.NewHash(head)},
+	}
+	obj := r.r.Storer.NewEncodedObject()
+	if err := commit.Encode(obj); err != nil {
+		return "", err
+	}
+	h, err := r.r.Storer.SetEncodedObject(obj)
+	if err != nil {
+		return "", err
+	}
+	return h.String(), nil
+}
+
+// writeBlob stores content as a blob.
+func (r *Repo) writeBlob(content []byte) (plumbing.Hash, error) {
+	obj := r.r.Storer.NewEncodedObject()
+	obj.SetType(plumbing.BlobObject)
+	obj.SetSize(int64(len(content)))
+	w, err := obj.Writer()
+	if err != nil {
+		return plumbing.Hash{}, err
+	}
+	if _, err := w.Write(content); err != nil {
+		w.Close()
+		return plumbing.Hash{}, err
+	}
+	if err := w.Close(); err != nil {
+		return plumbing.Hash{}, err
+	}
+	return r.r.Storer.SetEncodedObject(obj)
+}
+
+// insertBlob is the tree's hash with the blob at parts (the path split on /), the subtrees on the way made or
+// rebuilt — git has no directories of its own, a path is a chain of trees.
+func (r *Repo) insertBlob(tree *object.Tree, parts []string, blob plumbing.Hash) (plumbing.Hash, error) {
+	entries := make([]object.TreeEntry, 0, len(tree.Entries)+1)
+	if len(parts) == 1 {
+		for _, e := range tree.Entries {
+			if e.Name == parts[0] {
+				continue
+			}
+			entries = append(entries, e)
+		}
+		entries = append(entries, object.TreeEntry{Name: parts[0], Mode: filemode.Regular, Hash: blob})
+	} else {
+		sub := &object.Tree{}
+		for _, e := range tree.Entries {
+			if e.Name == parts[0] {
+				if e.Mode != filemode.Dir {
+					return plumbing.Hash{}, fmt.Errorf("%s is a file, not a directory", parts[0])
+				}
+				t, err := object.GetTree(r.r.Storer, e.Hash)
+				if err != nil {
+					return plumbing.Hash{}, err
+				}
+				sub = t
+				continue
+			}
+			entries = append(entries, e)
+		}
+		subHash, err := r.insertBlob(sub, parts[1:], blob)
+		if err != nil {
+			return plumbing.Hash{}, err
+		}
+		entries = append(entries, object.TreeEntry{Name: parts[0], Mode: filemode.Dir, Hash: subHash})
+	}
+	// git orders a tree's entries by name, a directory as its name with a trailing /
+	sort.Slice(entries, func(i, j int) bool {
+		a, b := entries[i].Name, entries[j].Name
+		if entries[i].Mode == filemode.Dir {
+			a += "/"
+		}
+		if entries[j].Mode == filemode.Dir {
+			b += "/"
+		}
+		return a < b
+	})
+	out := object.Tree{Entries: entries}
+	obj := r.r.Storer.NewEncodedObject()
+	if err := out.Encode(obj); err != nil {
+		return plumbing.Hash{}, err
+	}
+	return r.r.Storer.SetEncodedObject(obj)
 }
 
 // HasRemoteBranch says whether origin has the branch.

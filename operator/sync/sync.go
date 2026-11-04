@@ -495,6 +495,34 @@ func (s *Syncer) CreateBranch(ctx context.Context, projectID, branch, sha string
 	return fmt.Errorf("no project %s", projectID)
 }
 
+// CommitLock commits the release's lock file on the branch — fresh fetched first — and pushes; the answer is the
+// branch's new head (B10). The next sync sees the commit as every other: a plan of the release at the new sha.
+func (s *Syncer) CommitLock(ctx context.Context, projectID, branch, path string, content []byte, author, message string) (string, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for i := range s.cfg.Projects {
+		if s.cfg.Projects[i].ID != projectID {
+			continue
+		}
+		r, err := s.repo(ctx, &s.cfg.Projects[i])
+		if err != nil {
+			return "", err
+		}
+		if err := r.Fetch(ctx); err != nil {
+			return "", err
+		}
+		sha, err := r.CommitFile(ctx, branch, path, content, author, message)
+		if err != nil {
+			return "", err
+		}
+		if err := r.Push(ctx, sha+":refs/heads/"+branch); err != nil {
+			return "", err
+		}
+		return sha, nil
+	}
+	return "", fmt.Errorf("no project %s", projectID)
+}
+
 // MergeChange merges the branch's head into the project's main branch and pushes: the merge's sha (the head
 // itself on a fast-forward, the main branch's own head when merged already). git.ErrMergeConflict marks the
 // change as conflicted, nothing pushed.

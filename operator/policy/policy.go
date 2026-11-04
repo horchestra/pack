@@ -49,6 +49,8 @@ type Git interface {
 	ResolveBranch(ctx context.Context, project, branch string) (string, error)
 	CreateBranch(ctx context.Context, project, branch, sha string) error
 	MergeChange(ctx context.Context, project, branch, author, message string) (string, error)
+	// CommitLock commits the release's lock file on the branch and pushes (B10); the answer is the new head.
+	CommitLock(ctx context.Context, project, branch, path string, content []byte, author, message string) (string, error)
 }
 
 // Policy is the engine; Run drives it off the Bus.
@@ -296,10 +298,74 @@ func (p *Policy) onJob(ctx context.Context, job bus.Job) error {
 			return p.finishRequest(ctx, req, bus.RequestFailed)
 		}
 		return p.waitApproval(ctx, req, result.Digest)
-	case howApply, howPlain:
+	case howApply:
+		return p.finishRequest(ctx, req, bus.RequestDone)
+	case howPlain:
+		if req.Action == bus.ActionRefresh {
+			if err := p.lockDone(ctx, req, job); err != nil {
+				p.log.Error().Err(err).Str("request", req.ID).Msg("the lock is not committed")
+				return p.finishRequest(ctx, req, bus.RequestFailed)
+			}
+		}
 		return p.finishRequest(ctx, req, bus.RequestDone)
 	}
 	return nil
+}
+
+// lockDone is the B10 half of a refresh: the job's result carries the release's new lock; it is committed — the
+// operator both author and committer (К5) — to the main branch, or to the change request's branch when the
+// request was of its head. Nothing changed, nothing to commit.
+func (p *Policy) lockDone(ctx context.Context, req bus.Request, job bus.Job) error {
+	var result struct {
+		Lock    *lockFile `json:"lock"`
+		Changed bool      `json:"changed"`
+	}
+	if err := json.Unmarshal(job.Result, &result); err != nil {
+		return fmt.Errorf("the refresh's result: %w", err)
+	}
+	if !result.Changed || result.Lock == nil || p.git == nil {
+		return nil
+	}
+	content, err := json.MarshalIndent(result.Lock, "", "  ")
+	if err != nil {
+		return err
+	}
+	content = append(content, '\n')
+	branch := ""
+	_ = p.db.QueryRowContext(ctx, p.bind(`select branch from operator_changes
+		where project = ? and sha = ? and state = 'open' limit 1`), req.Repo, req.SHA).Scan(&branch)
+	if len(branch) == 0 {
+		if proj := p.project(req.Repo); proj != nil && len(proj.Branch) > 0 {
+			branch = proj.Branch
+		} else {
+			branch = "main"
+		}
+	}
+	author := p.cfg.Git.Author
+	if len(author) == 0 {
+		author = "pack-operator <pack-operator@localhost>"
+	}
+	path := req.Target.Release + "/release.lock.json"
+	message := fmt.Sprintf("Lock %s after refresh\n\nRequested-By: %s\n", req.Target.Release, req.ID)
+	sha, err := p.git.CommitLock(ctx, req.Repo, branch, path, content, author, message)
+	if err != nil {
+		return err
+	}
+	p.log.Info().Str("request", req.ID).Str("release", req.Target.Release).Str("branch", branch).Str("sha", sha).
+		Msg("the lock is committed")
+	return nil
+}
+
+// lockFile is release.lock.json as pack refresh reports it (the operator has no pack internals to import).
+type lockFile struct {
+	Pack    string `json:"pack,omitempty"`
+	Digest  string `json:"digest,omitempty"`
+	Targets map[string]struct {
+		Source string `json:"source,omitempty"`
+		SHA256 string `json:"sha256,omitempty"`
+		Image  string `json:"image,omitempty"`
+		Digest string `json:"digest,omitempty"`
+	} `json:"targets,omitempty"`
 }
 
 // planDone reads the plan job's result: the digest and the risks. A gate stands first when the project has one

@@ -68,6 +68,12 @@ type apiRig struct {
 
 func newAPIRig(t *testing.T) *apiRig {
 	t.Helper()
+	return newAPIRigWith(t, "pack: ../../../packs/kv\n")
+}
+
+// newAPIRigWith is newAPIRig with the release's own head of release.yaml (B10's fixture names a pack in a registry).
+func newAPIRigWith(t *testing.T, releaseHead string) *apiRig {
+	t.Helper()
 	bin, err := packBin()
 	if err != nil {
 		t.Fatalf("the pack binary: %v", err)
@@ -93,7 +99,7 @@ func newAPIRig(t *testing.T) *apiRig {
 		}
 	}
 	write("releases/prod/db/release.yaml",
-		"pack: ../../../packs/kv\nstate: db\nid: 11111111-2222-3333-4444-555555555555\n")
+		releaseHead+"state: db\nid: 11111111-2222-3333-4444-555555555555\n")
 	write("releases/prod/db/values.yaml", "value: one\n")
 	write("releases/prod/db/env.yaml", `{"target": "memory", "run": {"approve": "plan"}}`+"\n")
 	wt, err := seed.Worktree()
