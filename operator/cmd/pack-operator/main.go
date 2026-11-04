@@ -11,11 +11,13 @@ import (
 	"strings"
 	"syscall"
 
+	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/spf13/cobra"
 
 	"github.com/horchestra/pack/pkg/logging"
 
 	"github.com/horchestra/pack-operator/config"
+	"github.com/horchestra/pack-operator/mcpserver"
 	"github.com/horchestra/pack-operator/server"
 )
 
@@ -71,6 +73,20 @@ var workerCmd = &cobra.Command{
 	},
 }
 
+var mcpOperator, mcpUser string
+
+var mcpCmd = &cobra.Command{
+	Use:   "mcp",
+	Short: "an MCP server on stdio for a model that runs the operator's releases: next, check, plan, status, history, logs, journal, request, job",
+	Long: `Serves the operator's API (-—operator) to a model over MCP on stdin and stdout. What is a person's
+is not a tool's: no approval, no secret's value.`,
+	Args: cobra.NoArgs,
+	RunE: func(*cobra.Command, []string) error {
+		srv := mcpserver.New(&mcpserver.Client{Base: mcpOperator, User: mcpUser}, server.Version)
+		return srv.Run(interruptContext(), &mcp.StdioTransport{})
+	},
+}
+
 func init() {
 	root.PersistentFlags().StringVarP(&configPath, "config", "f", envOr("PACK_OPERATOR_CONFIG", "operator.yaml"),
 		"the configuration file (PACK_OPERATOR_CONFIG)")
@@ -80,7 +96,11 @@ func init() {
 	workerCmd.Flags().StringVar(&workerOpts.Kubeconfig, "kubeconfig", "", "k8s: the worker's own kubeconfig; empty — in-cluster")
 	workerCmd.Flags().StringVar(&workerOpts.Namespace, "namespace", "", "k8s: the namespace the Jobs run in")
 	workerCmd.Flags().StringVar(&workerOpts.GitImage, "git-image", "", "k8s: the init container's image (\"alpine/git:latest\" by default)")
-	root.AddCommand(serveCmd, workerCmd)
+	mcpCmd.Flags().StringVar(&mcpOperator, "operator", envOr("PACK_OPERATOR_URL", "http://127.0.0.1:8080"),
+		"the operator API's URL (PACK_OPERATOR_URL)")
+	mcpCmd.Flags().StringVar(&mcpUser, "user", envOr("PACK_OPERATOR_USER", ""),
+		"the X-Pack-User the calls are as (PACK_OPERATOR_USER); empty — the operator's own (auth: none)")
+	root.AddCommand(serveCmd, workerCmd, mcpCmd)
 }
 
 func envOr(name, fallback string) string {

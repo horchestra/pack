@@ -70,6 +70,11 @@ func (s *Server) runPackOp(ctx context.Context, proj *config.Project, rel, sha, 
 		return nil, fmt.Errorf("the checkout of %s: %w", sha, err)
 	}
 	checkout := filepath.Join(dir, "checkout")
+	if op == "next" {
+		if _, err := os.Stat(filepath.Join(checkout, filepath.FromSlash(rel))); os.IsNotExist(err) {
+			return []byte(`{"state":"new","next":["pack init <pack> ."]}`), nil // no release here: new, as pack next says
+		}
+	}
 	env, err := s.opEnv(proj, rel, checkout, dir)
 	if err != nil {
 		return nil, err

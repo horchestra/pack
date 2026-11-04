@@ -32,6 +32,7 @@ func (s *Server) routes(mux *http.ServeMux) {
 	mux.HandleFunc("PUT /api/projects", s.putProject)
 	mux.HandleFunc("GET /api/projects/{p}/releases", s.releases)
 	mux.HandleFunc("GET /api/releases/{rel}", s.release)
+	mux.HandleFunc("GET /api/releases/{rel}/next", s.packOp("next"))
 	mux.HandleFunc("GET /api/releases/{rel}/status", s.packOp("status"))
 	mux.HandleFunc("GET /api/releases/{rel}/history", s.packOp("history"))
 	mux.HandleFunc("GET /api/releases/{rel}/logs", s.packOp("logs"))

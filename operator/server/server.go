@@ -142,6 +142,16 @@ func (s *Server) Close() {
 // Bus is the server's Bus (a worker of the same process shares it).
 func (s *Server) Bus() *bus.SQLBus { return s.bus }
 
+// DB is the server's database (a worker of the same process keeps its projections there).
+func (s *Server) DB() *db.DB { return s.db }
+
+// Handler is the API's handler (К4): every route, for a listener of one's own (tests, an in-process MCP).
+func (s *Server) Handler() http.Handler {
+	mux := http.NewServeMux()
+	s.routes(mux)
+	return mux
+}
+
 // version answers GET /api/version: the operator's and the pack binary's (К4).
 func (s *Server) version(w http.ResponseWriter, r *http.Request) {
 	reply(w, struct {
