@@ -137,6 +137,23 @@ func (s *Syncer) Sync(ctx context.Context, projectID string) error {
 	return nil
 }
 
+// Checkout writes the tree of sha of the project's repository in dest — the policy reads a release's env
+// there (policy.Git). Remove it with os.RemoveAll.
+func (s *Syncer) Checkout(ctx context.Context, projectID, sha, dest string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for i := range s.cfg.Projects {
+		if s.cfg.Projects[i].ID == projectID {
+			r, err := s.repo(ctx, &s.cfg.Projects[i])
+			if err != nil {
+				return err
+			}
+			return r.Checkout(ctx, sha, dest)
+		}
+	}
+	return fmt.Errorf("no project %s", projectID)
+}
+
 // repo is the project's working copy, cloned on first use.
 func (s *Syncer) repo(ctx context.Context, p *config.Project) (*git.Repo, error) {
 	if r, ok := s.repos[p.ID]; ok {

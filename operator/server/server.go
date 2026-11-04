@@ -22,6 +22,7 @@ import (
 	"github.com/horchestra/pack-operator/db"
 	"github.com/horchestra/pack-operator/git"
 	"github.com/horchestra/pack-operator/packbin"
+	"github.com/horchestra/pack-operator/policy"
 	"github.com/horchestra/pack-operator/sync"
 )
 
@@ -33,8 +34,9 @@ type Server struct {
 	cfg    *config.Config
 	db     *db.DB
 	az     *authz.Authz
-	bus    bus.Bus
+	bus    *bus.SQLBus
 	syncer *sync.Syncer
+	pol    *policy.Policy
 	pck    api.VersionResult
 }
 
@@ -81,9 +83,12 @@ func Start(ctx context.Context, cfg *config.Config, ln net.Listener) error {
 		cache, _ := os.UserCacheDir()
 		dataDir = filepath.Join(cache, "pack-operator")
 	}
-	s.syncer = sync.New(cfg, s.bus, s.db, creds, filepath.Join(dataDir, "repos"), nil)
+	s.pol = policy.New(cfg, s.bus, s.db, s.az, nil)
+	s.syncer = sync.New(cfg, s.bus, s.db, creds, filepath.Join(dataDir, "repos"), s.pol)
 	defer s.syncer.Close()
+	s.pol.SetGit(s.syncer)
 	go func() { _ = s.syncer.Run(ctx) }()
+	go func() { _ = s.pol.Run(ctx) }()
 	log.Info().Str("pack", s.pck.Version).Str("db", s.db.Driver()).Int("projects", len(cfg.Projects)).
 		Str("addr", ln.Addr().String()).Msg("serving")
 

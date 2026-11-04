@@ -150,6 +150,24 @@ func NewRequest(repo, sha string, target Target, action string, params Params, b
 	}, nil
 }
 
+// NewJob is a job ready to queue (К3): id minted, state queued, the request it answers.
+func NewJob(request Request, argv []string, runtime string, labels map[string]string) (Job, error) {
+	id, err := mint("j")
+	if err != nil {
+		return Job{}, err
+	}
+	return Job{
+		Kind:    KindJob,
+		ID:      id,
+		Request: request.ID,
+		Argv:    argv,
+		Runtime: runtime,
+		Labels:  labels,
+		State:   JobQueued,
+		Created: time.Now().UTC(),
+	}, nil
+}
+
 // mint is an id: a prefix and 12 bytes of randomness, hex.
 func mint(prefix string) (string, error) {
 	var b [12]byte

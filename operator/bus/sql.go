@@ -95,6 +95,53 @@ func (b *SQLBus) Submit(ctx context.Context, req Request) (Request, bool, error)
 	return standing, false, nil
 }
 
+// UpdateRequest records a state of the request that stands (the policy's transitions) and publishes it.
+func (b *SQLBus) UpdateRequest(ctx context.Context, req Request) error {
+	raw, err := json.Marshal(req)
+	if err != nil {
+		return err
+	}
+	if _, err := b.db.ExecContext(ctx, b.bind(`update bus_requests set body = ? where id = ?`), raw, req.ID); err != nil {
+		return err
+	}
+	_, err = b.Publish(ctx, KindRequest, req)
+	return err
+}
+
+// GetRequest reads the request that stands.
+func (b *SQLBus) GetRequest(ctx context.Context, id string) (Request, error) {
+	var body []byte
+	if err := b.db.QueryRowContext(ctx, b.bind(`select body from bus_requests where id = ?`), id).Scan(&body); err != nil {
+		return Request{}, err
+	}
+	var req Request
+	return req, json.Unmarshal(body, &req)
+}
+
+// PublishJob records a job — a new one, or a state of one standing — and publishes it (migration 0005).
+func (b *SQLBus) PublishJob(ctx context.Context, job Job) error {
+	raw, err := json.Marshal(job)
+	if err != nil {
+		return err
+	}
+	if _, err := b.db.ExecContext(ctx, b.bind(`insert into bus_jobs (id, body, updated_at) values (?, ?, current_timestamp)
+		on conflict (id) do update set body = excluded.body, updated_at = excluded.updated_at`), job.ID, raw); err != nil {
+		return err
+	}
+	_, err = b.Publish(ctx, KindJob, job)
+	return err
+}
+
+// GetJob reads the job that stands.
+func (b *SQLBus) GetJob(ctx context.Context, id string) (Job, error) {
+	var body []byte
+	if err := b.db.QueryRowContext(ctx, b.bind(`select body from bus_jobs where id = ?`), id).Scan(&body); err != nil {
+		return Job{}, err
+	}
+	var job Job
+	return job, json.Unmarshal(body, &job)
+}
+
 func (b *SQLBus) Subscribe(ctx context.Context, group string, from int64) (Subscription, error) {
 	if _, err := b.db.ExecContext(ctx, b.bind(`insert into bus_positions (grp, seq) values (?, ?) on conflict (grp) do nothing`), group, from); err != nil {
 		return nil, err
