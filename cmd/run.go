@@ -36,7 +36,7 @@ var runCmd = &cobra.Command{
 what is installed: in the key's first instance as it runs (docker exec, the cluster's exec,
 the key's first host), with its files, data, network, environment and secrets, on the key's
 target; its lines go to the journal as a run of its own (pack log). A file it writes outlives
-it on a volume of the key. Without an action, lists them with their parameters. The actions are a closed list:
+it on a volume of the key. Without an action, lists them with their parameters — before anything is installed, the actions of the release's pack. The actions are a closed list:
 what may be run besides apply is what the pack says.
 
 An action that changes the installation (mutating) is a plan to run.approve: asked for under
@@ -55,7 +55,19 @@ too. --approve <digest> runs the one --dry-run showed.`,
 		if err != nil {
 			return err
 		}
-		if rec == nil || len(rec.Pack) == 0 {
+		if len(args) == 0 && (rec == nil || len(rec.Pack) == 0) {
+			// the actions of the release's pack, before anything is installed: what apply would make runnable
+			ref, err := dir.Release.PackRef()
+			if err != nil {
+				return err
+			}
+			if b, err = s.Pack(ref); err != nil {
+				return err
+			}
+			if _, rel, err = s.Render(); err != nil {
+				return err
+			}
+		} else if rec == nil || len(rec.Pack) == 0 {
 			return withCode(api.CodeNothingInstalled, fmt.Errorf("nothing is installed on %s: an action runs on what is", s.Target))
 		}
 		actions := session.Actions(b, rel)
@@ -120,7 +132,7 @@ func howRun(a session.Action, params []string) how {
 
 func printActions(actions []session.Action) {
 	if len(actions) == 0 {
-		fmt.Println("the installed version has no actions")
+		fmt.Println("the pack has no actions")
 		return
 	}
 	for _, a := range actions {

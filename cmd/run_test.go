@@ -2,6 +2,9 @@ package cmd
 
 import (
 	"context"
+	"encoding/json"
+	"reflect"
+	"slices"
 	"strings"
 	"testing"
 
@@ -95,4 +98,51 @@ func fmtEntries[E interface{ String() string }](es []E) string {
 		b.WriteString(e.String() + "\n")
 	}
 	return b.String()
+}
+
+// pack run lists the actions of the release's pack before anything is installed, the same list as after; running
+// one is nothing_installed, as before.
+func TestActionsBeforeInstall(t *testing.T) {
+	d := releaseOf(t, generated(t), nil)
+	out := pack(t, d, "run")
+	if !strings.Contains(out, "backup (postgres): Dumps the database") || !strings.Contains(out, "--param from=… (string, required) The dump to restore.") {
+		t.Fatalf("run, nothing installed:\n%s", out)
+	}
+	t.Cleanup(func() { jsonOut = false })
+	var before api.ActionsResult
+	if err := json.Unmarshal([]byte(pack(t, d, "run", "--json")), &before); err != nil || len(before.Actions) != 2 {
+		t.Fatalf("run --json, nothing installed: %v, %+v", err, before)
+	}
+	jsonOut = false
+	var restore api.Action
+	for _, a := range before.Actions {
+		if a.Action.Name == "restore" {
+			restore = a
+		}
+	}
+	if restore.Key != "postgres" || !restore.Action.Mutating || !restore.Action.Approve ||
+		restore.Action.Schema == nil || restore.Action.Schema.Properties["from"].Type != "string" ||
+		!slices.Contains(restore.Action.Schema.Required, "from") {
+		t.Errorf("restore: %+v", restore)
+	}
+	var backup api.Action
+	for _, a := range before.Actions {
+		if a.Action.Name == "backup" {
+			backup = a
+		}
+	}
+	format := backup.Action.Schema.Properties["format"]
+	if format.Default != "custom" || len(format.Enum) != 2 {
+		t.Errorf("backup's format: %+v", format)
+	}
+
+	pack(t, d, "apply")
+	var after api.ActionsResult
+	if err := json.Unmarshal([]byte(pack(t, d, "run", "--json")), &after); err != nil {
+		t.Fatalf("run --json, installed: %v", err)
+	}
+	jsonOut = false
+	if !reflect.DeepEqual(before, after) {
+		t.Errorf("before and installed:\n%+v\n%+v", before, after)
+	}
 }
