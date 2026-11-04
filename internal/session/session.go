@@ -66,6 +66,15 @@ func Open(ctx context.Context, d *workdir.Dir, readOnly bool) (*Session, error) 
 	scfg := secretstore.Config{Provider: env.Store.Provider, Addr: env.Store.Addr, Mount: env.Store.Mount,
 		Prefix: env.Store.Prefix, CACert: env.Store.CACert, Path: env.Store.Path}
 	storeSet := scfg.Settings()
+	if storeSet == nil {
+		storeSet = map[string]string{}
+	}
+	// every target is told how the record is kept: with state: db its own file would not outlive the run
+	kind := d.Release.State
+	if len(kind) == 0 {
+		kind = workdir.StateFile
+	}
+	storeSet[target.SettingPackState] = kind
 	maps.Copy(env.Settings, storeSet)
 
 	lock, err := release.ReadLock(d.Release.Dir)

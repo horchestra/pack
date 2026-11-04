@@ -146,7 +146,12 @@ func Names() []string {
 type Settings map[string]string
 
 // Own are the keys of the set that are pack's own, not a target's.
-var Own = []string{"target", "vault_addr", "vault_paths"}
+var Own = []string{"target", "vault_addr", "vault_paths", SettingPackState}
+
+// SettingPackState is how pack keeps the installation's record: file, target or db (release.yaml's `state:`).
+// pack says it to every target: with `db` a target's own state file would not outlive the run — the target
+// refuses one, and the record and the credentials are pack's storage's and the store's.
+const SettingPackState = "pack_state"
 
 // Check refuses a setting the target does not know: every key must be pack's own, one of names, or start with one
 // of prefixes. A setting nothing reads is a mistake — a typo, a setting of another target — never something to

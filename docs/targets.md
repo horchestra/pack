@@ -195,7 +195,10 @@ func main() {
 ```
 
 `factory(installation, settings)` makes the installation (`target.Installation`) for the environment's settings —
-refuse a setting it does not know with `target.Settings(set).Check(...)`:
+refuse a setting it does not know with `target.Settings(set).Check(...)`. Of the settings pack adds itself:
+`store_*` says where the secrets are kept (a credential a job makes is written there, `secretstore.FromSettings`),
+and `pack_state` how pack keeps the record — with `db` a state file of the target's own would not outlive the run,
+so the target refuses one and keeps no record (`state: db` is pack's database's):
 
 |                                                  |                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
 |--------------------------------------------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
