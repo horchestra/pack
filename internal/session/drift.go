@@ -36,11 +36,11 @@ func (s *Session) Drifts(ctx context.Context, rec *saga.Record, from *render.Rel
 		h, there := held[u.Key]
 		switch {
 		case !there:
-			out = append(out, Drift{u.Key, "missing in the target"})
+			out = append(out, Drift{Key: u.Key, Why: "missing in the target"})
 		case h.Image != u.Image:
-			out = append(out, Drift{u.Key, fmt.Sprintf("runs %s, the record says %s", h.Image, u.Image)})
+			out = append(out, Drift{Key: u.Key, Why: fmt.Sprintf("runs %s, the record says %s", h.Image, u.Image)})
 		case h.Replicas != u.Replicas:
-			out = append(out, Drift{u.Key, fmt.Sprintf("%d replica(s), the record says %d", h.Replicas, u.Replicas)})
+			out = append(out, Drift{Key: u.Key, Why: fmt.Sprintf("%d replica(s), the record says %d", h.Replicas, u.Replicas)})
 		}
 	}
 	slices.SortFunc(out, func(a, b Drift) int { return strings.Compare(a.Key, b.Key) })

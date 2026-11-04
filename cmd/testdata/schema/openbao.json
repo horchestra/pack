@@ -1,0 +1,900 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Secrets management; the storage is raft, or the embedded PostgreSQL.",
+  "properties": {
+    "dev": {
+      "description": "An in-memory, unsealed server, for trying it out.",
+      "title": "Dev mode",
+      "type": "boolean",
+      "x-pack-env": "BAO_DEV",
+      "x-pack-i18n": {
+        "ru": {
+          "description": "Сервер в памяти, без печати, — чтобы попробовать.",
+          "title": "Режим разработки"
+        }
+      }
+    },
+    "openbao": {
+      "additionalProperties": false,
+      "description": "The server's own configuration, the JSON form of its HCL.",
+      "properties": {
+        "administratively_disabled": {
+          "type": "boolean"
+        },
+        "api_addr": {
+          "description": "The address clients are told to reach the API at.",
+          "examples": [
+            "https://bao.example:8200"
+          ],
+          "title": "API address",
+          "type": "string",
+          "x-pack-group": "addresses",
+          "x-pack-i18n": {
+            "ru": {
+              "description": "Адрес, по которому клиентам сообщают обращаться к API.",
+              "title": "Адрес API"
+            }
+          }
+        },
+        "cache_size": {
+          "type": "integer"
+        },
+        "cluster_addr": {
+          "description": "The address the nodes reach each other at; raft wants it set.",
+          "title": "Cluster address",
+          "type": "string",
+          "x-pack-group": "addresses",
+          "x-pack-i18n": {
+            "ru": {
+              "description": "Адрес, по которому узлы обращаются друг к другу; raft требует его.",
+              "title": "Адрес кластера"
+            }
+          }
+        },
+        "cluster_name": {
+          "description": "The name of the cluster, in its metrics and its API.",
+          "title": "Cluster name",
+          "type": "string",
+          "x-pack-i18n": {
+            "ru": {
+              "description": "Имя кластера в его метриках и API.",
+              "title": "Имя кластера"
+            }
+          }
+        },
+        "default_lease_ttl": {
+          "type": "string"
+        },
+        "disable_cache": {
+          "type": "boolean"
+        },
+        "disable_clustering": {
+          "type": "boolean"
+        },
+        "disable_mlock": {
+          "default": true,
+          "type": "boolean"
+        },
+        "disable_printable_check": {
+          "type": "boolean"
+        },
+        "ha_storage": {
+          "type": "object"
+        },
+        "initialize": {
+          "items": {
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "introspection_endpoint": {
+          "type": "boolean"
+        },
+        "listener": {
+          "description": "The listeners, by their type (tcp).",
+          "title": "Listener",
+          "type": "object",
+          "x-pack-i18n": {
+            "ru": {
+              "description": "Слушатели по типу (tcp).",
+              "title": "Слушатели"
+            }
+          }
+        },
+        "log_file": {
+          "description": "Where the log goes besides the standard output.",
+          "title": "Log file",
+          "type": "string",
+          "x-pack-group": "logging",
+          "x-pack-i18n": {
+            "ru": {
+              "description": "Куда пишется журнал помимо стандартного вывода.",
+              "title": "Файл журнала"
+            }
+          }
+        },
+        "log_level": {
+          "default": "info",
+          "description": "How much the server says; the format is always JSON.",
+          "examples": [
+            "debug"
+          ],
+          "title": "Log level",
+          "type": "string",
+          "x-pack-group": "logging",
+          "x-pack-i18n": {
+            "ru": {
+              "description": "Насколько подробно пишет сервер; формат всегда JSON.",
+              "title": "Уровень журнала"
+            }
+          }
+        },
+        "log_rotate_bytes": {
+          "type": "integer"
+        },
+        "log_rotate_duration": {
+          "type": "string"
+        },
+        "log_rotate_max_files": {
+          "type": "integer"
+        },
+        "max_lease_ttl": {
+          "type": "string"
+        },
+        "pid_file": {
+          "type": "string"
+        },
+        "plugin_directory": {
+          "type": "string"
+        },
+        "raw_storage_endpoint": {
+          "type": "boolean"
+        },
+        "seal": {
+          "description": "The seal, by its type (static, awskms…).",
+          "title": "Seal",
+          "type": "object",
+          "x-pack-i18n": {
+            "ru": {
+              "description": "Печать по типу (static, awskms…).",
+              "title": "Печать"
+            }
+          }
+        },
+        "service_registration": {
+          "type": "object"
+        },
+        "storage": {
+          "description": "The storage backend, by its type: raft, or the embedded postgres, which\nfills it itself.",
+          "title": "Storage",
+          "type": "object",
+          "x-pack-compute": "has(pack.values.postgres) ? {'postgresql': {'connection_url': 'postgres://' + pack.values.postgres.superuser.name + ':${secret:' + pack.installation + '-postgres-superuser-password/password}@' + pack.keys.postgres.instances[0] + ':' + string(pack.keys.postgres.ports.pg) + '/' + pack.values.postgres.database}} : null",
+          "x-pack-i18n": {
+            "ru": {
+              "description": "Бэкенд хранения по типу: raft или встроенный postgres, который\nзаполняет его сам.",
+              "title": "Хранилище"
+            }
+          },
+          "x-pack-rules": [
+            {
+              "id": "storage-from-postgres",
+              "message": "storage is filled from the embedded postgres and must not be set",
+              "rule": "!has(pack.values.postgres) || !has(values.openbao.storage) || size(values.openbao.storage) == 0",
+              "x-pack-i18n": {
+                "ru": {
+                  "message": "хранилище заполняется из встроенного postgres и задаваться не должно"
+                }
+              }
+            }
+          ]
+        },
+        "telemetry": {
+          "additionalProperties": false,
+          "properties": {
+            "disable_hostname": {
+              "type": "boolean"
+            },
+            "dogstatsd_addr": {
+              "type": "string"
+            },
+            "dogstatsd_tags": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "enable_hostname_label": {
+              "type": "boolean"
+            },
+            "filter_default": {
+              "type": "boolean"
+            },
+            "lease_metrics_threshold": {
+              "type": "string"
+            },
+            "maximum_gauge_cardinality": {
+              "type": "integer"
+            },
+            "metrics_prefix": {
+              "type": "string"
+            },
+            "prefix_filter": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "prometheus_retention_time": {
+              "type": "string"
+            },
+            "statsd_address": {
+              "type": "string"
+            },
+            "statsite_address": {
+              "type": "string"
+            },
+            "usage_gauge_period": {
+              "type": "string"
+            }
+          },
+          "type": "object"
+        },
+        "ui": {
+          "description": "Serve the web UI.",
+          "examples": [
+            true
+          ],
+          "title": "Web UI",
+          "type": "boolean",
+          "x-pack-i18n": {
+            "ru": {
+              "description": "Отдавать веб-интерфейс.",
+              "title": "Веб-интерфейс"
+            }
+          }
+        },
+        "unsafe_allow_api_in_browser": {
+          "type": "boolean"
+        }
+      },
+      "title": "Server",
+      "type": "object",
+      "x-pack-i18n": {
+        "ru": {
+          "description": "Собственная конфигурация сервера, JSON-форма его HCL.",
+          "title": "Сервер"
+        }
+      }
+    },
+    "postgres": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "description": "The PostgreSQL installed with OpenBao as its storage; absent — raft.",
+      "properties": {
+        "conf": {
+          "additionalProperties": false,
+          "description": "The settings of postgresql.conf, written as they are.",
+          "properties": {
+            "listen_addresses": {
+              "default": "*",
+              "description": "The addresses the server listens on; * is every one.",
+              "title": "Listen addresses",
+              "type": "string",
+              "x-pack-group": "server",
+              "x-pack-i18n": {
+                "ru": {
+                  "description": "Адреса, на которых слушает сервер; * — все.",
+                  "title": "Адреса"
+                }
+              }
+            },
+            "max_connections": {
+              "default": 100,
+              "description": "How many client connections the server accepts at once.",
+              "examples": [
+                200
+              ],
+              "title": "Max connections",
+              "type": "integer",
+              "x-pack-group": "server",
+              "x-pack-i18n": {
+                "ru": {
+                  "description": "Сколько клиентских соединений сервер принимает одновременно.",
+                  "title": "Максимум соединений"
+                }
+              }
+            },
+            "port": {
+              "default": 5432,
+              "description": "The port the server listens on.",
+              "examples": [
+                5432
+              ],
+              "title": "Port",
+              "type": "integer",
+              "x-pack-group": "server",
+              "x-pack-i18n": {
+                "ru": {
+                  "description": "Порт, на котором слушает сервер.",
+                  "title": "Порт"
+                }
+              }
+            },
+            "shared_buffers": {
+              "description": "The memory of the shared buffer cache; a quarter of the memory limit unless set.",
+              "examples": [
+                "1GB"
+              ],
+              "title": "Shared buffers",
+              "type": "string",
+              "x-pack-compute": "has(limits.memory) ? string(limits.memory / 1048576 / 4) + 'MB' : '128MB'",
+              "x-pack-group": "server",
+              "x-pack-i18n": {
+                "ru": {
+                  "description": "Память кэша разделяемых буферов; если не задана — четверть лимита памяти.",
+                  "title": "Разделяемые буферы"
+                }
+              }
+            }
+          },
+          "title": "postgresql.conf",
+          "type": "object",
+          "x-pack-group": "server",
+          "x-pack-i18n": {
+            "ru": {
+              "description": "Настройки postgresql.conf, записываются как есть.",
+              "title": "postgresql.conf"
+            }
+          }
+        },
+        "database": {
+          "description": "The database created at the first start.",
+          "examples": [
+            "app"
+          ],
+          "title": "Database",
+          "type": "string",
+          "x-pack-env": "POSTGRES_DB",
+          "x-pack-i18n": {
+            "ru": {
+              "description": "База, создаваемая при первом запуске.",
+              "title": "База данных"
+            }
+          }
+        },
+        "init_extensions": {
+          "default": [
+            "pg_stat_statements",
+            "pgcrypto"
+          ],
+          "description": "The extensions every database gets, after the first start.",
+          "items": {
+            "type": "string"
+          },
+          "title": "Extensions",
+          "type": "array",
+          "x-pack-i18n": {
+            "ru": {
+              "description": "Расширения, которые получает каждая база после первого запуска.",
+              "title": "Расширения"
+            }
+          }
+        },
+        "pgdg": {
+          "default": "https://apt.postgresql.org/pub/repos/apt",
+          "description": "Where the packages of PGDG come from on a host: upstream by default, a\nmirror when the hosts do not reach it.",
+          "title": "PGDG repository",
+          "type": "string",
+          "x-pack-group": "packages",
+          "x-pack-i18n": {
+            "ru": {
+              "description": "Откуда берутся пакеты PGDG на хосте: по умолчанию из апстрима,\nиз зеркала, если хосты до него не достают.",
+              "title": "Репозиторий PGDG"
+            }
+          }
+        },
+        "pgdg_key": {
+          "default": "https://www.postgresql.org/media/keys/ACCC4CF8.asc",
+          "description": "The signing key of the PGDG repository.",
+          "title": "PGDG key",
+          "type": "string",
+          "x-pack-group": "packages",
+          "x-pack-i18n": {
+            "ru": {
+              "description": "Ключ подписи репозитория PGDG.",
+              "title": "Ключ PGDG"
+            }
+          }
+        },
+        "superuser": {
+          "additionalProperties": false,
+          "description": "The role the server is bootstrapped with.",
+          "properties": {
+            "name": {
+              "default": "postgres",
+              "description": "The superuser's name.",
+              "title": "Name",
+              "type": "string",
+              "x-pack-env": "POSTGRES_USER",
+              "x-pack-i18n": {
+                "ru": {
+                  "description": "Имя суперпользователя.",
+                  "title": "Имя"
+                }
+              }
+            },
+            "password": {
+              "description": "A reference to the Secret that holds the superuser's password.",
+              "format": "password",
+              "title": "Password",
+              "type": "string",
+              "x-pack-env": "POSTGRES_PASSWORD",
+              "x-pack-i18n": {
+                "ru": {
+                  "description": "Ссылка на Secret с паролем суперпользователя.",
+                  "title": "Пароль"
+                }
+              }
+            }
+          },
+          "required": [
+            "password"
+          ],
+          "title": "Superuser",
+          "type": "object",
+          "x-pack-i18n": {
+            "ru": {
+              "description": "Роль, с которой инициализируется сервер.",
+              "title": "Суперпользователь"
+            }
+          }
+        }
+      },
+      "required": [
+        "database",
+        "superuser",
+        "conf"
+      ],
+      "title": "Embedded PostgreSQL",
+      "type": "object",
+      "x-pack": {
+        "content": [
+          {
+            "format": "properties",
+            "path": "/etc/postgresql/postgresql.conf",
+            "values": "conf"
+          },
+          {
+            "mode": "0755",
+            "path": "/opt/pack/init-extensions.sh",
+            "template": "init-extensions.sh"
+          },
+          {
+            "mode": "0755",
+            "path": "/opt/pack/restore-15.sh",
+            "source": "restore-15.sh"
+          }
+        ],
+        "data": {
+          "data": {
+            "mountPath": "/var/lib/postgresql/data",
+            "size": "10Gi"
+          }
+        },
+        "hooks": [
+          {
+            "command": [
+              "/opt/pack/init-extensions.sh"
+            ],
+            "idempotent": true,
+            "image": "new",
+            "name": "init-extensions",
+            "phase": "postInstall",
+            "timeout": "5m"
+          },
+          {
+            "command": [
+              "/usr/lib/postgresql/16/bin/pg_upgrade",
+              "--old-bindir=/usr/lib/postgresql/15/bin",
+              "--new-bindir=/usr/lib/postgresql/16/bin",
+              "--old-datadir=/var/lib/postgresql/data",
+              "--new-datadir=/var/lib/postgresql/data.16"
+            ],
+            "compensate": {
+              "command": [
+                "/opt/pack/restore-15.sh"
+              ],
+              "image": "old"
+            },
+            "exclusive": true,
+            "image": "new",
+            "name": "pg-upgrade",
+            "phase": "preUpgrade",
+            "timeout": "30m",
+            "when": {
+              "from": "\u003c16",
+              "to": "\u003e=16"
+            }
+          },
+          {
+            "command": [
+              "vacuumdb",
+              "--all",
+              "--analyze-in-stages"
+            ],
+            "idempotent": true,
+            "image": "new",
+            "name": "analyze",
+            "phase": "postUpgrade",
+            "when": {
+              "to": "\u003e=16"
+            }
+          }
+        ],
+        "minimum": {
+          "cpu": "500m",
+          "memory": "512Mi"
+        },
+        "packages": {
+          "debian": {
+            "content": [
+              {
+                "mode": "0644",
+                "path": "/etc/postgresql/16/main/conf.d/pack.conf",
+                "template": "host-postgresql.conf"
+              },
+              {
+                "mode": "0640",
+                "path": "/etc/postgresql/16/main/pg_hba.conf",
+                "source": "host-pg_hba.conf"
+              },
+              {
+                "mode": "0700",
+                "path": "/opt/pack/init-extensions.sh",
+                "template": "host-init.sh"
+              }
+            ],
+            "names": [
+              "postgresql-16"
+            ],
+            "prepare": [
+              "ca-certificates"
+            ],
+            "repo": [
+              {
+                "mode": "0644",
+                "path": "/etc/apt/keyrings/pgdg.asc",
+                "url": "{{ .pgdg_key }}"
+              },
+              {
+                "mode": "0644",
+                "path": "/etc/apt/sources.list.d/pgdg.sources",
+                "template": "host-pgdg.sources"
+              }
+            ],
+            "services": [
+              "postgresql@16-main"
+            ]
+          },
+          "fedora": {
+            "commands": [
+              [
+                "sh",
+                "-c",
+                "test -f /var/lib/pgsql/data/PG_VERSION || postgresql-setup --initdb"
+              ]
+            ],
+            "content": [
+              {
+                "mode": "0644",
+                "path": "/var/lib/pgsql/data/postgresql.auto.conf",
+                "template": "host-postgresql.conf"
+              },
+              {
+                "mode": "0644",
+                "path": "/var/lib/pgsql/data/pg_hba.conf",
+                "source": "host-pg_hba.conf"
+              },
+              {
+                "mode": "0700",
+                "path": "/opt/pack/init-extensions.sh",
+                "template": "host-init.sh"
+              }
+            ],
+            "names": [
+              "postgresql-server",
+              "postgresql-contrib"
+            ],
+            "services": [
+              "postgresql"
+            ]
+          }
+        },
+        "ports": {
+          "pg": 5432
+        },
+        "readiness": {
+          "tcp": "pg"
+        },
+        "upgrade": {
+          "from": "\u003e=15"
+        }
+      },
+      "x-pack-actions": [
+        {
+          "command": [
+            "pg_dump",
+            "--username={{ .user }}",
+            "--format={{ .format }}",
+            "--file={{ .to }}",
+            "--dbname={{ .database }}"
+          ],
+          "description": "Dumps a database with pg_dump to a file of the instance.",
+          "name": "backup",
+          "params": {
+            "additionalProperties": false,
+            "properties": {
+              "database": {
+                "default": "postgres",
+                "description": "The database to dump.",
+                "type": "string",
+                "x-pack-i18n": {
+                  "ru": {
+                    "description": "База для выгрузки."
+                  }
+                }
+              },
+              "format": {
+                "default": "custom",
+                "description": "The format of the dump, as pg_dump says it.",
+                "enum": [
+                  "custom",
+                  "plain",
+                  "directory"
+                ],
+                "type": "string",
+                "x-pack-i18n": {
+                  "ru": {
+                    "description": "Формат выгрузки, как его называет pg_dump."
+                  }
+                }
+              },
+              "to": {
+                "description": "The file (or the directory, of format directory) the dump goes to, in the instance: under /var/lib/postgresql/data it outlives the instance.",
+                "type": "string",
+                "x-pack-i18n": {
+                  "ru": {
+                    "description": "Файл (или каталог, для формата directory) на экземпляре, куда пишется выгрузка: под /var/lib/postgresql/data она переживёт экземпляр."
+                  }
+                }
+              },
+              "user": {
+                "default": "postgres",
+                "description": "The role the dump is made as.",
+                "type": "string",
+                "x-pack-i18n": {
+                  "ru": {
+                    "description": "Роль, от имени которой делается выгрузка."
+                  }
+                }
+              }
+            },
+            "required": [
+              "to"
+            ],
+            "type": "object"
+          },
+          "timeout": "1h",
+          "x-pack-i18n": {
+            "ru": {
+              "description": "Выгружает базу через pg_dump в файл на экземпляре."
+            }
+          }
+        },
+        {
+          "approve": true,
+          "command": [
+            "pg_restore",
+            "--username={{ .user }}",
+            "--clean",
+            "--if-exists",
+            "--dbname={{ .database }}",
+            "{{ .from }}"
+          ],
+          "description": "Restores a database from a dump with pg_restore, dropping what it holds first.",
+          "mutating": true,
+          "name": "restore",
+          "params": {
+            "additionalProperties": false,
+            "properties": {
+              "database": {
+                "default": "postgres",
+                "description": "The database to restore into.",
+                "type": "string",
+                "x-pack-i18n": {
+                  "ru": {
+                    "description": "База, в которую восстанавливать."
+                  }
+                }
+              },
+              "from": {
+                "description": "The dump to restore.",
+                "type": "string",
+                "x-pack-i18n": {
+                  "ru": {
+                    "description": "Выгрузка для восстановления."
+                  }
+                }
+              },
+              "user": {
+                "default": "postgres",
+                "description": "The role the restore is made as.",
+                "type": "string",
+                "x-pack-i18n": {
+                  "ru": {
+                    "description": "Роль, от имени которой идёт восстановление."
+                  }
+                }
+              }
+            },
+            "required": [
+              "from"
+            ],
+            "type": "object"
+          },
+          "timeout": "1h",
+          "x-pack-i18n": {
+            "ru": {
+              "description": "Восстанавливает базу из выгрузки через pg_restore, сначала удаляя то, что в ней есть."
+            }
+          }
+        }
+      ],
+      "x-pack-groups": [
+        {
+          "id": "server",
+          "title": "Server",
+          "x-pack-i18n": {
+            "ru": {
+              "title": "Сервер"
+            }
+          }
+        },
+        {
+          "id": "packages",
+          "title": "Packages",
+          "x-pack-i18n": {
+            "ru": {
+              "title": "Пакеты"
+            }
+          }
+        }
+      ],
+      "x-pack-i18n": {
+        "ru": {
+          "description": "PostgreSQL, устанавливаемый вместе с OpenBao как его хранилище; если не задан — raft.",
+          "title": "Встроенный PostgreSQL"
+        }
+      },
+      "x-pack-langs": [
+        "en",
+        "ru"
+      ]
+    },
+    "release_url": {
+      "default": "https://github.com/openbao/openbao/releases/download",
+      "description": "Where the release archive of OpenBao is downloaded from on a host.",
+      "title": "Release URL",
+      "type": "string",
+      "x-pack-i18n": {
+        "ru": {
+          "description": "Откуда на хосте скачивается архив релиза OpenBao.",
+          "title": "URL релиза"
+        }
+      }
+    }
+  },
+  "required": [
+    "openbao"
+  ],
+  "title": "OpenBao",
+  "type": "object",
+  "x-pack": {
+    "command": [
+      "/bin/sh",
+      "-c",
+      "if [ \"${BAO_DEV:-}\" = true ]; then exec docker-entrypoint.sh server -dev -dev-no-store-token; fi; exec docker-entrypoint.sh server"
+    ],
+    "content": [
+      {
+        "path": "/openbao/config/config.json",
+        "values": "openbao"
+      }
+    ],
+    "data": {
+      "file": {
+        "mountPath": "/openbao/file",
+        "size": "1Gi"
+      }
+    },
+    "packages": {
+      "debian": {
+        "content": [
+          {
+            "format": "json",
+            "mode": "0644",
+            "path": "/etc/openbao/openbao.hcl",
+            "values": "openbao"
+          }
+        ],
+        "names": [
+          "{{ .release_url }}/v2.6.5/openbao_2.6.5_linux_${os:arch}.deb"
+        ],
+        "prepare": [
+          "ca-certificates",
+          "openssl"
+        ],
+        "services": [
+          "openbao"
+        ]
+      },
+      "fedora": {
+        "content": [
+          {
+            "format": "json",
+            "mode": "0644",
+            "path": "/etc/openbao.d/openbao.hcl",
+            "values": "openbao"
+          }
+        ],
+        "names": [
+          "openbao"
+        ],
+        "services": [
+          "openbao"
+        ]
+      }
+    },
+    "ports": {
+      "api": 8200,
+      "cluster": 8201
+    },
+    "readiness": {
+      "http": "api/v1/sys/health"
+    },
+    "savepoints": [
+      "postgres"
+    ]
+  },
+  "x-pack-groups": [
+    {
+      "id": "addresses",
+      "title": "Addresses",
+      "x-pack-i18n": {
+        "ru": {
+          "title": "Адреса"
+        }
+      }
+    },
+    {
+      "id": "logging",
+      "title": "Logging",
+      "x-pack-i18n": {
+        "ru": {
+          "title": "Журнал"
+        }
+      }
+    }
+  ],
+  "x-pack-i18n": {
+    "ru": {
+      "description": "Управление секретами; хранилище — raft или встроенный PostgreSQL.",
+      "title": "OpenBao"
+    }
+  },
+  "x-pack-langs": [
+    "en",
+    "ru"
+  ]
+}

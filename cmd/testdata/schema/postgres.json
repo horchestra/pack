@@ -1,0 +1,515 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "A single-instance PostgreSQL with an install hook and a major-version upgrade hook.",
+  "properties": {
+    "conf": {
+      "additionalProperties": false,
+      "description": "The settings of postgresql.conf, written as they are.",
+      "properties": {
+        "listen_addresses": {
+          "default": "*",
+          "description": "The addresses the server listens on; * is every one.",
+          "title": "Listen addresses",
+          "type": "string",
+          "x-pack-group": "server",
+          "x-pack-i18n": {
+            "ru": {
+              "description": "Адреса, на которых слушает сервер; * — все.",
+              "title": "Адреса"
+            }
+          }
+        },
+        "max_connections": {
+          "default": 100,
+          "description": "How many client connections the server accepts at once.",
+          "examples": [
+            200
+          ],
+          "title": "Max connections",
+          "type": "integer",
+          "x-pack-group": "server",
+          "x-pack-i18n": {
+            "ru": {
+              "description": "Сколько клиентских соединений сервер принимает одновременно.",
+              "title": "Максимум соединений"
+            }
+          }
+        },
+        "port": {
+          "default": 5432,
+          "description": "The port the server listens on.",
+          "examples": [
+            5432
+          ],
+          "title": "Port",
+          "type": "integer",
+          "x-pack-group": "server",
+          "x-pack-i18n": {
+            "ru": {
+              "description": "Порт, на котором слушает сервер.",
+              "title": "Порт"
+            }
+          }
+        },
+        "shared_buffers": {
+          "description": "The memory of the shared buffer cache; a quarter of the memory limit unless set.",
+          "examples": [
+            "1GB"
+          ],
+          "title": "Shared buffers",
+          "type": "string",
+          "x-pack-compute": "has(limits.memory) ? string(limits.memory / 1048576 / 4) + 'MB' : '128MB'",
+          "x-pack-group": "server",
+          "x-pack-i18n": {
+            "ru": {
+              "description": "Память кэша разделяемых буферов; если не задана — четверть лимита памяти.",
+              "title": "Разделяемые буферы"
+            }
+          }
+        }
+      },
+      "title": "postgresql.conf",
+      "type": "object",
+      "x-pack-group": "server",
+      "x-pack-i18n": {
+        "ru": {
+          "description": "Настройки postgresql.conf, записываются как есть.",
+          "title": "postgresql.conf"
+        }
+      }
+    },
+    "database": {
+      "description": "The database created at the first start.",
+      "examples": [
+        "app"
+      ],
+      "title": "Database",
+      "type": "string",
+      "x-pack-env": "POSTGRES_DB",
+      "x-pack-i18n": {
+        "ru": {
+          "description": "База, создаваемая при первом запуске.",
+          "title": "База данных"
+        }
+      }
+    },
+    "init_extensions": {
+      "default": [
+        "pg_stat_statements",
+        "pgcrypto"
+      ],
+      "description": "The extensions every database gets, after the first start.",
+      "items": {
+        "type": "string"
+      },
+      "title": "Extensions",
+      "type": "array",
+      "x-pack-i18n": {
+        "ru": {
+          "description": "Расширения, которые получает каждая база после первого запуска.",
+          "title": "Расширения"
+        }
+      }
+    },
+    "pgdg": {
+      "default": "https://apt.postgresql.org/pub/repos/apt",
+      "description": "Where the packages of PGDG come from on a host: upstream by default, a\nmirror when the hosts do not reach it.",
+      "title": "PGDG repository",
+      "type": "string",
+      "x-pack-group": "packages",
+      "x-pack-i18n": {
+        "ru": {
+          "description": "Откуда берутся пакеты PGDG на хосте: по умолчанию из апстрима,\nиз зеркала, если хосты до него не достают.",
+          "title": "Репозиторий PGDG"
+        }
+      }
+    },
+    "pgdg_key": {
+      "default": "https://www.postgresql.org/media/keys/ACCC4CF8.asc",
+      "description": "The signing key of the PGDG repository.",
+      "title": "PGDG key",
+      "type": "string",
+      "x-pack-group": "packages",
+      "x-pack-i18n": {
+        "ru": {
+          "description": "Ключ подписи репозитория PGDG.",
+          "title": "Ключ PGDG"
+        }
+      }
+    },
+    "superuser": {
+      "additionalProperties": false,
+      "description": "The role the server is bootstrapped with.",
+      "properties": {
+        "name": {
+          "default": "postgres",
+          "description": "The superuser's name.",
+          "title": "Name",
+          "type": "string",
+          "x-pack-env": "POSTGRES_USER",
+          "x-pack-i18n": {
+            "ru": {
+              "description": "Имя суперпользователя.",
+              "title": "Имя"
+            }
+          }
+        },
+        "password": {
+          "description": "A reference to the Secret that holds the superuser's password.",
+          "format": "password",
+          "title": "Password",
+          "type": "string",
+          "x-pack-env": "POSTGRES_PASSWORD",
+          "x-pack-i18n": {
+            "ru": {
+              "description": "Ссылка на Secret с паролем суперпользователя.",
+              "title": "Пароль"
+            }
+          }
+        }
+      },
+      "required": [
+        "password"
+      ],
+      "title": "Superuser",
+      "type": "object",
+      "x-pack-i18n": {
+        "ru": {
+          "description": "Роль, с которой инициализируется сервер.",
+          "title": "Суперпользователь"
+        }
+      }
+    }
+  },
+  "required": [
+    "database",
+    "superuser",
+    "conf"
+  ],
+  "title": "PostgreSQL",
+  "type": "object",
+  "x-pack": {
+    "content": [
+      {
+        "format": "properties",
+        "path": "/etc/postgresql/postgresql.conf",
+        "values": "conf"
+      },
+      {
+        "mode": "0755",
+        "path": "/opt/pack/init-extensions.sh",
+        "template": "init-extensions.sh"
+      },
+      {
+        "mode": "0755",
+        "path": "/opt/pack/restore-15.sh",
+        "source": "restore-15.sh"
+      }
+    ],
+    "data": {
+      "data": {
+        "mountPath": "/var/lib/postgresql/data",
+        "size": "10Gi"
+      }
+    },
+    "hooks": [
+      {
+        "command": [
+          "/opt/pack/init-extensions.sh"
+        ],
+        "idempotent": true,
+        "image": "new",
+        "name": "init-extensions",
+        "phase": "postInstall",
+        "timeout": "5m"
+      },
+      {
+        "command": [
+          "/usr/lib/postgresql/16/bin/pg_upgrade",
+          "--old-bindir=/usr/lib/postgresql/15/bin",
+          "--new-bindir=/usr/lib/postgresql/16/bin",
+          "--old-datadir=/var/lib/postgresql/data",
+          "--new-datadir=/var/lib/postgresql/data.16"
+        ],
+        "compensate": {
+          "command": [
+            "/opt/pack/restore-15.sh"
+          ],
+          "image": "old"
+        },
+        "exclusive": true,
+        "image": "new",
+        "name": "pg-upgrade",
+        "phase": "preUpgrade",
+        "timeout": "30m",
+        "when": {
+          "from": "\u003c16",
+          "to": "\u003e=16"
+        }
+      },
+      {
+        "command": [
+          "vacuumdb",
+          "--all",
+          "--analyze-in-stages"
+        ],
+        "idempotent": true,
+        "image": "new",
+        "name": "analyze",
+        "phase": "postUpgrade",
+        "when": {
+          "to": "\u003e=16"
+        }
+      }
+    ],
+    "minimum": {
+      "cpu": "500m",
+      "memory": "512Mi"
+    },
+    "packages": {
+      "debian": {
+        "content": [
+          {
+            "mode": "0644",
+            "path": "/etc/postgresql/16/main/conf.d/pack.conf",
+            "template": "host-postgresql.conf"
+          },
+          {
+            "mode": "0640",
+            "path": "/etc/postgresql/16/main/pg_hba.conf",
+            "source": "host-pg_hba.conf"
+          },
+          {
+            "mode": "0700",
+            "path": "/opt/pack/init-extensions.sh",
+            "template": "host-init.sh"
+          }
+        ],
+        "names": [
+          "postgresql-16"
+        ],
+        "prepare": [
+          "ca-certificates"
+        ],
+        "repo": [
+          {
+            "mode": "0644",
+            "path": "/etc/apt/keyrings/pgdg.asc",
+            "url": "{{ .pgdg_key }}"
+          },
+          {
+            "mode": "0644",
+            "path": "/etc/apt/sources.list.d/pgdg.sources",
+            "template": "host-pgdg.sources"
+          }
+        ],
+        "services": [
+          "postgresql@16-main"
+        ]
+      },
+      "fedora": {
+        "commands": [
+          [
+            "sh",
+            "-c",
+            "test -f /var/lib/pgsql/data/PG_VERSION || postgresql-setup --initdb"
+          ]
+        ],
+        "content": [
+          {
+            "mode": "0644",
+            "path": "/var/lib/pgsql/data/postgresql.auto.conf",
+            "template": "host-postgresql.conf"
+          },
+          {
+            "mode": "0644",
+            "path": "/var/lib/pgsql/data/pg_hba.conf",
+            "source": "host-pg_hba.conf"
+          },
+          {
+            "mode": "0700",
+            "path": "/opt/pack/init-extensions.sh",
+            "template": "host-init.sh"
+          }
+        ],
+        "names": [
+          "postgresql-server",
+          "postgresql-contrib"
+        ],
+        "services": [
+          "postgresql"
+        ]
+      }
+    },
+    "ports": {
+      "pg": 5432
+    },
+    "readiness": {
+      "tcp": "pg"
+    },
+    "upgrade": {
+      "from": "\u003e=15"
+    }
+  },
+  "x-pack-actions": [
+    {
+      "command": [
+        "pg_dump",
+        "--username={{ .user }}",
+        "--format={{ .format }}",
+        "--file={{ .to }}",
+        "--dbname={{ .database }}"
+      ],
+      "description": "Dumps a database with pg_dump to a file of the instance.",
+      "name": "backup",
+      "params": {
+        "additionalProperties": false,
+        "properties": {
+          "database": {
+            "default": "postgres",
+            "description": "The database to dump.",
+            "type": "string",
+            "x-pack-i18n": {
+              "ru": {
+                "description": "База для выгрузки."
+              }
+            }
+          },
+          "format": {
+            "default": "custom",
+            "description": "The format of the dump, as pg_dump says it.",
+            "enum": [
+              "custom",
+              "plain",
+              "directory"
+            ],
+            "type": "string",
+            "x-pack-i18n": {
+              "ru": {
+                "description": "Формат выгрузки, как его называет pg_dump."
+              }
+            }
+          },
+          "to": {
+            "description": "The file (or the directory, of format directory) the dump goes to, in the instance: under /var/lib/postgresql/data it outlives the instance.",
+            "type": "string",
+            "x-pack-i18n": {
+              "ru": {
+                "description": "Файл (или каталог, для формата directory) на экземпляре, куда пишется выгрузка: под /var/lib/postgresql/data она переживёт экземпляр."
+              }
+            }
+          },
+          "user": {
+            "default": "postgres",
+            "description": "The role the dump is made as.",
+            "type": "string",
+            "x-pack-i18n": {
+              "ru": {
+                "description": "Роль, от имени которой делается выгрузка."
+              }
+            }
+          }
+        },
+        "required": [
+          "to"
+        ],
+        "type": "object"
+      },
+      "timeout": "1h",
+      "x-pack-i18n": {
+        "ru": {
+          "description": "Выгружает базу через pg_dump в файл на экземпляре."
+        }
+      }
+    },
+    {
+      "approve": true,
+      "command": [
+        "pg_restore",
+        "--username={{ .user }}",
+        "--clean",
+        "--if-exists",
+        "--dbname={{ .database }}",
+        "{{ .from }}"
+      ],
+      "description": "Restores a database from a dump with pg_restore, dropping what it holds first.",
+      "mutating": true,
+      "name": "restore",
+      "params": {
+        "additionalProperties": false,
+        "properties": {
+          "database": {
+            "default": "postgres",
+            "description": "The database to restore into.",
+            "type": "string",
+            "x-pack-i18n": {
+              "ru": {
+                "description": "База, в которую восстанавливать."
+              }
+            }
+          },
+          "from": {
+            "description": "The dump to restore.",
+            "type": "string",
+            "x-pack-i18n": {
+              "ru": {
+                "description": "Выгрузка для восстановления."
+              }
+            }
+          },
+          "user": {
+            "default": "postgres",
+            "description": "The role the restore is made as.",
+            "type": "string",
+            "x-pack-i18n": {
+              "ru": {
+                "description": "Роль, от имени которой идёт восстановление."
+              }
+            }
+          }
+        },
+        "required": [
+          "from"
+        ],
+        "type": "object"
+      },
+      "timeout": "1h",
+      "x-pack-i18n": {
+        "ru": {
+          "description": "Восстанавливает базу из выгрузки через pg_restore, сначала удаляя то, что в ней есть."
+        }
+      }
+    }
+  ],
+  "x-pack-groups": [
+    {
+      "id": "server",
+      "title": "Server",
+      "x-pack-i18n": {
+        "ru": {
+          "title": "Сервер"
+        }
+      }
+    },
+    {
+      "id": "packages",
+      "title": "Packages",
+      "x-pack-i18n": {
+        "ru": {
+          "title": "Пакеты"
+        }
+      }
+    }
+  ],
+  "x-pack-i18n": {
+    "ru": {
+      "description": "PostgreSQL на одном экземпляре с хуком установки и хуком обновления мажорной версии.",
+      "title": "PostgreSQL"
+    }
+  },
+  "x-pack-langs": [
+    "en",
+    "ru"
+  ]
+}

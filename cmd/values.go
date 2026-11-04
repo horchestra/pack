@@ -3,6 +3,7 @@ package cmd
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -26,6 +27,8 @@ func init() {
 	valuesWriteCmd.Flags().StringVar(&valuesLang, "lang", "", "the language of the comments (env.yaml lang:, else $LANG, else the pack's base)")
 	valuesWriteCmd.Flags().BoolVar(&valuesCheck, "check", false, "write nothing: say whether the file is what pack would write")
 	valuesCmd.AddCommand(valuesWriteCmd)
+	valuesSchemaCmd.Flags().StringVar(&schemaLang, "lang", "", "the language of the titles and descriptions (the pack's base language by default)")
+	valuesCmd.AddCommand(valuesSchemaCmd)
 	rootCmd.AddCommand(valuesCmd)
 }
 
@@ -38,6 +41,32 @@ var (
 var valuesCmd = &cobra.Command{
 	Use:   "values",
 	Short: "the release's values.yaml",
+}
+
+var schemaLang string
+
+var valuesSchemaCmd = &cobra.Command{
+	Use:   "schema",
+	Short: "the JSON Schema of the release's values, the packs it holds inlined, x-pack-* kept — what a form renders",
+	Long: `The JSON Schema of the release's values as the operator writes them: the pack's own settings
+and, inlined at their fields, the packs it holds. The extensions of a pack's schema
+(x-pack-groups, x-pack-compute, x-pack-suggest, x-pack-rules, x-pack-i18n …) are kept; the
+titles and descriptions are in --lang, the pack's base language without it.`,
+	Args: cobra.NoArgs,
+	Run: run(func(*cobra.Command, []string) error {
+		ctx, stop := interrupt.Context()
+		defer stop()
+		b, err := session.ReleasePack(ctx, dir)
+		if err != nil {
+			return err
+		}
+		raw, err := b.ValuesSchema(schemaLang)
+		if err != nil {
+			return err
+		}
+		fmt.Print(string(raw))
+		return result(json.RawMessage(raw))
+	}),
 }
 
 var valuesWriteCmd = &cobra.Command{

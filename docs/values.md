@@ -25,6 +25,11 @@ Replicas, resources and placement are not values: they are the environment's, se
 packs it holds, in the schema's order, its documentation (the pack's `docs/`, in `lang:` of `env.yaml`, else `$LANG`,
 else the pack's base language) as comments above it.
 
+`pack values schema [--lang L]` writes the same schema as one JSON Schema document: the pack's settings and, inlined
+at their fields, the packs it holds (a `pack://` `$ref` resolved), the `x-pack-*` extensions kept (groups, compute,
+suggest, rules, i18n), the titles and descriptions in `L` — the pack's base language without it. A form (a UI)
+renders it; the values it produces are this document's.
+
 ```yaml
 # pack values: sha256:73e34aa141b83d4a
   …
