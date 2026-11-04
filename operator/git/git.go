@@ -311,3 +311,79 @@ func (r *Repo) RemoteBranches(ctx context.Context) ([][2]string, error) {
 	})
 	return branches, err
 }
+
+// ErrMergeConflict is a merge whose branches both changed a file: a person rebases the change request.
+var ErrMergeConflict = fmt.Errorf("the branches changed the same files")
+
+// Merge merges sha into the remote-tracking branch (refs/remotes/origin/<into>) and answers the commit the
+// branch should point at, and whether a merge commit was made for it: sha itself when the branch fast-forwards,
+// a new two-parent commit when the branches diverged and changed no file in common (its tree is sha's);
+// into's own head, false, when sha is merged already; ErrMergeConflict when both changed a file. Push moves
+// the branch; the answer is what to push.
+func (r *Repo) Merge(ctx context.Context, into, sha, author, message string) (string, bool, error) {
+	head, err := r.Resolve(ctx, "refs/remotes/origin/"+into)
+	if err != nil {
+		return "", false, err
+	}
+	base, err := r.MergeBase(ctx, head, sha)
+	if err != nil {
+		return "", false, err
+	}
+	switch base {
+	case sha:
+		return head, false, nil // merged already
+	case head:
+		return sha, false, nil // a fast-forward
+	}
+	mine, err := r.ChangedFiles(ctx, base, head)
+	if err != nil {
+		return "", false, err
+	}
+	theirs, err := r.ChangedFiles(ctx, base, sha)
+	if err != nil {
+		return "", false, err
+	}
+	both := map[string]bool{}
+	for _, f := range mine {
+		both[f] = true
+	}
+	for _, f := range theirs {
+		if both[f] {
+			return "", false, fmt.Errorf("%s: %w", f, ErrMergeConflict)
+		}
+	}
+	c, err := r.r.CommitObject(plumbing.NewHash(sha))
+	if err != nil {
+		return "", false, err
+	}
+	name, email, ok := strings.Cut(author, " <")
+	if !ok || !strings.HasSuffix(email, ">") {
+		return "", false, fmt.Errorf("the author is \"Name <address>\": %q", author)
+	}
+	who := object.Signature{Name: name, Email: strings.TrimSuffix(email, ">"), When: time.Now()}
+	commit := object.Commit{
+		Author:       who,
+		Committer:    who,
+		Message:      message,
+		TreeHash:     c.TreeHash,
+		ParentHashes: []plumbing.Hash{plumbing.NewHash(head), plumbing.NewHash(sha)},
+	}
+	obj := r.r.Storer.NewEncodedObject()
+	if err := commit.Encode(obj); err != nil {
+		return "", false, err
+	}
+	h, err := r.r.Storer.SetEncodedObject(obj)
+	if err != nil {
+		return "", false, err
+	}
+	return h.String(), true, nil
+}
+
+// HasRemoteBranch says whether origin has the branch.
+func (r *Repo) HasRemoteBranch(ctx context.Context, branch string) (bool, error) {
+	_, err := r.r.Reference(plumbing.NewRemoteReferenceName("origin", branch), true)
+	if err == plumbing.ErrReferenceNotFound {
+		return false, nil
+	}
+	return err == nil, err
+}

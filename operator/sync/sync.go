@@ -213,6 +213,11 @@ func (s *Syncer) syncBranch(ctx context.Context, p *config.Project, r *git.Repo,
 		return nil // nothing new: a repeated fetch makes no new requests
 	}
 	main := branch == p.Branch
+	if !main {
+		// the change request of the branch points at what was planned last (B9)
+		_, _ = s.db.ExecContext(ctx, s.bind(`update operator_changes set sha = ?, updated_at = current_timestamp
+			where project = ? and branch = ? and state = 'open'`), head, p.ID, branch)
+	}
 	commits, err := s.newCommits(ctx, r, head, known, main)
 	if err != nil {
 		return err
@@ -440,4 +445,97 @@ func (s *Syncer) bind(query string) string {
 		out.WriteRune(r)
 	}
 	return out.String()
+}
+
+// ---- change requests (B9)
+
+// ResolveBranch is the sha of the project's remote branch, fresh fetched; "" when there is no such branch.
+func (s *Syncer) ResolveBranch(ctx context.Context, projectID, branch string) (string, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for i := range s.cfg.Projects {
+		if s.cfg.Projects[i].ID != projectID {
+			continue
+		}
+		r, err := s.repo(ctx, &s.cfg.Projects[i])
+		if err != nil {
+			return "", err
+		}
+		if err := r.Fetch(ctx); err != nil {
+			return "", err
+		}
+		if ok, err := r.HasRemoteBranch(ctx, branch); err != nil || !ok {
+			return "", err
+		}
+		return r.Resolve(ctx, "refs/remotes/origin/"+branch)
+	}
+	return "", fmt.Errorf("no project %s", projectID)
+}
+
+// CreateBranch pushes sha as the project's remote branch; an existing branch is left alone.
+func (s *Syncer) CreateBranch(ctx context.Context, projectID, branch, sha string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for i := range s.cfg.Projects {
+		if s.cfg.Projects[i].ID != projectID {
+			continue
+		}
+		r, err := s.repo(ctx, &s.cfg.Projects[i])
+		if err != nil {
+			return err
+		}
+		if err := r.Fetch(ctx); err != nil {
+			return err
+		}
+		if ok, err := r.HasRemoteBranch(ctx, branch); err != nil || ok {
+			return err
+		}
+		return r.Push(ctx, sha+":refs/heads/"+branch)
+	}
+	return fmt.Errorf("no project %s", projectID)
+}
+
+// MergeChange merges the branch's head into the project's main branch and pushes: the merge's sha (the head
+// itself on a fast-forward, the main branch's own head when merged already). git.ErrMergeConflict marks the
+// change as conflicted, nothing pushed.
+func (s *Syncer) MergeChange(ctx context.Context, projectID, branch, author, message string) (string, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for i := range s.cfg.Projects {
+		p := &s.cfg.Projects[i]
+		if p.ID != projectID {
+			continue
+		}
+		r, err := s.repo(ctx, p)
+		if err != nil {
+			return "", err
+		}
+		if err := r.Fetch(ctx); err != nil {
+			return "", err
+		}
+		head, err := r.Resolve(ctx, "refs/remotes/origin/"+branch)
+		if err != nil {
+			return "", err
+		}
+		main := p.Branch
+		if len(main) == 0 {
+			main = "main"
+		}
+		sha, _, err := r.Merge(ctx, main, head, author, message)
+		if err != nil {
+			return "", err
+		}
+		mainHead, err := r.Resolve(ctx, "refs/remotes/origin/"+main)
+		if err != nil {
+			return "", err
+		}
+		if sha == mainHead {
+			return sha, nil // merged already
+		}
+		if err := r.Push(ctx, sha+":refs/heads/"+main); err != nil {
+			return "", err
+		}
+		return sha, nil
+	}
+	return "", fmt.Errorf("no project %s", projectID)
 }

@@ -23,6 +23,8 @@ import (
 
 	"github.com/horchestra/pack/pkg/logging"
 
+	opgit "github.com/horchestra/pack-operator/git"
+
 	"github.com/horchestra/pack-operator/authz"
 	"github.com/horchestra/pack-operator/bus"
 	"github.com/horchestra/pack-operator/config"
@@ -43,6 +45,10 @@ const (
 // Git gives the policy a tree of a project at a sha — the release's env.yaml is read there (run.approve).
 type Git interface {
 	Checkout(ctx context.Context, project, sha, dest string) error
+	// The change-request part (B9); a nil git (tests) answers as unimplemented.
+	ResolveBranch(ctx context.Context, project, branch string) (string, error)
+	CreateBranch(ctx context.Context, project, branch, sha string) error
+	MergeChange(ctx context.Context, project, branch, author, message string) (string, error)
 }
 
 // Policy is the engine; Run drives it off the Bus.
@@ -201,6 +207,22 @@ func (p *Policy) start(ctx context.Context, req bus.Request) error {
 	return err
 }
 
+// recordChangePlan keeps the plan of a change request's branch as the change's plan of the release (B9):
+// the branch's head the request is of names the change; nothing matches a plan of the main branch.
+func (p *Policy) recordChangePlan(ctx context.Context, req bus.Request, job bus.Job, digest string) {
+	var change string
+	err := p.db.QueryRowContext(ctx, p.bind(`select id from operator_changes
+		where project = ? and sha = ? and state = 'open' limit 1`), req.Repo, req.SHA).Scan(&change)
+	if err != nil {
+		return
+	}
+	_, _ = p.db.ExecContext(ctx, p.bind(`insert into operator_change_plans (change, release, sha, digest, plan)
+		values (?, ?, ?, ?, ?)
+		on conflict (change, release) do update set sha = excluded.sha, digest = excluded.digest,
+			plan = excluded.plan, at = current_timestamp`),
+		change, req.Target.Release, req.SHA, digest, string(job.Result))
+}
+
 // mutates says whether the request's pipeline changes the release — those are the jobs the queue serializes.
 func mutates(req bus.Request) bool {
 	switch req.Action {
@@ -293,6 +315,7 @@ func (p *Policy) planDone(ctx context.Context, req bus.Request, job bus.Job) err
 	if err := p.setDigest(ctx, req.ID, plan.Digest); err != nil {
 		return err
 	}
+	p.recordChangePlan(ctx, req, job, plan.Digest)
 	if gate := p.gate(req.Repo, req.Target.Release); gate != nil {
 		proj := p.project(req.Repo)
 		runtime, labels := proj.Runtime, proj.Labels
@@ -384,9 +407,54 @@ func (p *Policy) Approve(ctx context.Context, project, release, digest, sha, by 
 }
 
 // Merge is the change-request path of К5: B9 owns it.
+// Merge merges a change request's branch into the project's main branch (B9): by the right through the API, or
+// by a signed Pack-Merge trailer (sha set — then a trailer of a head that has moved on is stale and does
+// nothing). A conflict marks the change, an open change only.
 func (p *Policy) Merge(ctx context.Context, project, change, sha, by string) error {
-	p.log.Info().Str("project", project).Str("change", change).Str("sha", sha).Msg("a merge trailer: B9's, not yet")
-	return nil
+	var cr struct {
+		branch, state string
+	}
+	err := p.db.QueryRowContext(ctx, p.bind(`select branch, state from operator_changes
+		where id = ? and project = ?`), change, project).Scan(&cr.branch, &cr.state)
+	if err != nil {
+		return fmt.Errorf("the change %s: %w", change, err)
+	}
+	if cr.state != "open" {
+		return fmt.Errorf("the change %s is %s", change, cr.state)
+	}
+	head, err := p.git.ResolveBranch(ctx, project, cr.branch)
+	if err != nil {
+		return err
+	}
+	if len(sha) > 0 && sha != head {
+		p.log.Info().Str("project", project).Str("change", change).Str("sha", sha).Str("head", head).
+			Msg("a merge trailer of a head that moved on — stale, nothing merges")
+		return nil
+	}
+	author := p.cfg.Git.Author
+	if len(author) == 0 {
+		author = "pack-operator <pack-operator@localhost>"
+	}
+	via := "api"
+	if len(sha) > 0 {
+		via = "trailer"
+	}
+	message := fmt.Sprintf("Merge change request %s into %s\n\nPack-Merge: %s\n", change, cr.branch, change)
+	merged, err := p.git.MergeChange(ctx, project, cr.branch, author, message)
+	if err != nil {
+		if errors.Is(err, opgit.ErrMergeConflict) {
+			_, _ = p.db.ExecContext(ctx, p.bind(`update operator_changes set state = 'conflict', updated_at = current_timestamp
+				where id = ?`), change)
+			return fmt.Errorf("the change %s: %w", change, err)
+		}
+		return err
+	}
+	if _, err := p.db.ExecContext(ctx, p.bind(`update operator_changes set state = 'merged', sha = ?, updated_at = current_timestamp
+		where id = ?`), merged, change); err != nil {
+		return err
+	}
+	_, err = p.bus.Publish(ctx, "merge", bus.Approval{Kind: "merge", Request: change, SHA: merged, By: by, Via: via, At: time.Now().UTC()})
+	return err
 }
 
 // ApproveAPI is the API path (К4 POST /api/requests/{id}/approve): the right approve on the release (casbin)

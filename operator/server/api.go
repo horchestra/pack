@@ -54,6 +54,12 @@ func (s *Server) routes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/jobs/{id}/cancel", s.cancelJob)
 	mux.HandleFunc("GET /api/secrets", s.secrets)
 	mux.HandleFunc("POST /api/secrets", s.putSecret)
+	mux.HandleFunc("GET /api/changes", s.changes)
+	mux.HandleFunc("POST /api/changes", s.openChange)
+	mux.HandleFunc("GET /api/changes/{cr}", s.changeDetail)
+	mux.HandleFunc("POST /api/changes/{cr}/comments", s.commentChange)
+	mux.HandleFunc("POST /api/changes/{cr}/close", s.closeChange)
+	mux.HandleFunc("POST /api/changes/{cr}/merge", s.mergeChange)
 	mux.HandleFunc("GET /api/audit", s.audit)
 }
 

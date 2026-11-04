@@ -195,7 +195,7 @@ func (s *Server) audit(w http.ResponseWriter, r *http.Request) {
 		since = t
 	}
 	rows, err := s.db.QueryContext(r.Context(), s.bind(`select kind, body, at from bus_events
-		where kind in ('request', 'approval') and at > ? order by seq desc limit 500`), since)
+		where kind in ('request', 'approval', 'merge') and at > ? order by seq desc limit 500`), since)
 	if err != nil {
 		fail(w, http.StatusInternalServerError, api.CodeError, "%v", err)
 		return

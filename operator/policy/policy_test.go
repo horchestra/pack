@@ -207,6 +207,17 @@ func (r *rig) Checkout(ctx context.Context, project, sha, dest string) error {
 	return r.repo.Checkout(ctx, sha, dest)
 }
 
+// The change-request part of Git: the policy tests merge nothing.
+func (r *rig) ResolveBranch(ctx context.Context, project, branch string) (string, error) {
+	return "", fmt.Errorf("no branches in the fixture")
+}
+func (r *rig) CreateBranch(ctx context.Context, project, branch, sha string) error {
+	return fmt.Errorf("no branches in the fixture")
+}
+func (r *rig) MergeChange(ctx context.Context, project, branch, author, message string) (string, error) {
+	return "", fmt.Errorf("no branches in the fixture")
+}
+
 // work is the native executor in miniature: a queued job's argv runs in a checkout of its request's sha,
 // --stream swapped for --json (the stream's events are B6's); the document becomes the job's result.
 // A gate job (pack test --release) is answered without pack: the fixture's packs hold no scenarios, and the
