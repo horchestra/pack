@@ -84,7 +84,14 @@ func newLogCmd() *cobra.Command {
 			if len(*node) == 0 || e.Node == *node {
 				fmt.Println(e)
 				shown = append(shown, e)
+				streamEvent(entryEvent(e)) // the same events as the saga's, for a UI that reconnects
 			}
+		}
+		if streamOut {
+			// each entry was an event: the result says which saga, not the entries again
+			return result(struct {
+				Saga string `json:"saga"`
+			}{run})
 		}
 		truncated := len(shown) > maxEntries
 		if truncated {

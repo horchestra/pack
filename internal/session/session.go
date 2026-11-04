@@ -39,6 +39,9 @@ type Session struct {
 	Execs  map[string]target.Executor // the environment's other targets by name
 	Ctx    render.Context
 	Store  saga.Store
+	// Hear hears the entries of a saga the session runs, after the line a person reads of each is printed: the
+	// events of --stream. Nil — none.
+	Hear func(saga.Entry)
 
 	ctx context.Context
 }
@@ -214,7 +217,14 @@ func (s *Session) Run(g *graph.Graph, ex saga.Executor) *saga.Run {
 		// as many revisions as sagas in the journal: each has its log there
 		HistoryKeep: s.Env.Run.JournalKeep,
 		Journal:     s.Dir.JournalFor(s.ID),
-		Events:      func(line string) { fmt.Println(line) },
+		Hear: func(e saga.Entry) {
+			if line, ok := e.Line(); ok {
+				fmt.Println(line)
+			}
+			if s.Hear != nil {
+				s.Hear(e)
+			}
+		},
 	}
 }
 

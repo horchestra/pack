@@ -40,6 +40,7 @@ directory, or a registry reference.`,
 			return err
 		}
 		fmt.Print(c.Plan.Text())
+		planned(c.Plan)
 		if err := approved(s, c.Plan, applyApprove, howApply); err != nil {
 			return err
 		}

@@ -10,6 +10,7 @@ import (
 	"github.com/horchestra/pack/internal/release"
 	"github.com/horchestra/pack/internal/session"
 	"github.com/horchestra/pack/internal/workdir"
+	"github.com/horchestra/pack/pkg/saga"
 )
 
 var rootCmd = &cobra.Command{
@@ -40,10 +41,18 @@ func init() {
 		if f, ok := stdout.(*os.File); ok && jsonOut {
 			os.Stdout = f // the next command of a process (a test's) starts as it was
 		}
+		if streamOut {
+			stopStream()
+		}
 	}
 	rootCmd.PersistentPreRun = run(func(c *cobra.Command, _ []string) error {
 		if jsonOut {
 			asJSON()
+		}
+		if streamOut {
+			if err := startStream(); err != nil {
+				return err
+			}
 		}
 		if len(chdir) > 0 {
 			if err := os.Chdir(chdir); err != nil {
@@ -82,5 +91,9 @@ func run(f func(*cobra.Command, []string) error) func(*cobra.Command, []string) 
 
 // open is the session of a command: readOnly — the secret store is only read.
 func open(ctx context.Context, readOnly bool) (*session.Session, error) {
-	return session.Open(ctx, dir, readOnly)
+	s, err := session.Open(ctx, dir, readOnly)
+	if err == nil && streamOut {
+		s.Hear = func(e saga.Entry) { streamEvent(entryEvent(e)) }
+	}
+	return s, err
 }

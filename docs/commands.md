@@ -87,3 +87,45 @@ A problem is `{kind, where, rule?, message}`: `kind` is `required`, `schema`, `r
 (`where` the operator's JSON Pointer, or the environment's setting), `check` or `warning` for what `pack check` found
 — a failing check's problems are in its error document, the one document it writes. `target` is what the target
 itself said: it refused, or did not start or answer.
+
+## --stream
+
+`--stream` (of `apply`, `delete`, `rollback`, `plan` and `log`) makes stdout NDJSON — one event a line, as the command
+does what it says — and nothing else goes there: the text a person reads goes to stderr. A UI's backend runs pack and
+forwards each line as it comes (an SSE `data:`, a WebSocket frame) without reading text; it cancels with SIGINT, as
+Ctrl-C does — the saga cuts the running steps short and rolls back, and says so in events. Not with `--json`: the
+last event is the result `--json` writes.
+
+```json
+{"seq":5,"time":"2026-11-04T10:00:01Z","type":"node","key":"openbao","status":"running","saga":"20261104T100000.512Z"}
+{"seq":6,"time":"2026-11-04T10:00:01Z","type":"log","key":"openbao","step":"apply","message":"container openbao started","saga":"20261104T100000.512Z"}
+```
+
+| field                | what                                                                                     |
+|----------------------|------------------------------------------------------------------------------------------|
+| `seq`                | 1, 2, … in the order written: an SSE id, what `Last-Event-ID` resumes from               |
+| `time`               | when it happened (UTC)                                                                   |
+| `type`               | `plan`, `node`, `log`, `saga`, `result`                                                  |
+| `key`, `step`        | the key an event is of, and the step of it a line is of (`apply`, `wait`, `hook migrate`, `undo apply`) |
+| `status`             | of a `node`, a `saga`, a `result`, below                                                 |
+| `message`, `error`   | what was said, what failed                                                               |
+| `saga`               | the saga's id: `pack log <it>`                                                           |
+| `plan`               | of a `plan` event: the plan, as `plan --json` writes it                                  |
+| `result`             | of an `ok` result: the command's document, as `--json` writes it                         |
+| `code`, `next`       | of a `failed` result: the error's code and what to run next, as `--json` says them       |
+
+| type     | status                                                                                                       |
+|----------|--------------------------------------------------------------------------------------------------------------|
+| `plan`   | — the plan the command runs, before anything is done (`plan`, `apply`; the removal of `delete`, the taking back of `rollback`) |
+| `node`   | `running`, `done`, `failed`; `compensating` → `rolled-back` (a rollback, an undo); `removing` → `removed` (`delete`) |
+| `log`    | — a line of a key's step (what the target said) or of the saga                                              |
+| `saga`   | `started`, `failed` (a key failed: the rollback follows), `ended` (or `failed` if recording the end failed), `interrupted` |
+| `result` | `ok` or `failed` — always the last event; the exit code is the command's                                     |
+
+A reader that goes away stops the events, not the command: a saga goes on to its end or its rollback, the text on
+stderr says so (pack ignores SIGPIPE while it streams). A removal's events are of its keys alone — no savepoint is
+taken away. `pack test` has no `--stream`: its scenarios run on a stand of their own, its result is one document.
+
+A saga's events are the entries of its journal: `pack log --stream [run]` gives a saga that is over in the same
+events, `result` last — what a UI shows again when it lost the stream. pack writes no value of a setting into an
+event (a plan has none); a `log` line is what a target said, the target's to keep clean of secrets.

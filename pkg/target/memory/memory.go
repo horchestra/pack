@@ -37,6 +37,10 @@ func init() {
 			}
 			t.Fail = failAt(at, msg)
 		}
+		if at := settings["hold_at"]; len(at) > 0 {
+			hit := failAt(at, "")
+			t.Hold = func(s target.Step) bool { return hit(s) != nil }
+		}
 		return t, nil
 	})
 }
@@ -45,6 +49,9 @@ func init() {
 type Target struct {
 	// Fail, when set, is asked before a step is performed; an error fails it.
 	Fail func(target.Step) error
+	// Hold, when it says so of a step, keeps it running until its ctx is done (hold_at: <key>/<kind>, as fail_at
+	// names one): a stand of a step under way, for an interrupt to cut short.
+	Hold func(target.Step) bool
 
 	mu     sync.Mutex
 	steps  []target.Step
@@ -206,6 +213,11 @@ func (t *Target) Execute(ctx context.Context, s target.Step, events func(string)
 		if err := t.Fail(s); err != nil {
 			return err
 		}
+	}
+	if t.Hold != nil && t.Hold(s) {
+		events("held until cut short")
+		<-ctx.Done()
+		return ctx.Err()
 	}
 	t.mu.Lock()
 	t.steps = append(t.steps, s)

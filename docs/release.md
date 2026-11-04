@@ -72,7 +72,8 @@ keys: # how the environment runs each key of the pack
 
 - `target:` names a target; the core knows none by name. `memory` is in pack (it keeps what it is told in the
   process: what the tests and `plan`/`template` use; `observe: "true"` makes it report what it holds, so drift can be
-  seen). `docker`, `ansible` and `k8s` are programs of their own that `pack refresh` (and `pack init`) downloads and
+  seen; `fail_at: <key>/<kind>` fails a step, `hold_at: <key>/<kind>` keeps one running until it is cut short — stands
+  of a failure and of an interrupt). `docker`, `ansible` and `k8s` are programs of their own that `pack refresh` (and `pack init`) downloads and
   pack starts,
   `pack-target-<name>`, see [targets.md](targets.md); each one's settings and the entries of `keys:` it reads are in its
   README.

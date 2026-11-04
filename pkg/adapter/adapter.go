@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"reflect"
 	"slices"
+	"strings"
 	"sync"
 	"time"
 
@@ -109,6 +110,7 @@ func (e *Exec) Apply(ctx context.Context, n *graph.Node) error {
 			continue
 		}
 		e.begin(n.Name, s.N) // the step under way counts: it may be partly in effect
+		ctx := saga.WithStep(ctx, stepName(string(s.Kind), s.Name))
 		saga.Logf(ctx, "%s %s", s.Kind, s.Name)
 		if err := e.run(ctx, s.Target, e.forward(s)); err != nil {
 			return fmt.Errorf("%s %s: %w", s.Kind, n.Name, err)
@@ -176,11 +178,15 @@ func (e *Exec) keySteps(key string) []plan.Step {
 	return out
 }
 
+// stepName is the step a line of the saga is of: its kind, and the hook's name if it is one.
+func stepName(kind, name string) string { return strings.TrimSpace(kind + " " + name) }
+
 func (e *Exec) base(key string, to, prev *render.Unit) target.Step {
 	return target.Step{Key: key, Rollback: true, Unit: to, Previous: prev, Credentials: e.credentials(key)}
 }
 
 func (e *Exec) undoStep(ctx context.Context, targetName string, st target.Step) error {
+	ctx = saga.WithStep(ctx, "undo "+stepName(string(st.Kind), st.Name))
 	saga.Logf(ctx, "undo %s %s", st.Kind, st.Name)
 	if err := e.run(ctx, targetName, st); err != nil {
 		return fmt.Errorf("undo %s %s: %w", st.Kind, st.Key, err)

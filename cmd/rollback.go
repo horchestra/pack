@@ -73,6 +73,7 @@ first (pack rollback, without --to).`,
 				Order: append(slices.Clone(sg.Done), sg.Running...)}
 			plan.Seal(p, nil, nil) // a taking back is recovery: no risk of its own, run.approve: plan asks as for any plan
 			fmt.Println("plan", p.Digest)
+			planned(p)
 			undone := struct {
 				Undone version `json:"undone"`
 				Back   version `json:"back"`
@@ -142,6 +143,7 @@ func rollForwardTo(ctx context.Context, s *session.Session, curB *bundle.Bundle,
 	}
 	plan.Seal(p, curRel, toRel)
 	fmt.Print(p.Text())
+	planned(p)
 	if rollbackDry {
 		return result(p)
 	}

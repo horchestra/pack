@@ -57,6 +57,7 @@ var deleteCmd = &cobra.Command{
 		p := &plan.Plan{Pack: rec.Pack, From: rec.Version, Direction: plan.DirUninstall, Order: keys}
 		plan.Seal(p, rel, nil)
 		fmt.Println("plan", p.Digest)
+		planned(p)
 		removed := struct {
 			Removed version  `json:"removed"`
 			Keys    []string `json:"keys"`

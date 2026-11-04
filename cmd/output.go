@@ -29,6 +29,10 @@ func asJSON() {
 
 // result writes v, the command's result, as the JSON document of --json; nothing without it.
 func result(v any) error {
+	if streamOut {
+		streamEvent(Event{Type: EventResult, Status: StatusOK, Result: v})
+		return nil
+	}
 	if !jsonOut {
 		return nil
 	}
@@ -166,6 +170,10 @@ func nextFor(code string) []string {
 
 // fail ends the process for an error: "pack: …" on stderr, and with --json the error's document on stdout.
 func fail(err error) {
+	if streamOut {
+		e := classify(err)
+		streamEvent(Event{Type: EventResult, Status: StatusFailed, Code: e.Code, Error: e.Message, Next: nextOf(err, e.Code)})
+	}
 	if jsonOut {
 		e := classify(err)
 		b, _ := json.MarshalIndent(failure{Error: e, Next: nextOf(err, e.Code)}, "", "  ")

@@ -26,8 +26,30 @@ type Entry struct {
 	Run     string    `json:"run"` // the saga's id; a continued saga keeps it
 	Kind    Kind      `json:"kind"`
 	Node    string    `json:"node,omitempty"`
+	Step    string    `json:"step,omitempty"` // the step of the node a line is of; of an undo, undo or remove
 	Message string    `json:"message,omitempty"`
 	Error   string    `json:"error,omitempty"`
+}
+
+// Line is what a person reads of an entry as the saga goes, and whether there is anything: a node applied or
+// undone, a line of a node or of the saga, the saga's failure; the rest only the journal keeps.
+func (e Entry) Line() (string, bool) {
+	switch e.Kind {
+	case KindStart:
+		return "apply " + e.Node, true
+	case KindUndo:
+		return e.Step + " " + e.Node, true
+	case KindLog:
+		if len(e.Node) > 0 {
+			return e.Node + ": " + e.Message, true
+		}
+		return e.Message, true
+	case KindFail:
+		if len(e.Node) == 0 && e.Message == "saga failed" {
+			return "failed: " + e.Error, true
+		}
+	}
+	return "", false
 }
 
 func (e Entry) String() string {
@@ -57,8 +79,16 @@ type Journal interface {
 // for whatever it wants to be kept of a step: what it does, what the system answered. Outside a saga it does nothing.
 func Logf(ctx context.Context, format string, args ...any) {
 	if l, ok := ctx.Value(logKey{}).(*nodeLog); ok {
-		l.r.logNode(l.node, fmt.Sprintf(format, args...))
+		l.r.logNode(l.node, l.step, fmt.Sprintf(format, args...))
 	}
+}
+
+// WithStep is ctx of a node's step: the lines Logf writes under it say the step.
+func WithStep(ctx context.Context, step string) context.Context {
+	if l, ok := ctx.Value(logKey{}).(*nodeLog); ok {
+		return context.WithValue(ctx, logKey{}, &nodeLog{r: l.r, node: l.node, step: step})
+	}
+	return ctx
 }
 
 type logKey struct{}
@@ -66,6 +96,7 @@ type logKey struct{}
 type nodeLog struct {
 	r    *Run
 	node string
+	step string
 }
 
 func withNode(ctx context.Context, r *Run, node string) context.Context {

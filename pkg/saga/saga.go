@@ -178,8 +178,9 @@ type Run struct {
 	Keep []string
 	// HistoryKeep is how many revisions the record keeps (Record.History): 0 — DefaultHistoryKeep, below 0 — all.
 	HistoryKeep int
-	// Events hears what happens, a line at a time; calls are serialised.
-	Events func(string)
+	// Hear hears what happens: each entry of the journal as it is written (Journal or not), and a few the journal
+	// does not keep (its own failure). Calls are serialised. Entry.Line is the line a person reads of it.
+	Hear func(Entry)
 	// Journal keeps the history: the stages of the saga and the logs of its nodes. Nil — none is kept.
 	Journal Journal
 	// Finish runs once every node is in effect, before the record says installed: what has to be done for the
@@ -196,40 +197,43 @@ type Run struct {
 }
 
 func (r *Run) say(format string, a ...any) {
-	msg := fmt.Sprintf(format, a...)
-	r.note(KindLog, "", msg, nil)
-	r.event(msg)
-}
-
-func (r *Run) event(msg string) {
-	if r.Events != nil {
-		r.mu.Lock()
-		defer r.mu.Unlock()
-		r.Events(msg)
-	}
+	r.note(KindLog, "", fmt.Sprintf(format, a...), nil)
 }
 
 // logNode is a line of a node: heard, and kept.
-func (r *Run) logNode(node, msg string) {
-	r.note(KindLog, node, msg, nil)
-	r.event(node + ": " + msg)
+func (r *Run) logNode(node, step, msg string) {
+	r.noteStep(KindLog, node, step, msg, nil)
 }
 
 // note appends to the journal. A journal that fails is said once and then left alone: the record, not the
 // journal, is what the saga stands on.
-func (r *Run) note(kind Kind, node, msg string, err error) {
-	if r.Journal == nil {
+func (r *Run) note(kind Kind, node, msg string, err error) { r.noteStep(kind, node, "", msg, err) }
+
+// noteStep writes an entry to the journal and to Hear, one at a time.
+func (r *Run) noteStep(kind Kind, node, step, msg string, err error) {
+	if r.Journal == nil && r.Hear == nil {
 		return
 	}
-	e := Entry{Time: time.Now().UTC(), Run: r.runID, Kind: kind, Node: node, Message: msg}
+	e := Entry{Time: time.Now().UTC(), Run: r.runID, Kind: kind, Node: node, Step: step, Message: msg}
 	if err != nil {
 		e.Error = err.Error()
 	}
 	r.jmu.Lock()
 	defer r.jmu.Unlock()
-	if jerr := r.Journal.Append(e); jerr != nil && !r.jwarn {
+	var jerr error
+	if r.Journal != nil {
+		jerr = r.Journal.Append(e)
+	}
+	r.hear(e)
+	if jerr != nil && !r.jwarn {
 		r.jwarn = true
-		go r.event("journal: " + jerr.Error() + " — the saga goes on without it")
+		r.hear(Entry{Time: e.Time, Run: r.runID, Kind: KindLog, Message: "journal: " + jerr.Error() + " — the saga goes on without it"})
+	}
+}
+
+func (r *Run) hear(e Entry) {
+	if r.Hear != nil {
+		r.Hear(e)
 	}
 }
 
@@ -318,7 +322,6 @@ func (r *Run) forward(ctx context.Context, n *graph.Node) error {
 		return fmt.Errorf("record %s: %w", n.Name, err)
 	}
 	r.note(KindStart, n.Name, "", nil)
-	r.event("apply " + n.Name)
 	if err := r.Exec.Apply(withNode(ctx, r, n.Name), n); err != nil {
 		r.note(KindFail, n.Name, "", err)
 		return err
@@ -363,7 +366,6 @@ func (r *Run) fail(ctx context.Context, res *runner.Result, runErr error) error 
 		return fmt.Errorf("%w; record the failure: %w", cause, werr)
 	}
 	r.note(KindFail, "", "saga failed", cause)
-	r.event(fmt.Sprintf("failed: %v", cause))
 	if r.NoRollback {
 		return cause
 	}
@@ -387,8 +389,7 @@ func (r *Run) reverse(ctx context.Context, verb string, mine func(*graph.Node) b
 		if mine != nil && !mine(n) {
 			return nil
 		}
-		r.note(KindUndo, n.Name, "", nil)
-		r.event(verb + " " + n.Name)
+		r.noteStep(KindUndo, n.Name, verb, "", nil)
 		if err := r.Exec.Undo(withNode(ctx, r, n.Name), n); err != nil {
 			r.note(KindFail, n.Name, verb, err)
 			return err
@@ -398,7 +399,7 @@ func (r *Run) reverse(ctx context.Context, verb string, mine func(*graph.Node) b
 				return err
 			}
 		}
-		r.note(KindUndone, n.Name, "", nil)
+		r.noteStep(KindUndone, n.Name, verb, "", nil)
 		return nil
 	}, runner.Options{Jobs: r.Jobs, FailFast: true})
 	return errors.Join(res.Err(), err)
