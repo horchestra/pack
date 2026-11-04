@@ -48,7 +48,14 @@ func init() {
 	_ = authorCelCmd.MarkFlagRequired("pack")
 	authorRefCmd.Flags().StringVar(&authorShowLang, "lang", author.Go, "the language of the examples: go, python or java")
 	authorExampleCmd.Flags().StringVar(&authorShowLang, "lang", author.Go, "the language of the example: go, python or java")
-	authorCmd.AddCommand(authorCheckCmd, authorCelCmd, authorRefCmd, authorExampleCmd, authorDocsCmd)
+	authorScaffoldCmd.Flags().StringVar(&scaffoldSpec, "spec", "", "the spec of the pack, YAML or JSON (--schema says its schema)")
+	authorScaffoldCmd.Flags().StringVar(&scaffoldFrom, "from", "", "a generated pack (its directory) to write the source of again: the pack ported to another language")
+	authorScaffoldCmd.Flags().StringVar(&scaffoldLang, "lang", author.Go, "the language to write: go, python or java")
+	authorScaffoldCmd.Flags().StringVarP(&scaffoldOut, "output", "o", ".", "the directory to write the source into")
+	authorScaffoldCmd.Flags().StringVar(&scaffoldGoImport, "go-import", "", "Go: the import path of the package written (by default the go.mod above the directory says it)")
+	authorScaffoldCmd.Flags().BoolVar(&scaffoldForce, "force", false, "write over the files of a scaffold already in the directory (by default they are refused, none written)")
+	authorScaffoldCmd.Flags().BoolVar(&scaffoldSchema, "schema", false, "say the JSON Schema of a spec — what a model's output is constrained by — and write nothing")
+	authorCmd.AddCommand(authorCheckCmd, authorCelCmd, authorRefCmd, authorExampleCmd, authorDocsCmd, authorScaffoldCmd)
 	rootCmd.AddCommand(authorCmd)
 }
 
@@ -58,6 +65,9 @@ var (
 	authorPack, authorKey, authorValues, authorFacts string
 	authorEnv                                        string
 	authorShowLang                                   string // ref's and example's: the language shown
+
+	scaffoldSpec, scaffoldFrom, scaffoldLang, scaffoldOut, scaffoldGoImport string
+	scaffoldSchema, scaffoldForce                                           bool
 )
 
 var authorCmd = &cobra.Command{
@@ -177,9 +187,8 @@ func generateFrom(ctx context.Context, src string) (out, root, lang string, res 
 	if out, err = os.MkdirTemp("", "pack-author-"); err != nil {
 		return "", "", "", res, err
 	}
-	var ge *author.GenerateError
 	err = author.Generate(ctx, src, lang, out, author.Options{Classpath: authorClasspath, Sources: authorSources})
-	if errors.As(err, &ge) {
+	if ge, ok := errors.AsType[*author.GenerateError](err); ok {
 		res.Generate = ge.Said
 		return out, "", lang, res, nil
 	}
@@ -493,5 +502,69 @@ in, write it to docs/<lang>.yaml beside the source, run pack author check.`,
 			Lang string `json:"lang"`
 			Text string `json:"text"`
 		}{root, docsLang, string(text)})
+	}),
+}
+
+var authorScaffoldCmd = &cobra.Command{
+	Use:   "scaffold --spec <spec.yaml> | --from <generated pack> [--lang L] [-o dir]",
+	Short: "write a pack's source in a language from a short spec of it — or from a generated pack, to port it",
+	Long: `Writes the source of a pack in --lang under -o from its spec: the struct of its settings, Meta,
+PackRoot, its formulas, rules, suggestions, diagnoses and actions, as the examples are written
+(Go: the package and cmd/main.go; Python: one file; Java: one class), docs/<lang>.yaml of each
+language of the spec, content/ for the files the root names, tests/basic.yaml. Once: from then
+on the source is the pack — run pack author check on it.
+
+The spec is what a model gives instead of code, its output constrained by the spec's JSON
+Schema (--schema). --from writes the spec of a generated pack instead: the pack written again,
+in another language, its templates/ for content/.`,
+	Args: cobra.NoArgs,
+	Run: run(func(*cobra.Command, []string) error {
+		if scaffoldSchema {
+			b, err := author.SpecSchema()
+			if err != nil {
+				return err
+			}
+			if jsonOut {
+				return result(json.RawMessage(b))
+			}
+			fmt.Println(string(b))
+			return nil
+		}
+		var spec *author.Spec
+		var templates string
+		switch {
+		case len(scaffoldSpec) > 0 && len(scaffoldFrom) > 0:
+			return errors.New("--spec or --from, not both")
+		case len(scaffoldSpec) > 0:
+			raw, err := os.ReadFile(scaffoldSpec)
+			if err != nil {
+				return err
+			}
+			spec = &author.Spec{}
+			if err := yaml.UnmarshalStrict(raw, spec); err != nil {
+				return withCode(CodeValuesInvalid, fmt.Errorf("%s: %w", scaffoldSpec, err))
+			}
+		case len(scaffoldFrom) > 0:
+			var err error
+			if spec, err = author.FromPack(scaffoldFrom); err != nil {
+				return err
+			}
+			templates = filepath.Join(scaffoldFrom, "templates")
+		default:
+			return errors.New("--spec <spec.yaml> or --from <generated pack> (--schema says what a spec is)")
+		}
+		files, err := author.Scaffold(spec, scaffoldLang, scaffoldOut, author.ScaffoldOptions{GoImport: scaffoldGoImport, Templates: templates, Force: scaffoldForce})
+		if err != nil {
+			return withCode(CodeValuesInvalid, err)
+		}
+		for _, f := range files {
+			fmt.Println("wrote", filepath.Join(scaffoldOut, f))
+		}
+		fmt.Printf("next: pack author check %s\n", scaffoldOut)
+		return result(struct {
+			Lang  string   `json:"lang"`
+			Dir   string   `json:"dir"`
+			Files []string `json:"files"`
+		}{scaffoldLang, scaffoldOut, files})
 	}),
 }

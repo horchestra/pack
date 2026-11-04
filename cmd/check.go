@@ -114,8 +114,7 @@ func checkPack(ctx context.Context, ref string, s *session.Session) ([]check.Pro
 		return nil, err
 	}
 	if _, err := render.Render(b, v, s.Ctx); err != nil {
-		var ps *render.Problems
-		if errors.As(err, &ps) {
+		if ps, ok := errors.AsType[*render.Problems](err); ok {
 			for _, p := range ps.Problems {
 				problems = append(problems, check.Problem{Path: p.Where, Message: p.Message})
 			}

@@ -208,7 +208,7 @@ func Locate(dir, lang, pointer string) (Where, bool) {
 
 // camel is a json name as a Java field names it: max_connections → maxConnections.
 func camel(s string) string {
-	parts := strings.Split(s, "_")
+	parts := strings.FieldsFunc(s, func(r rune) bool { return r == '_' || r == '-' })
 	for i := 1; i < len(parts); i++ {
 		if len(parts[i]) > 0 {
 			parts[i] = strings.ToUpper(parts[i][:1]) + parts[i][1:]

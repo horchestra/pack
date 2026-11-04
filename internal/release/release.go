@@ -46,7 +46,7 @@ type Release struct {
 	// target's name.
 	Targets map[string]TargetSource `json:"targets,omitempty"`
 	// Registry is how the pack is read from a registry; a target's source says it for itself.
-	Registry Registry `json:"registry,omitempty"`
+	Registry Registry `json:"registry"`
 
 	values []string
 	env    string // the environment file, "" — none

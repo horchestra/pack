@@ -483,7 +483,7 @@ func (r *release) dumpLogs(t *testing.T) {
 		return
 	}
 	names, _ := exec.Command("docker", "ps", "-a", "-q", "--filter", "label=pack.horchestra.io/installation="+id).Output()
-	for _, c := range strings.Fields(string(names)) {
+	for c := range strings.FieldsSeq(string(names)) {
 		out, _ := exec.Command("docker", "logs", "--tail", "30", c).CombinedOutput()
 		t.Logf("logs of %s:\n%s", c, out)
 	}

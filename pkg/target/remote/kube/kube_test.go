@@ -101,7 +101,7 @@ func TestWaitRunning(t *testing.T) {
 		"unscheduled": {corev1.PodStatus{Phase: corev1.PodPending, Conditions: []corev1.PodCondition{{Type: corev1.PodScheduled, Status: corev1.ConditionFalse, Reason: corev1.PodReasonUnschedulable, Message: "0/3 nodes are available"}}}, "cannot be placed: 0/3 nodes"},
 		"time is up":  {corev1.PodStatus{Phase: corev1.PodPending}, "does not run (Pending)"},
 	} {
-		cs := fake.NewClientset(&corev1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "p", Namespace: "pack"}, Status: c.status})
+		cs := fake.NewClientset(&corev1.Pod{Name: "p", Namespace: "pack", Status: c.status})
 		ctx, cancel := context.WithTimeout(ctx, 50*time.Millisecond)
 		err := waitRunning(ctx, cs, "pack", "p", 10*time.Millisecond)
 		cancel()
@@ -164,7 +164,7 @@ func TestConfig(t *testing.T) {
 // with nothing to say.
 func TestWatchEnd(t *testing.T) {
 	ctx := context.Background()
-	exited := &corev1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "p", Namespace: "pack"}, Status: corev1.PodStatus{Phase: corev1.PodRunning,
+	exited := &corev1.Pod{Name: "p", Namespace: "pack", Status: corev1.PodStatus{Phase: corev1.PodRunning,
 		ContainerStatuses: []corev1.ContainerStatus{{State: corev1.ContainerState{Terminated: &corev1.ContainerStateTerminated{ExitCode: 1, Reason: "Error", Message: "bad token"}}}}}}
 	if err := watchEnd(ctx, fake.NewClientset(exited), "pack", "p", time.Millisecond); err == nil || !strings.Contains(err.Error(), "exited (1 Error): bad token") {
 		t.Errorf("exited: %v", err)
@@ -172,7 +172,7 @@ func TestWatchEnd(t *testing.T) {
 	if err := watchEnd(ctx, fake.NewClientset(), "pack", "p", time.Millisecond); err == nil || !strings.Contains(err.Error(), "is gone") {
 		t.Errorf("gone: %v", err)
 	}
-	running := &corev1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "p", Namespace: "pack"}, Status: corev1.PodStatus{Phase: corev1.PodRunning}}
+	running := &corev1.Pod{Name: "p", Namespace: "pack", Status: corev1.PodStatus{Phase: corev1.PodRunning}}
 	cctx, cancel := context.WithTimeout(ctx, 30*time.Millisecond)
 	defer cancel()
 	if err := watchEnd(cctx, fake.NewClientset(running), "pack", "p", time.Millisecond); err != nil {

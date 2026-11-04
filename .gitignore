@@ -6,3 +6,4 @@ __pycache__/
 *.pyc
 /sdk/java/out
 /.pack
+/internal/author/zz_scaffold_*

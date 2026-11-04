@@ -16,7 +16,7 @@ import (
 // Inner is a pack another holds; Outer holds it. Each has one template that says everything it sees.
 type Inner struct {
 	Name     string     `json:"name,omitempty"`
-	Password sdk.Secret `json:"password,omitempty" env:"INNER_PASSWORD"`
+	Password sdk.Secret `json:"password" env:"INNER_PASSWORD"`
 }
 
 func (*Inner) SetDefaults() {}

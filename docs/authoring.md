@@ -264,6 +264,59 @@ The author checks run on the result with `pack check <dir>`. Python and
 Java: [../sdk/python/README.md](../sdk/python/README.md),
 [../sdk/java/README.md](../sdk/java/README.md).
 
+## Scaffolding from a spec
+
+`pack author scaffold --spec spec.yaml --lang go|python|java -o dir` writes a pack's source from a short spec of it —
+what a model gives instead of code, its output constrained by the spec's JSON Schema (`pack author scaffold
+--schema`), or what a person writes by hand. The spec is the pack said as data: its name, version and image, its
+settings as a tree of fields (a type of `string integer number boolean object list map secret`, required or not, an
+environment variable, a default, a title and a description in each language, a group), `root` — `PackRoot` as the
+schema's `x-pack` says it — and its formulas, rules, suggestions, diagnoses and actions by the fields' pointers:
+
+```yaml
+name: kv
+version: "1.0.0"
+image: images/kv:1.0.0
+langs:
+  - en
+  - ru
+fields:
+  - name: password
+    type: secret
+    required: true
+    env: KV_PASSWORD
+    title: Password
+    i18n:
+      ru:
+        title: Пароль
+  - name: port
+    type: integer
+    default: 6380
+root:
+  ports:
+    kv: 6380
+  readiness:
+    tcp: kv
+rules:
+  /port:
+    - id: port-high
+      rule: values.port > 1024
+      message: the port is above 1024
+```
+
+It writes the source as the examples are written (Go: the package and `cmd/main.go`, its import path the go.mod's
+above the directory or `--go-import`; Python: one file; Java: one class), `docs/<lang>.yaml` of each language,
+`content/` for the files the root names, and `tests/basic.yaml` — the required settings given, the least the pack
+runs on as the environment's requests, an apply that installs. It is written once: a directory that holds any of
+those files already is refused before one is written (`--force` writes over them), and from then on the source is
+the pack, and `pack author check` is what says it is right. The spec itself is checked first — names, types, a
+default of its field's type, a group of the spec's groups, the pointers of formulas and rules naming fields (not the
+whole pack: a rule of the root is written in the source), the actions' params — so a model hears of a mistake there
+before any code is written. `--from <generated pack>` takes the spec of a pack already
+generated — the pack written again in another language, its `templates/` for `content/`; the examples go there and
+back, byte for byte in Go and Java. A pack that holds another is not said by a spec yet: scaffold the held one by
+itself.
+
 ## Checking while writing
 
 `pack author check [src]` is the loop of writing a pack — a person's, or a model's writing it from a prompt: it

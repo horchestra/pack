@@ -118,7 +118,7 @@ func TestOperator(t *testing.T) {
 			t.Errorf("%s: a person's approval in a tool", tl.Name)
 		}
 	}
-	if len(names) != 15 {
+	if len(names) != 16 {
 		t.Errorf("the tools: %v", names)
 	}
 

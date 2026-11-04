@@ -28,7 +28,8 @@ applied. Values: questions lists what to answer, with the answers the pack offer
 reference {name, key} to a secret kept elsewhere: never a value. apply refused with needs_approval is a plan with
 risks: show it to a person, approving is theirs. A failure: diagnose, then diagnose with the remedy it offers.
 run performs only the actions the pack names. When next says a person should look, stop and say so.
-Writing a pack: author_ref and author_example before the code, author_check after each change until it says ok.`
+Writing a pack: author_scaffold from a spec (its schema: author_scaffold with none), author_ref and author_example
+before changing the code, author_check after each change until it says ok.`
 
 // Server runs pack for the release in Dir.
 type Server struct {
@@ -129,6 +130,14 @@ type authorShowIn struct {
 	Lang string `json:"lang,omitempty" jsonschema:"go (by default), python or java"`
 }
 
+type authorScaffoldIn struct {
+	Spec  map[string]any `json:"spec,omitempty" jsonschema:"the spec of the pack (author_scaffold with none says its schema)"`
+	From  string         `json:"from,omitempty" jsonschema:"a generated pack to write again in another language, instead of a spec"`
+	Lang  string         `json:"lang,omitempty" jsonschema:"go (by default), python or java"`
+	Dir   string         `json:"dir,omitempty" jsonschema:"the directory to write the source into"`
+	Force bool           `json:"force,omitempty" jsonschema:"write over the files of a scaffold already there (by default refused)"`
+}
+
 // author adds the author's tools: the same as pack author.
 func (s *Server) author(srv *mcp.Server) {
 	mcp.AddTool(srv, &mcp.Tool{Name: "author_check", Description: "Generate the pack from its source, check it, its docs and its scenarios: what to fix, with the field's pointer and file:line. Repeat after each fix until ok."},
@@ -179,6 +188,40 @@ func (s *Server) author(srv *mcp.Server) {
 			return s.call(ctx, args...)
 		}
 	}
+	mcp.AddTool(srv, &mcp.Tool{Name: "author_scaffold", Description: "Write a pack's source in a language from a short spec of it (none given: the spec's JSON Schema), or from a generated pack. Then author_check."},
+		func(ctx context.Context, _ *mcp.CallToolRequest, in authorScaffoldIn) (*mcp.CallToolResult, any, error) {
+			if len(in.Spec) == 0 && len(in.From) == 0 {
+				return s.call(ctx, "author", "scaffold", "--schema")
+			}
+			args := []string{"author", "scaffold"}
+			// both given: the command refuses them, as it does on the command line
+			if len(in.From) > 0 {
+				args = append(args, "--from", in.From)
+			}
+			if len(in.Spec) > 0 {
+				f, err := os.CreateTemp("", "pack-spec-*.json")
+				if err != nil {
+					return nil, nil, err
+				}
+				defer os.Remove(f.Name())
+				if err := json.NewEncoder(f).Encode(in.Spec); err != nil {
+					_ = f.Close()
+					return nil, nil, err
+				}
+				_ = f.Close()
+				args = append(args, "--spec", f.Name())
+			}
+			if len(in.Lang) > 0 {
+				args = append(args, "--lang", in.Lang)
+			}
+			if len(in.Dir) > 0 {
+				args = append(args, "-o", in.Dir)
+			}
+			if in.Force {
+				args = append(args, "--force")
+			}
+			return s.call(ctx, args...)
+		})
 	mcp.AddTool(srv, &mcp.Tool{Name: "author_ref", Description: "The part of the authoring guide a topic is, with the code of a language: read it before writing that part of a pack."}, show("ref"))
 	mcp.AddTool(srv, &mcp.Tool{Name: "author_example", Description: "An example pack's source in a language, the nearest to what is being written."}, show("example"))
 }

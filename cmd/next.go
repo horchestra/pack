@@ -140,8 +140,7 @@ func stateNow(ctx context.Context) nextState {
 	}
 	c, err := s.Prepare(false)
 	if err != nil {
-		var ps *render.Problems
-		if errors.As(err, &ps) {
+		if ps, ok := errors.AsType[*render.Problems](err); ok {
 			e := classify(err)
 			if ps.OnlyRequired() {
 				var where []string

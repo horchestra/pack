@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -110,8 +111,8 @@ func caseOf(ctx context.Context, s *session.Session, rec *saga.Record, logs bool
 	if dir.Journal != "off" {
 		entries, err := storage.FileJournal{Dir: dir.JournalPath(), Installation: s.ID}.Read(sg.ID)
 		if err == nil {
-			for i := len(entries) - 1; i >= 0; i-- {
-				if e := entries[i]; e.Kind == saga.KindFail && len(e.Node) > 0 {
+			for _, e := range slices.Backward(entries) {
+				if e.Kind == saga.KindFail && len(e.Node) > 0 {
 					in.Key = e.Node
 					if len(e.Error) > 0 {
 						in.Error = e.Error
@@ -119,6 +120,7 @@ func caseOf(ctx context.Context, s *session.Session, rec *saga.Record, logs bool
 					break
 				}
 			}
+
 			for _, e := range entries {
 				if len(in.Key) > 0 && e.Node == in.Key && (e.Kind == saga.KindLog || e.Kind == saga.KindFail) {
 					in.Lines = append(in.Lines, strings.TrimSpace(e.Message+" "+e.Error))
@@ -126,6 +128,7 @@ func caseOf(ctx context.Context, s *session.Session, rec *saga.Record, logs bool
 			}
 		}
 	}
+
 	guessed := len(in.Key) == 0
 	if guessed {
 		in.Key, _, _ = strings.Cut(sg.Error, ":") // the error names the node that failed — when it is a key, below

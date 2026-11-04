@@ -115,3 +115,94 @@ func TestAuthorTestsNamed(t *testing.T) {
 		t.Error("the sources of an example")
 	}
 }
+
+// A spec written by hand becomes a source that author check says ok of — its scenario of the required settings
+// included — in Python here (Go and Java: internal/author's round trip).
+func TestAuthorScaffold(t *testing.T) {
+	if _, err := exec.LookPath("python3"); err != nil {
+		t.Skip("no python3")
+	}
+	t.Setenv("PYTHONPATH", filepath.Join(examples, "..", "sdk", "python"))
+	t.Cleanup(func() {
+		scaffoldSpec, scaffoldFrom, scaffoldLang, scaffoldOut, scaffoldGoImport, scaffoldSchema = "", "", "go", ".", "", false
+		authorLang, authorTests = "", ""
+	})
+	d := t.TempDir()
+	spec := `name: kv
+version: "1.0.0"
+image: images/kv:1.0.0
+title: KV
+doc: A key-value store.
+langs:
+  - en
+  - ru
+i18n:
+  ru:
+    title: KV
+    description: Хранилище ключей и значений.
+fields:
+  - name: database
+    type: string
+    required: true
+    env: KV_DB
+    title: Database
+    description: The database to open.
+    i18n:
+      ru:
+        title: База
+        description: База, которую открыть.
+  - name: password
+    type: secret
+    required: true
+    env: KV_PASSWORD
+    title: Password
+    description: The password of the admin.
+  - name: port
+    type: integer
+    default: 6380
+    title: Port
+    description: Where it listens.
+root:
+  ports:
+    kv: 6380
+  readiness:
+    tcp: kv
+  minimum:
+    memory: 256Mi
+rules:
+  /port:
+    - id: port-high
+      rule: values.port > 1024
+      message: the port is above 1024
+actions:
+  - name: compact
+    command:
+      - kv
+      - compact
+    description: Compacts the store.
+`
+	if err := os.WriteFile(filepath.Join(d, "spec.yaml"), []byte(spec), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	src := filepath.Join(d, "src")
+	out := pack(t, d, "author", "scaffold", "--spec", filepath.Join(d, "spec.yaml"), "--lang", "python", "-o", src)
+	if !strings.Contains(out, "kv.py") || !strings.Contains(out, "docs/ru.yaml") || !strings.Contains(out, "tests/basic.yaml") {
+		t.Fatalf("scaffold:\n%s", out)
+	}
+	scaffoldSpec = ""
+	if out := pack(t, d, "author", "check", src); !strings.HasSuffix(strings.TrimSpace(out), "ok") {
+		t.Errorf("author check of what scaffold wrote:\n%s", out)
+	}
+	ctx := context.Background()
+	gen, root, _, res, err := generateFrom(ctx, src)
+	defer os.RemoveAll(gen)
+	if err != nil || len(res.Generate) > 0 {
+		t.Fatal(err, res.Generate)
+	}
+	raw, _ := os.ReadFile(filepath.Join(gen, root, "schema.json"))
+	for _, want := range []string{`"x-pack-env":"KV_DB"`, `"format":"password"`, `"default":6380`, `"port-high"`, `"База"`, `"name":"compact"`} {
+		if !strings.Contains(string(raw), want) {
+			t.Errorf("the schema has no %s:\n%s", want, raw)
+		}
+	}
+}

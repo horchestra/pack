@@ -182,7 +182,7 @@ func objects(in instance) (*corev1.Pod, *corev1.Secret, *corev1.Service, *networ
 			Name:    "target",
 			Image:   in.image,
 			Env:     []corev1.EnvVar{{Name: remote.EnvAddress, Value: "tcp://0.0.0.0:" + remote.ImagePort}},
-			EnvFrom: []corev1.EnvFromSource{{SecretRef: &corev1.SecretEnvSource{LocalObjectReference: corev1.LocalObjectReference{Name: in.name}}}},
+			EnvFrom: []corev1.EnvFromSource{{SecretRef: &corev1.SecretEnvSource{Name: in.name}}},
 			Ports:   []corev1.ContainerPort{{Name: "grpc", ContainerPort: int32(port)}},
 			// the target ends when its stdin closes: a Pod has one open as long as it lives
 			Stdin: true,

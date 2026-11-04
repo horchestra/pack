@@ -435,13 +435,13 @@ func TestRollbackInParallel(t *testing.T) {
 
 func TestHistory(t *testing.T) {
 	rec := &Record{}
-	for i := 0; i < 5; i++ {
-		rec.revise(Revision{Installation: Installation{Pack: "p", Version: fmt.Sprint(i)}, Outcome: RevInstalled}, 3)
+	for i := range 5 {
+		rec.revise(Revision{Pack: "p", Version: fmt.Sprint(i), Outcome: RevInstalled}, 3)
 	}
 	if len(rec.History) != 3 || rec.History[0].N != 3 || rec.History[2].N != 5 || rec.Revision(4).Version != "3" || rec.Revision(1) != nil {
 		t.Fatalf("history = %+v", rec.History)
 	}
-	for i := 0; i < DefaultHistoryKeep+5; i++ {
+	for range DefaultHistoryKeep + 5 {
 		rec.revise(Revision{Outcome: RevInstalled}, 0)
 	}
 	if len(rec.History) != DefaultHistoryKeep {
@@ -457,7 +457,7 @@ func TestHistory(t *testing.T) {
 func TestCurrent(t *testing.T) {
 	a := Installation{Pack: "p", Version: "1", Values: []byte(`{"a":1}`)}
 	b := Installation{Pack: "p", Version: "1", Values: []byte(`{"a":2}`)}
-	rec := &Record{State: Installed, Installation: Installation{Pack: "p", Version: "1", Values: []byte("{\n  \"a\": 1\n}")}}
+	rec := &Record{State: Installed, Pack: "p", Version: "1", Values: []byte("{\n  \"a\": 1\n}")}
 	rec.revise(Revision{Installation: a, Outcome: RevInstalled}, 0)
 	rec.revise(Revision{Installation: b, Outcome: RevInstalled}, 0)
 	rec.revise(Revision{Installation: a, Outcome: RevUndone}, 0)

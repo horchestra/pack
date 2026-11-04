@@ -67,7 +67,7 @@ func (s *Set) Apply(root *jsonschema.Schema) error {
 func (s *Set) groups(root *jsonschema.Schema) error {
 	var used []string
 	Walk(root, func(_ string, n *jsonschema.Schema) {
-		if g, ok := n.Extras[KeyGroup].(string); ok && !contains(used, g) {
+		if g, ok := n.Extras[KeyGroup].(string); ok && !slices.Contains(used, g) {
 			used = append(used, g)
 		}
 	})
@@ -90,7 +90,7 @@ func (s *Set) groups(root *jsonschema.Schema) error {
 		list = append(list, g)
 	}
 	for id := range s.Base.Groups {
-		if !contains(used, id) {
+		if !slices.Contains(used, id) {
 			return fmt.Errorf("%s/%s.yaml: group %q: no field is in it", Dir, s.Base.Lang, id)
 		}
 	}
@@ -338,13 +338,4 @@ func i18n(s *jsonschema.Schema) map[string]map[string]string {
 		s.Extras[KeyI18n] = m
 	}
 	return m
-}
-
-func contains(l []string, s string) bool {
-	for _, x := range l {
-		if x == s {
-			return true
-		}
-	}
-	return false
 }
