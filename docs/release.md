@@ -6,7 +6,7 @@ the same bare command gives the same result on a console and in CI. **The comman
 
 | file                                      |                                                                                                                                                                                                        |
 |-------------------------------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| `release.yaml`                            | `pack:` a directory or `oci://host/repo:tag`; `values:` more files or directories; `state: file` (default) or `target`; `id:` the installation's UUID (`state: target` only; `pack refresh` writes it) |
+| `release.yaml`                            | `pack:` a directory or `oci://host/repo:tag`; `values:` more files or directories; `state: file` (default), `target` or `db`; `state_dsn_env:` the variable with the state DSN (`PACK_STATE_DSN`); `id:` the installation's UUID (`state: target` and `state: db`; `pack refresh` writes it) |
 | `values.yaml`, `*.values.yaml`, `values/` | what the operator wants, in the pack's own words, see [values.md](values.md)                                                                                                                           |
 | `env.yaml`                                | the environment; `--env x` (or `PACK_ENV`) reads `env.x.yaml` instead                                                                                                                                  |
 | `release.lock.json`                       | the digest a registry tag meant when `pack init` or `pack refresh` ran; commit it                                                                                                                      |
@@ -95,6 +95,16 @@ keys: # how the environment runs each key of the pack
 the
 credentials). `state: target` has the target keep it, so a CI job with no disk finds the installation where it is;
 without a file for it, the installation's `id` is written to `release.yaml` by `pack refresh`.
+
+`state: db` keeps the record, the sagas' journals and the targets' facts in a database — PostgreSQL or SQLite —
+whose DSN is read from the environment variable `state_dsn_env` names (`PACK_STATE_DSN` by default):
+`postgres://…` or `sqlite://<path>`. pack owns the schema and applies the missing migrations at the first
+connection. With the state in a database pack is stateless: a second process, on another checkout of the same
+release, sees what the first installed and waits on its lock. `pack state migrate [--to db|file]` moves the record
+and the journal between the file and the database, the history whole.
+
+The packs brought from a registry and the targets' programs are the cache's, not the release's: `PACK_CACHE`
+(`~/.cache/pack` by default), shared by every release on the machine.
 
 The record names the installation (a UUID that outlives its removal: what stays after `delete` is found again by the
 next

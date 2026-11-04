@@ -31,11 +31,11 @@ import (
 )
 
 const (
-	// EnvPath lists the directories searched for the programs of targets. Unset, it is .pack/bin of the release the
-	// command runs in — where `pack refresh` downloads them.
+	// EnvPath lists the directories searched for the programs of targets. Unset, it is bin/ of the cache
+	// (PACK_CACHE, by default ~/.cache/pack) — where `pack refresh` downloads them: one cache for every release.
 	EnvPath = "PACK_TARGET_PATH"
-	// DefaultDir is what EnvPath defaults to, relative to the directory pack runs in.
-	DefaultDir = ".pack/bin"
+	// DefaultDir is what EnvPath defaults to, relative to the cache (PACK_CACHE).
+	DefaultDir = "bin"
 	// Prefix names a target binary: pack-target-<target>.
 	Prefix = "pack-target-"
 
@@ -54,16 +54,30 @@ const ImagePort = "7353"
 // ImageStart is how long an image is given to answer: the runtime may pull it first.
 const ImageStart = imageStart
 
-// Dirs are the directories the programs of targets are searched in: PACK_TARGET_PATH, else .pack/bin here.
+// Dirs are the directories the programs of targets are searched in: PACK_TARGET_PATH, else the cache's bin.
 func Dirs() []string {
 	if p := os.Getenv(EnvPath); len(p) > 0 {
 		return filepath.SplitList(p)
 	}
-	abs, err := filepath.Abs(DefaultDir)
-	if err != nil {
-		return []string{DefaultDir}
+	return []string{BinDir()}
+}
+
+// BinDir is where the programs of targets are kept: bin/ of the cache (PACK_CACHE, by default ~/.cache/pack).
+func BinDir() string {
+	return filepath.Join(CacheDir(), DefaultDir)
+}
+
+// CacheDir is pack's cache of packs and of the targets' programs: PACK_CACHE, by default ~/.cache/pack. It is
+// shared by every release and survives what a run makes and removes (a job's checkout, its HOME).
+func CacheDir() string {
+	if p := os.Getenv("PACK_CACHE"); len(p) > 0 {
+		return p
 	}
-	return []string{abs}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return ".pack/cache"
+	}
+	return filepath.Join(home, ".cache", "pack")
 }
 
 // Find locates pack-target-<name> in Dirs.

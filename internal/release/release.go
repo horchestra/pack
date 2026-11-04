@@ -37,8 +37,11 @@ type Release struct {
 	Dir    string   `json:"-"`
 	Pack   string   `json:"pack,omitempty"`   // directory or registry reference to install
 	Values []string `json:"values,omitempty"` // more values files or directories than the ones found by name
-	// State is where the record of the installation is kept: file (.pack/state.json, the default) or target.
+	// State is where the record of the installation is kept: file (.pack/state.json, the default), target, or db.
 	State string `json:"state,omitempty"`
+	// StateDSNEnv names the variable the DSN of the state database is in (state: db; PACK_STATE_DSN by default):
+	// postgres://… or sqlite://<path>. The DSN is never in the file.
+	StateDSNEnv string `json:"state_dsn_env,omitempty"`
 	// ID is the installation's UUID. A file state makes and keeps its own at the first apply; state: target has
 	// no file to keep it in, so it is written here.
 	ID string `json:"id,omitempty"`

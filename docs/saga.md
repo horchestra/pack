@@ -76,6 +76,8 @@ A plan refused is not begun: the error is `needs_approval`, its risks the proble
 (`plan sha256:…`), and `pack apply --approve <digest>` applies that very plan, and refuses one that changed since it
 was shown. `rollback` and `delete` take `--approve` the same way, the digest
 their `--dry-run` says, and a refusal names the command to run again (`pack rollback --to 3 --approve <digest>`).
+The digest covers the release's revision (`PACK_REVISION`, else the commit the release's directory is at), which the
+plan and the record of the saga say: a plan approved on another revision does not apply.
 Taking an installation away is no risk of itself (the data and the credentials stay), and neither is undoing an
 unfinished saga — recovery is not held back —, so `delete` and that `rollback` ask only under `plan`.
 
@@ -102,11 +104,13 @@ leaves
 the saga in progress and the next `apply` finishes it; nothing is lost between.
 
 A second saga on the installation is refused while the first runs (a lock file under `.pack/`, with the owner's pid; a
-crash leaves it, and the error says which file to remove).
+crash leaves it, and the error says which file to remove). With `state: db` the lock is the database's: an advisory
+lock of PostgreSQL's, a lease of `pack_locks` on SQLite — a pack on another checkout, another machine, waits on it
+the same.
 
 ## The journal
 
-Every saga is journaled under `.pack/`: its stages and the output of each key's steps. `pack log --list` lists the
-sagas,
+Every saga is journaled under `.pack/` — with `state: db`, in the `pack_journal` table of the state database —: its
+stages and the output of each key's steps. `pack log --list` lists the sagas,
 `pack log [run]` shows one, `--node K` only the lines of a key. After each apply the journal keeps `run.journal_keep`
 newest sagas (default 20; below 0 keeps all); `pack log --prune N` does it by hand.

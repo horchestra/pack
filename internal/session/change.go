@@ -9,6 +9,7 @@ import (
 	"github.com/horchestra/pack/internal/adapter"
 	"github.com/horchestra/pack/internal/graph"
 	"github.com/horchestra/pack/internal/oci"
+	"github.com/horchestra/pack/internal/release"
 	"github.com/horchestra/pack/internal/values"
 	"github.com/horchestra/pack/pkg/bundle"
 	"github.com/horchestra/pack/pkg/plan"
@@ -84,6 +85,7 @@ func (s *Session) Prepare(provision bool) (*Change, error) {
 		for _, d := range c.Drifts {
 			c.Plan.Warnings = append(c.Plan.Warnings, "drift: "+d.String())
 		}
+		c.Plan.Revision = release.Revision(s.Dir.Release.Dir)
 		plan.Seal(c.Plan, fromRel, c.ToRel)
 	}
 	return c, err

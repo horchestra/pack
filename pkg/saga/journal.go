@@ -75,6 +75,14 @@ type Journal interface {
 	Append(Entry) error
 }
 
+// JournalReader reads a journal back: the sagas it holds, the entries of one, and the removal of the oldest
+// (Prune keeps the keep newest and says which went). A command that shows or prunes the journal asks for no more.
+type JournalReader interface {
+	Runs() ([]string, error)
+	Read(run string) ([]Entry, error)
+	Prune(keep int) ([]string, error)
+}
+
 // Logf writes a line to the saga's journal and events, as the node whose step ctx is. An Executor calls it
 // for whatever it wants to be kept of a step: what it does, what the system answered. Outside a saga it does nothing.
 func Logf(ctx context.Context, format string, args ...any) {

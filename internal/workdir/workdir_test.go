@@ -25,8 +25,11 @@ func TestLayout(t *testing.T) {
 	if b, err := os.ReadFile(filepath.Join(d.Path, ".gitignore")); err != nil || string(b) != "*\n" {
 		t.Fatalf(".gitignore = %q, %v", b, err)
 	}
-	if d.JournalPath() != filepath.Join(d.Path, "journal") || d.PacksPath() != filepath.Join(d.Path, "packs") {
-		t.Fatalf("journal %s, packs %s", d.JournalPath(), d.PacksPath())
+	cache := t.TempDir()
+	t.Setenv("PACK_CACHE", cache)
+	if d.JournalPath() != filepath.Join(d.Path, "journal") || d.PacksPath() != filepath.Join(cache, "packs") ||
+		d.BinPath() != filepath.Join(cache, "bin") {
+		t.Fatalf("journal %s, packs %s, bin %s", d.JournalPath(), d.PacksPath(), d.BinPath())
 	}
 	d.Journal = "/elsewhere"
 	if d.JournalPath() != "/elsewhere" {

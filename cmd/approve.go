@@ -50,7 +50,8 @@ func approved(s *session.Session, p *plan.Plan, approve string, h how) error {
 	}
 	if len(approve) > 0 {
 		if approve != p.Digest {
-			return withNext(api.CodeNeedsApproval, fmt.Errorf("--approve %s: the plan is %s now — look at it again (%s)", approve, p.Digest, h.look), h.next(p.Digest))
+			// the digest covers the release's revision too: a plan approved on another commit does not apply here
+			return withNext(api.CodeNeedsApproval, fmt.Errorf("--approve %s: the plan is %s now — the release moved on or the plan changed; look at it again (%s)", approve, p.Digest, h.look), h.next(p.Digest))
 		}
 		return nil
 	}

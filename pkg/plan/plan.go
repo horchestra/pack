@@ -122,6 +122,9 @@ type Plan struct {
 	// Rollback says how an apply of a key that changes version is undone
 	// beyond applying the previous unit: the downgrade hooks around it.
 	Rollback map[string]KeyRollback `json:"rollback,omitempty"`
+	// Revision is the revision of the inputs (the commit) the plan was made from — the digest covers it, so a plan
+	// of another revision is another plan, and --approve of its digest is refused.
+	Revision string `json:"revision,omitempty"`
 	// Risks are what an apply should not do unasked, Digest what --approve names (Seal).
 	Risks  []Risk `json:"risks,omitempty"`
 	Digest string `json:"digest,omitempty"`

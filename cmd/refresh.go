@@ -45,8 +45,8 @@ release; refresh brings what one names, after a clone or a change of release.yam
 		ctx, stop := interrupt.Context()
 		defer stop()
 		rel := dir.Release
-		// a state kept in the target has no file to keep its id in: it is written here, once
-		if rel.State == workdir.StateTarget && len(rel.ID) == 0 {
+		// a state kept in the target or in a database has no file to keep its id in: it is written here, once
+		if (rel.State == workdir.StateTarget || rel.State == workdir.StateDB) && len(rel.ID) == 0 {
 			id := workdir.NewID()
 			if err := release.Update(rel.Dir, func(doc map[string]any) { doc["id"] = id }); err != nil {
 				return err

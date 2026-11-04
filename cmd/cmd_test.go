@@ -155,6 +155,7 @@ func TestLogPrune(t *testing.T) {
 
 // A pack in a registry: init writes the lock and brings the pack, and the commands that follow read it from there.
 func TestRefreshFromARegistry(t *testing.T) {
+	t.Setenv("PACK_CACHE", t.TempDir())
 	host := regserver.Serve(t, testpacks.Generated(t, t.TempDir()))
 	ref := "oci://" + host + "/packs/openbao:2.1.0"
 	d := releaseOf(t, ref, nil)
@@ -168,8 +169,8 @@ func TestRefreshFromARegistry(t *testing.T) {
 	if err != nil || lock == nil || lock.Pack != ref || !strings.HasPrefix(lock.Digest, "sha256:") {
 		t.Fatalf("lock = %+v, %v", lock, err)
 	}
-	if ents, _ := os.ReadDir(filepath.Join(d, ".pack", "packs")); len(ents) == 0 {
-		t.Fatal("the pack is not in .pack/packs")
+	if ents, _ := os.ReadDir(filepath.Join(os.Getenv("PACK_CACHE"), "packs")); len(ents) == 0 {
+		t.Fatal("the pack is not in the cache's packs")
 	}
 	// again: the same lock, nothing new
 	pack(t, d, "refresh")
@@ -199,9 +200,11 @@ func TestRefreshMakesTheIDOfAStateKeptInTheTarget(t *testing.T) {
 	}
 }
 
-// The programs of the targets are downloaded by refresh from the sources release.yaml names, into .pack/bin; the lock
-// keeps their checksums; a source that gives something else is refused until --upgrade.
+// The programs of the targets are downloaded by refresh from the sources release.yaml names, into the cache's bin
+// (PACK_CACHE); the lock keeps their checksums; a source that gives something else is refused until --upgrade.
 func TestRefreshBringsTheTargets(t *testing.T) {
+	cache := t.TempDir()
+	t.Setenv("PACK_CACHE", cache)
 	body := []byte("#!/bin/sh\necho one\n")
 	var mu sync.Mutex
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -218,7 +221,7 @@ func TestRefreshBringsTheTargets(t *testing.T) {
 		"targets": map[string]any{"fake": srv.URL + "/pack-target-fake_{os}_{arch}"},
 	})
 	out := pack(t, d, "refresh")
-	file := filepath.Join(d, ".pack", "bin", "pack-target-fake")
+	file := filepath.Join(cache, "bin", "pack-target-fake")
 	if got, err := os.ReadFile(file); err != nil || string(got) != string(body) {
 		t.Fatalf("the program: %q %v\n%s", got, err, out)
 	}

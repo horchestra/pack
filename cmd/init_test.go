@@ -118,11 +118,12 @@ func TestInitRefusesATargetItDoesNotKnow(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { _, _ = w.Write([]byte("#!/bin/sh\n")) }))
 	defer srv.Close()
 	initSource = srv.URL + "/pack-target-dokcer"
+	t.Setenv("PACK_CACHE", t.TempDir())
 	out := filepath.Join(t.TempDir(), "b")
 	if _, err := initRelease(context.Background(), pk, out, strings.NewReader(""), false); err != nil {
 		t.Errorf("a target of another name with its source: %v", err)
 	}
-	if _, err := os.Stat(filepath.Join(out, ".pack", "bin", "pack-target-dokcer")); err != nil {
+	if _, err := os.Stat(filepath.Join(os.Getenv("PACK_CACHE"), "bin", "pack-target-dokcer")); err != nil {
 		t.Errorf("its program: %v", err)
 	}
 }

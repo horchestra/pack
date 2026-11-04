@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"slices"
 	"strings"
 
@@ -13,7 +14,6 @@ import (
 	"github.com/horchestra/pack/internal/diagnose"
 	"github.com/horchestra/pack/internal/interrupt"
 	"github.com/horchestra/pack/internal/session"
-	"github.com/horchestra/pack/internal/storage"
 	"github.com/horchestra/pack/internal/valuesfile"
 	"github.com/horchestra/pack/pkg/render"
 	"github.com/horchestra/pack/pkg/saga"
@@ -108,8 +108,11 @@ source diagnose), checked by the schema and the rules; a command is said, for yo
 func caseOf(ctx context.Context, s *session.Session, rec *saga.Record, logs bool) (diagnose.Case, error) {
 	sg := rec.Saga
 	in := diagnose.Input{Saga: sg.ID, Error: sg.Error}
-	if dir.Journal != "off" {
-		entries, err := storage.FileJournal{Dir: dir.JournalPath(), Installation: s.ID}.Read(sg.ID)
+	if j, jerr := dir.JournalReaderFor(s.ID); jerr == nil && j != nil {
+		if c, ok := j.(io.Closer); ok {
+			defer func() { _ = c.Close() }()
+		}
+		entries, err := j.Read(sg.ID)
 		if err == nil {
 			for _, e := range slices.Backward(entries) {
 				if e.Kind == saga.KindFail && len(e.Node) > 0 {

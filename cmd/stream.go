@@ -29,7 +29,9 @@ var stream struct {
 	saga string // the saga the last event was of: what an interrupt is of
 }
 
-func init() { streamFlag(applyCmd, planCmd, deleteCmd, rollbackCmd, logCmd, runCmd, refreshCmd, discoverCmd, testCmd) }
+func init() {
+	streamFlag(applyCmd, planCmd, deleteCmd, rollbackCmd, logCmd, runCmd, refreshCmd, discoverCmd, testCmd)
+}
 
 // streamFlag gives commands --stream.
 func streamFlag(cmds ...*cobra.Command) {

@@ -16,7 +16,6 @@ import (
 	"github.com/horchestra/pack/internal/graph"
 	"github.com/horchestra/pack/internal/oci"
 	"github.com/horchestra/pack/internal/release"
-	"github.com/horchestra/pack/internal/storage"
 	_ "github.com/horchestra/pack/internal/target/kube"   // runtime k8s: a target's image in a Pod
 	_ "github.com/horchestra/pack/internal/target/memory" // the targets there are
 	"github.com/horchestra/pack/internal/workdir"
@@ -152,8 +151,11 @@ func (s *Session) pruneJournal() {
 	if keep == 0 {
 		keep = environment.DefaultJournalKeep
 	}
-	if j, ok := s.Dir.JournalFor(s.ID).(storage.FileJournal); ok {
+	if j, err := s.Dir.JournalReaderFor(s.ID); err == nil {
 		_, _ = j.Prune(keep)
+		if c, ok := j.(io.Closer); ok {
+			_ = c.Close()
+		}
 	}
 }
 
@@ -182,6 +184,9 @@ func Placements(keys map[string]environment.Key) map[string]render.Placement {
 
 // Close releases the session: a target that is a program of its own (target/remote) is stopped.
 func (s *Session) Close() {
+	if c, ok := s.Store.(io.Closer); ok {
+		_ = c.Close() // a state database's store holds its connection
+	}
 	closeTarget(s.Inst)
 	for _, x := range s.Execs {
 		closeTarget(x)
@@ -220,6 +225,7 @@ func (s *Session) Run(g *graph.Graph, ex saga.Executor) *saga.Run {
 		Keep:       s.Env.Run.Keep,
 		// as many revisions as sagas in the journal: each has its log there
 		HistoryKeep: s.Env.Run.JournalKeep,
+		Revision:    release.Revision(s.Dir.Release.Dir),
 		Journal:     s.Dir.JournalFor(s.ID),
 		Hear: func(e saga.Entry) {
 			if line, ok := e.Line(); ok {

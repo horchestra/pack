@@ -71,6 +71,9 @@ type Record struct {
 	Previous *Installation `json:"previous,omitempty"`
 	// History are the revisions of the installation, the oldest first: every saga that ended, and the removals.
 	History []Revision `json:"history,omitempty"`
+	// Rev is the revision of the inputs (the commit) what is installed was installed from (PACK_REVISION,
+	// or the release's git HEAD); "" — not known.
+	Rev string `json:"revision,omitempty"`
 }
 
 // The outcomes of a revision.
@@ -89,6 +92,8 @@ type Revision struct {
 	Outcome string `json:"outcome"`
 	Saga    string `json:"saga,omitempty"`  // the saga's id in the journal
 	Error   string `json:"error,omitempty"` // why an undone saga failed
+	// Revision is the revision of the inputs the saga ran from.
+	Revision string `json:"revision,omitempty"`
 }
 
 // Same says whether two installations are one: the same pack and version, and values that mean the same, however
@@ -188,6 +193,8 @@ type Run struct {
 	// version to be whole (the keys it dropped are taken away). Its failure keeps the record in-progress, with all
 	// the nodes done: the same apply runs it again. It runs under the saga's lock; it must not take it.
 	Finish func(ctx context.Context) error
+	// Revision is the revision of the inputs the saga runs from: the record and the revision keep it.
+	Revision string
 
 	mu  sync.Mutex
 	rec *Record
@@ -350,7 +357,8 @@ func (r *Run) finish() error {
 		rec.Previous = &prev
 	}
 	rec.Installation, rec.State, rec.Saga = sg.Installation, Installed, nil
-	rec.revise(Revision{Installation: sg.Installation, Outcome: RevInstalled, Saga: sg.ID}, r.HistoryKeep)
+	rec.Rev = r.Revision
+	rec.revise(Revision{Installation: sg.Installation, Outcome: RevInstalled, Saga: sg.ID, Revision: r.Revision}, r.HistoryKeep)
 	err := r.save()
 	r.note(KindEnd, "", "installed "+rec.Pack+" "+rec.Version, err)
 	return err

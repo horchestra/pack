@@ -99,7 +99,7 @@ func releaseStand(dir string) (*stand, error) {
 		return nil, fmt.Errorf("--release %s: no lock — run pack refresh there: %w", dir, err)
 	}
 	delete(relDoc, "pack")
-	return &stand{pack: pack, release: relDoc, env: env, lock: lock, bin: filepath.Join(abs, remote.DefaultDir), real: true}, nil
+	return &stand{pack: pack, release: relDoc, env: env, lock: lock, bin: remote.BinDir(), real: true}, nil
 }
 
 // TestInstallation is the id of the installation of every scenario. The memory target keeps what it holds of an

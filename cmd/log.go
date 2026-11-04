@@ -2,10 +2,10 @@ package cmd
 
 import (
 	"fmt"
+	"io"
 
 	"github.com/spf13/cobra"
 
-	"github.com/horchestra/pack/internal/storage"
 	"github.com/horchestra/pack/internal/workdir"
 	"github.com/horchestra/pack/pkg/api"
 	"github.com/horchestra/pack/pkg/saga"
@@ -31,8 +31,8 @@ func newLogCmd() *cobra.Command {
 		} else if rec != nil {
 			installation = rec.ID
 		}
-		if len(installation) == 0 && dir.Release.State == workdir.StateTarget {
-			// the record is the target's; the release says the installation's id
+		if len(installation) == 0 && dir.Release.State != "" && dir.Release.State != workdir.StateFile {
+			// the record is the target's or the database's; the release says the installation's id
 			id, err := dir.InstallationID()
 			if err != nil {
 				return err
@@ -42,10 +42,16 @@ func newLogCmd() *cobra.Command {
 		if len(installation) == 0 {
 			return fmt.Errorf("no state in %s: nothing was applied here", dir.Path)
 		}
-		if dir.Journal == "off" {
+		if dir.Journal == "off" && dir.Release.State != workdir.StateDB {
 			return fmt.Errorf("the journal is off (--journal)")
 		}
-		f := storage.FileJournal{Dir: dir.JournalPath(), Installation: installation}
+		f, err := dir.JournalReaderFor(installation)
+		if err != nil {
+			return err
+		}
+		if c, ok := f.(io.Closer); ok {
+			defer func() { _ = c.Close() }()
+		}
 		runs, err := f.Runs()
 		if err != nil {
 			return err
