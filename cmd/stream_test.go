@@ -7,6 +7,7 @@ import (
 	"errors"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
@@ -292,5 +293,67 @@ func TestLogFlags(t *testing.T) {
 	_, errOut, code = streamProcess(t, d, "plan", "--log-level", "loud")
 	if code != 1 || !strings.Contains(errOut, `log level "loud"`) {
 		t.Errorf("a level of none: %d\n%s", code, errOut)
+	}
+}
+
+// --stream of the commands it was added to: stdout is events alone, the result the last of them.
+func TestStreamEveryCommand(t *testing.T) {
+	d := releaseOf(t, generated(t), nil)
+
+	out, errOut, code := streamProcess(t, d, "refresh", "--stream")
+	if code != 0 {
+		t.Fatalf("refresh: %d\n%s", code, errOut)
+	}
+	if evs := said(events(t, out)); evs[len(evs)-1] != "result ok" {
+		t.Errorf("refresh --stream:\n%s", strings.Join(evs, "\n"))
+	}
+
+	out, errOut, code = streamProcess(t, d, "discover", "--stream")
+	if code != 0 {
+		t.Fatalf("discover: %d\n%s", code, errOut)
+	}
+	if evs := said(events(t, out)); evs[len(evs)-1] != "result ok" {
+		t.Errorf("discover --stream:\n%s", strings.Join(evs, "\n"))
+	}
+
+	pack(t, d, "apply")
+	runParams = nil
+	out, errOut, code = streamProcess(t, d, "run", "backup", "--param", "to=/backups/one", "--stream")
+	if code != 0 {
+		t.Fatalf("run: %d\n%s", code, errOut)
+	}
+	evs := events(t, out)
+	got := said(evs)
+	want := []string{"saga started", "node postgres running", "node postgres done", "saga ended", "result ok"}
+	if strings.Join(got, "\n") != strings.Join(want, "\n") {
+		t.Errorf("run --stream:\n%s\nwant\n%s", strings.Join(got, "\n"), strings.Join(want, "\n"))
+	}
+	var logged bool
+	for _, e := range evs {
+		if e.Type == api.EventLog && e.Key == "postgres" && len(e.Saga) > 0 {
+			logged = true
+		}
+	}
+	if !logged {
+		t.Errorf("no line of the action:\n%s", out)
+	}
+
+	// test --release: the scenarios on the release's target
+	write(t, d, "release.lock.json", map[string]any{})
+	sc := filepath.Join(t.TempDir(), "ok.yaml")
+	scenario := "name: installs\nvalues:\n  openbao:\n    api_addr: https://bao:8200\n  postgres:\n    id: n1\nexpect:\n  apply:\n    state: installed\n    in_effect: [postgres, openbao]\n"
+	if err := os.WriteFile(sc, []byte(scenario), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	out, errOut, code = streamProcess(t, d, "test", "--release", d, sc, "--stream")
+	testRelease = "" // a flag keeps its value between runs in one process
+	if code != 0 {
+		t.Fatalf("test --release: %d\n%s", code, errOut)
+	}
+	if evs := said(events(t, out)); evs[len(evs)-1] != "result ok" {
+		t.Errorf("test --release --stream:\n%s", strings.Join(evs, "\n"))
+	}
+	if strings.Contains(out, "scenario(s) ok") && !strings.Contains(errOut, "scenario(s) ok") {
+		t.Errorf("the text is not on stderr:\n%s", errOut)
 	}
 }

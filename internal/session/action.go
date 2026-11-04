@@ -209,6 +209,9 @@ func (s *Session) RunAction(ctx context.Context, rel *render.Release, p *plan.Pl
 			en.Error = e.Error()
 		}
 		_ = j.Append(en) // a journal that fails does not fail the action
+		if s.Hear != nil {
+			s.Hear(en)
+		}
 	}
 	note(saga.KindSaga, fmt.Sprintf("action %s on %s: %s", st.Name, st.Key, strings.Join(st.Command, " ")), nil)
 	note(saga.KindStart, "action "+st.Name, nil)

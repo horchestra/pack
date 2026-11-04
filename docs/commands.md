@@ -95,7 +95,7 @@ itself said: it refused, or did not start or answer.
 
 ## --stream
 
-`--stream` (of `apply`, `delete`, `rollback`, `plan` and `log`) makes stdout NDJSON — one event a line, as the command
+`--stream` (of `apply`, `delete`, `rollback`, `plan`, `log`, `run`, `refresh`, `discover` and `test --release`) makes stdout NDJSON — one event a line, as the command
 does what it says — and nothing else goes there: the text a person reads goes to stderr. A UI's backend runs pack and
 forwards each line as it comes (an SSE `data:`, a WebSocket frame) without reading text; it cancels with SIGINT, as
 Ctrl-C does — the saga cuts the running steps short and rolls back, and says so in events. Not with `--json`: the
