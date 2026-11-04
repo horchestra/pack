@@ -7,11 +7,11 @@ annotations:
   pack.name: openbao
   pack.version: 2.1.0
 items:
-- annotations:
-    pack.image: "true"
-  from: oci://images/openbao:2.1.0
-- from: file://schema.json
-  type: application/vnd.pack.schema.v1+json
-- from: oci://packs/tembo:0.2.0
+  - annotations:
+      pack.image: "true"
+    from: oci://images/openbao:2.1.0
+  - from: file://schema.json
+    type: application/vnd.pack.schema.v1+json
+  - from: oci://packs/tembo:0.2.0
 repository: packs/openbao:2.1.0
 type: application/vnd.pack.pack.v1+json

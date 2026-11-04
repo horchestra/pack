@@ -16,7 +16,7 @@ env:
         limits:
           memory: 2Gi
 expect:
-  problems: []
+  problems: [ ]
   files: golden/basic
   apply:
     state: installed

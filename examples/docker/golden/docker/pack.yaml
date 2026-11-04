@@ -6,9 +6,9 @@ annotations:
   pack.name: docker
   pack.version: 1.0.0
 items:
-- from: file://schema.json
-  type: application/vnd.pack.schema.v1+json
-- from: dir://templates/
-  type: application/vnd.pack.template.v1
+  - from: file://schema.json
+    type: application/vnd.pack.schema.v1+json
+  - from: dir://templates/
+    type: application/vnd.pack.template.v1
 repository: packs/docker:1.0.0
 type: application/vnd.pack.pack.v1+json

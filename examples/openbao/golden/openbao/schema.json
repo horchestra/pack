@@ -1,1 +1,396 @@
-{"$schema":"https://json-schema.org/draft/2020-12/schema","properties":{"openbao":{"properties":{"cluster_name":{"type":"string","title":"Cluster name","description":"The name of the cluster, in its metrics and its API.","x-pack-i18n":{"ru":{"description":"Имя кластера в его метриках и API.","title":"Имя кластера"}}},"api_addr":{"type":"string","title":"API address","description":"The address clients are told to reach the API at.","examples":["https://bao.example:8200"],"x-pack-group":"addresses","x-pack-i18n":{"ru":{"description":"Адрес, по которому клиентам сообщают обращаться к API.","title":"Адрес API"}}},"cluster_addr":{"type":"string","title":"Cluster address","description":"The address the nodes reach each other at; raft wants it set.","x-pack-group":"addresses","x-pack-i18n":{"ru":{"description":"Адрес, по которому узлы обращаются друг к другу; raft требует его.","title":"Адрес кластера"}}},"cache_size":{"type":"integer"},"disable_cache":{"type":"boolean"},"disable_mlock":{"type":"boolean","default":true},"disable_clustering":{"type":"boolean"},"ui":{"type":"boolean","title":"Web UI","description":"Serve the web UI.","examples":[true],"x-pack-i18n":{"ru":{"description":"Отдавать веб-интерфейс.","title":"Веб-интерфейс"}}},"raw_storage_endpoint":{"type":"boolean"},"introspection_endpoint":{"type":"boolean"},"unsafe_allow_api_in_browser":{"type":"boolean"},"disable_printable_check":{"type":"boolean"},"administratively_disabled":{"type":"boolean"},"pid_file":{"type":"string"},"plugin_directory":{"type":"string"},"default_lease_ttl":{"type":"string"},"max_lease_ttl":{"type":"string"},"log_level":{"type":"string","title":"Log level","description":"How much the server says; the format is always JSON.","default":"info","examples":["debug"],"x-pack-group":"logging","x-pack-i18n":{"ru":{"description":"Насколько подробно пишет сервер; формат всегда JSON.","title":"Уровень журнала"}}},"log_file":{"type":"string","title":"Log file","description":"Where the log goes besides the standard output.","x-pack-group":"logging","x-pack-i18n":{"ru":{"description":"Куда пишется журнал помимо стандартного вывода.","title":"Файл журнала"}}},"log_rotate_bytes":{"type":"integer"},"log_rotate_duration":{"type":"string"},"log_rotate_max_files":{"type":"integer"},"storage":{"type":"object","title":"Storage","description":"The storage backend, by its type: raft, or the embedded postgres, which\nfills it itself.","x-pack-compute":"has(pack.values.postgres) ? {'postgresql': {'connection_url': 'postgres://' + pack.values.postgres.superuser.name + ':${secret:' + pack.installation + '-postgres-superuser-password/password}@' + pack.keys.postgres.instances[0] + ':' + string(pack.keys.postgres.ports.pg) + '/' + pack.values.postgres.database}} : null","x-pack-i18n":{"ru":{"description":"Бэкенд хранения по типу: raft или встроенный postgres, который\nзаполняет его сам.","title":"Хранилище"}},"x-pack-rules":[{"id":"storage-from-postgres","rule":"!has(pack.values.postgres) || !has(values.openbao.storage) || size(values.openbao.storage) == 0","message":"storage is filled from the embedded postgres and must not be set","x-pack-i18n":{"ru":{"message":"хранилище заполняется из встроенного postgres и задаваться не должно"}}}]},"ha_storage":{"type":"object"},"listener":{"type":"object","title":"Listener","description":"The listeners, by their type (tcp).","x-pack-i18n":{"ru":{"description":"Слушатели по типу (tcp).","title":"Слушатели"}}},"seal":{"type":"object","title":"Seal","description":"The seal, by its type (static, awskms…).","x-pack-i18n":{"ru":{"description":"Печать по типу (static, awskms…).","title":"Печать"}}},"telemetry":{"properties":{"disable_hostname":{"type":"boolean"},"enable_hostname_label":{"type":"boolean"},"metrics_prefix":{"type":"string"},"usage_gauge_period":{"type":"string"},"maximum_gauge_cardinality":{"type":"integer"},"lease_metrics_threshold":{"type":"string"},"filter_default":{"type":"boolean"},"prefix_filter":{"items":{"type":"string"},"type":"array"},"statsd_address":{"type":"string"},"statsite_address":{"type":"string"},"dogstatsd_addr":{"type":"string"},"dogstatsd_tags":{"items":{"type":"string"},"type":"array"},"prometheus_retention_time":{"type":"string"}},"additionalProperties":false,"type":"object"},"service_registration":{"type":"object"},"initialize":{"items":{"type":"object"},"type":"array"}},"additionalProperties":false,"type":"object","title":"Server","description":"The server's own configuration, the JSON form of its HCL.","x-pack-i18n":{"ru":{"description":"Собственная конфигурация сервера, JSON-форма его HCL.","title":"Сервер"}}},"postgres":{"$ref":"pack://postgres#","title":"Embedded PostgreSQL","description":"The PostgreSQL installed with OpenBao as its storage; absent — raft.","x-pack-i18n":{"ru":{"description":"PostgreSQL, устанавливаемый вместе с OpenBao как его хранилище; если не задан — raft.","title":"Встроенный PostgreSQL"}}},"dev":{"type":"boolean","title":"Dev mode","description":"An in-memory, unsealed server, for trying it out.","x-pack-env":"BAO_DEV","x-pack-i18n":{"ru":{"description":"Сервер в памяти, без печати, — чтобы попробовать.","title":"Режим разработки"}}},"release_url":{"type":"string","title":"Release URL","description":"Where the release archive of OpenBao is downloaded from on a host.","default":"https://github.com/openbao/openbao/releases/download","x-pack-i18n":{"ru":{"description":"Откуда на хосте скачивается архив релиза OpenBao.","title":"URL релиза"}}}},"additionalProperties":false,"type":"object","required":["openbao"],"title":"OpenBao","description":"Secrets management; the storage is raft, or the embedded PostgreSQL.","x-pack":{"ports":{"api":8200,"cluster":8201},"data":{"file":{"mountPath":"/openbao/file","size":"1Gi"}},"content":[{"path":"/openbao/config/config.json","values":"openbao"}],"packages":{"debian":{"prepare":["ca-certificates","openssl"],"names":["{{ .release_url }}/v2.6.5/openbao_2.6.5_linux_${os:arch}.deb"],"content":[{"path":"/etc/openbao/openbao.hcl","values":"openbao","format":"json","mode":"0644"}],"services":["openbao"]},"fedora":{"names":["openbao"],"content":[{"path":"/etc/openbao.d/openbao.hcl","values":"openbao","format":"json","mode":"0644"}],"services":["openbao"]}},"readiness":{"http":"api/v1/sys/health"},"command":["/bin/sh","-c","if [ \"${BAO_DEV:-}\" = true ]; then exec docker-entrypoint.sh server -dev -dev-no-store-token; fi; exec docker-entrypoint.sh server"],"savepoints":["postgres"]},"x-pack-groups":[{"id":"addresses","title":"Addresses","x-pack-i18n":{"ru":{"title":"Адреса"}}},{"id":"logging","title":"Logging","x-pack-i18n":{"ru":{"title":"Журнал"}}}],"x-pack-i18n":{"ru":{"description":"Управление секретами; хранилище — raft или встроенный PostgreSQL.","title":"OpenBao"}},"x-pack-langs":["en","ru"]}
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "properties": {
+    "openbao": {
+      "properties": {
+        "cluster_name": {
+          "type": "string",
+          "title": "Cluster name",
+          "description": "The name of the cluster, in its metrics and its API.",
+          "x-pack-i18n": {
+            "ru": {
+              "description": "Имя кластера в его метриках и API.",
+              "title": "Имя кластера"
+            }
+          }
+        },
+        "api_addr": {
+          "type": "string",
+          "title": "API address",
+          "description": "The address clients are told to reach the API at.",
+          "examples": [
+            "https://bao.example:8200"
+          ],
+          "x-pack-group": "addresses",
+          "x-pack-i18n": {
+            "ru": {
+              "description": "Адрес, по которому клиентам сообщают обращаться к API.",
+              "title": "Адрес API"
+            }
+          }
+        },
+        "cluster_addr": {
+          "type": "string",
+          "title": "Cluster address",
+          "description": "The address the nodes reach each other at; raft wants it set.",
+          "x-pack-group": "addresses",
+          "x-pack-i18n": {
+            "ru": {
+              "description": "Адрес, по которому узлы обращаются друг к другу; raft требует его.",
+              "title": "Адрес кластера"
+            }
+          }
+        },
+        "cache_size": {
+          "type": "integer"
+        },
+        "disable_cache": {
+          "type": "boolean"
+        },
+        "disable_mlock": {
+          "type": "boolean",
+          "default": true
+        },
+        "disable_clustering": {
+          "type": "boolean"
+        },
+        "ui": {
+          "type": "boolean",
+          "title": "Web UI",
+          "description": "Serve the web UI.",
+          "examples": [
+            true
+          ],
+          "x-pack-i18n": {
+            "ru": {
+              "description": "Отдавать веб-интерфейс.",
+              "title": "Веб-интерфейс"
+            }
+          }
+        },
+        "raw_storage_endpoint": {
+          "type": "boolean"
+        },
+        "introspection_endpoint": {
+          "type": "boolean"
+        },
+        "unsafe_allow_api_in_browser": {
+          "type": "boolean"
+        },
+        "disable_printable_check": {
+          "type": "boolean"
+        },
+        "administratively_disabled": {
+          "type": "boolean"
+        },
+        "pid_file": {
+          "type": "string"
+        },
+        "plugin_directory": {
+          "type": "string"
+        },
+        "default_lease_ttl": {
+          "type": "string"
+        },
+        "max_lease_ttl": {
+          "type": "string"
+        },
+        "log_level": {
+          "type": "string",
+          "title": "Log level",
+          "description": "How much the server says; the format is always JSON.",
+          "default": "info",
+          "examples": [
+            "debug"
+          ],
+          "x-pack-group": "logging",
+          "x-pack-i18n": {
+            "ru": {
+              "description": "Насколько подробно пишет сервер; формат всегда JSON.",
+              "title": "Уровень журнала"
+            }
+          }
+        },
+        "log_file": {
+          "type": "string",
+          "title": "Log file",
+          "description": "Where the log goes besides the standard output.",
+          "x-pack-group": "logging",
+          "x-pack-i18n": {
+            "ru": {
+              "description": "Куда пишется журнал помимо стандартного вывода.",
+              "title": "Файл журнала"
+            }
+          }
+        },
+        "log_rotate_bytes": {
+          "type": "integer"
+        },
+        "log_rotate_duration": {
+          "type": "string"
+        },
+        "log_rotate_max_files": {
+          "type": "integer"
+        },
+        "storage": {
+          "type": "object",
+          "title": "Storage",
+          "description": "The storage backend, by its type: raft, or the embedded postgres, which\nfills it itself.",
+          "x-pack-compute": "has(pack.values.postgres) ? {'postgresql': {'connection_url': 'postgres://' + pack.values.postgres.superuser.name + ':${secret:' + pack.installation + '-postgres-superuser-password/password}@' + pack.keys.postgres.instances[0] + ':' + string(pack.keys.postgres.ports.pg) + '/' + pack.values.postgres.database}} : null",
+          "x-pack-i18n": {
+            "ru": {
+              "description": "Бэкенд хранения по типу: raft или встроенный postgres, который\nзаполняет его сам.",
+              "title": "Хранилище"
+            }
+          },
+          "x-pack-rules": [
+            {
+              "id": "storage-from-postgres",
+              "rule": "!has(pack.values.postgres) || !has(values.openbao.storage) || size(values.openbao.storage) == 0",
+              "message": "storage is filled from the embedded postgres and must not be set",
+              "x-pack-i18n": {
+                "ru": {
+                  "message": "хранилище заполняется из встроенного postgres и задаваться не должно"
+                }
+              }
+            }
+          ]
+        },
+        "ha_storage": {
+          "type": "object"
+        },
+        "listener": {
+          "type": "object",
+          "title": "Listener",
+          "description": "The listeners, by their type (tcp).",
+          "x-pack-i18n": {
+            "ru": {
+              "description": "Слушатели по типу (tcp).",
+              "title": "Слушатели"
+            }
+          }
+        },
+        "seal": {
+          "type": "object",
+          "title": "Seal",
+          "description": "The seal, by its type (static, awskms…).",
+          "x-pack-i18n": {
+            "ru": {
+              "description": "Печать по типу (static, awskms…).",
+              "title": "Печать"
+            }
+          }
+        },
+        "telemetry": {
+          "properties": {
+            "disable_hostname": {
+              "type": "boolean"
+            },
+            "enable_hostname_label": {
+              "type": "boolean"
+            },
+            "metrics_prefix": {
+              "type": "string"
+            },
+            "usage_gauge_period": {
+              "type": "string"
+            },
+            "maximum_gauge_cardinality": {
+              "type": "integer"
+            },
+            "lease_metrics_threshold": {
+              "type": "string"
+            },
+            "filter_default": {
+              "type": "boolean"
+            },
+            "prefix_filter": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "statsd_address": {
+              "type": "string"
+            },
+            "statsite_address": {
+              "type": "string"
+            },
+            "dogstatsd_addr": {
+              "type": "string"
+            },
+            "dogstatsd_tags": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "prometheus_retention_time": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false,
+          "type": "object"
+        },
+        "service_registration": {
+          "type": "object"
+        },
+        "initialize": {
+          "items": {
+            "type": "object"
+          },
+          "type": "array"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "title": "Server",
+      "description": "The server's own configuration, the JSON form of its HCL.",
+      "x-pack-i18n": {
+        "ru": {
+          "description": "Собственная конфигурация сервера, JSON-форма его HCL.",
+          "title": "Сервер"
+        }
+      }
+    },
+    "postgres": {
+      "$ref": "pack://postgres#",
+      "title": "Embedded PostgreSQL",
+      "description": "The PostgreSQL installed with OpenBao as its storage; absent — raft.",
+      "x-pack-i18n": {
+        "ru": {
+          "description": "PostgreSQL, устанавливаемый вместе с OpenBao как его хранилище; если не задан — raft.",
+          "title": "Встроенный PostgreSQL"
+        }
+      }
+    },
+    "dev": {
+      "type": "boolean",
+      "title": "Dev mode",
+      "description": "An in-memory, unsealed server, for trying it out.",
+      "x-pack-env": "BAO_DEV",
+      "x-pack-i18n": {
+        "ru": {
+          "description": "Сервер в памяти, без печати, — чтобы попробовать.",
+          "title": "Режим разработки"
+        }
+      }
+    },
+    "release_url": {
+      "type": "string",
+      "title": "Release URL",
+      "description": "Where the release archive of OpenBao is downloaded from on a host.",
+      "default": "https://github.com/openbao/openbao/releases/download",
+      "x-pack-i18n": {
+        "ru": {
+          "description": "Откуда на хосте скачивается архив релиза OpenBao.",
+          "title": "URL релиза"
+        }
+      }
+    }
+  },
+  "additionalProperties": false,
+  "type": "object",
+  "required": [
+    "openbao"
+  ],
+  "title": "OpenBao",
+  "description": "Secrets management; the storage is raft, or the embedded PostgreSQL.",
+  "x-pack": {
+    "ports": {
+      "api": 8200,
+      "cluster": 8201
+    },
+    "data": {
+      "file": {
+        "mountPath": "/openbao/file",
+        "size": "1Gi"
+      }
+    },
+    "content": [
+      {
+        "path": "/openbao/config/config.json",
+        "values": "openbao"
+      }
+    ],
+    "packages": {
+      "debian": {
+        "prepare": [
+          "ca-certificates",
+          "openssl"
+        ],
+        "names": [
+          "{{ .release_url }}/v2.6.5/openbao_2.6.5_linux_${os:arch}.deb"
+        ],
+        "content": [
+          {
+            "path": "/etc/openbao/openbao.hcl",
+            "values": "openbao",
+            "format": "json",
+            "mode": "0644"
+          }
+        ],
+        "services": [
+          "openbao"
+        ]
+      },
+      "fedora": {
+        "names": [
+          "openbao"
+        ],
+        "content": [
+          {
+            "path": "/etc/openbao.d/openbao.hcl",
+            "values": "openbao",
+            "format": "json",
+            "mode": "0644"
+          }
+        ],
+        "services": [
+          "openbao"
+        ]
+      }
+    },
+    "readiness": {
+      "http": "api/v1/sys/health"
+    },
+    "command": [
+      "/bin/sh",
+      "-c",
+      "if [ \"${BAO_DEV:-}\" = true ]; then exec docker-entrypoint.sh server -dev -dev-no-store-token; fi; exec docker-entrypoint.sh server"
+    ],
+    "savepoints": [
+      "postgres"
+    ]
+  },
+  "x-pack-groups": [
+    {
+      "id": "addresses",
+      "title": "Addresses",
+      "x-pack-i18n": {
+        "ru": {
+          "title": "Адреса"
+        }
+      }
+    },
+    {
+      "id": "logging",
+      "title": "Logging",
+      "x-pack-i18n": {
+        "ru": {
+          "title": "Журнал"
+        }
+      }
+    }
+  ],
+  "x-pack-i18n": {
+    "ru": {
+      "description": "Управление секретами; хранилище — raft или встроенный PostgreSQL.",
+      "title": "OpenBao"
+    }
+  },
+  "x-pack-langs": [
+    "en",
+    "ru"
+  ]
+}

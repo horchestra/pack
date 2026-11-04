@@ -3,7 +3,7 @@ name: release
 # a tag v* builds pack for the platforms and attaches the archives to the release
 on:
   push:
-    tags: ["v*"]
+    tags: [ "v*" ]
 
 permissions:
   contents: write

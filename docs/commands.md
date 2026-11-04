@@ -101,26 +101,26 @@ last event is the result `--json` writes.
 {"seq":6,"time":"2026-11-04T10:00:01Z","type":"log","key":"openbao","step":"apply","message":"container openbao started","saga":"20261104T100000.512Z"}
 ```
 
-| field                | what                                                                                     |
-|----------------------|------------------------------------------------------------------------------------------|
-| `seq`                | 1, 2, … in the order written: an SSE id, what `Last-Event-ID` resumes from               |
-| `time`               | when it happened (UTC)                                                                   |
-| `type`               | `plan`, `node`, `log`, `saga`, `result`                                                  |
-| `key`, `step`        | the key an event is of, and the step of it a line is of (`apply`, `wait`, `hook migrate`, `undo apply`) |
-| `status`             | of a `node`, a `saga`, a `result`, below                                                 |
-| `message`, `error`   | what was said, what failed                                                               |
-| `saga`               | the saga's id: `pack log <it>`                                                           |
-| `plan`               | of a `plan` event: the plan, as `plan --json` writes it                                  |
-| `result`             | of an `ok` result: the command's document, as `--json` writes it                         |
-| `code`, `next`       | of a `failed` result: the error's code and what to run next, as `--json` says them       |
+| field              | what                                                                                                    |
+|--------------------|---------------------------------------------------------------------------------------------------------|
+| `seq`              | 1, 2, … in the order written: an SSE id, what `Last-Event-ID` resumes from                              |
+| `time`             | when it happened (UTC)                                                                                  |
+| `type`             | `plan`, `node`, `log`, `saga`, `result`                                                                 |
+| `key`, `step`      | the key an event is of, and the step of it a line is of (`apply`, `wait`, `hook migrate`, `undo apply`) |
+| `status`           | of a `node`, a `saga`, a `result`, below                                                                |
+| `message`, `error` | what was said, what failed                                                                              |
+| `saga`             | the saga's id: `pack log <it>`                                                                          |
+| `plan`             | of a `plan` event: the plan, as `plan --json` writes it                                                 |
+| `result`           | of an `ok` result: the command's document, as `--json` writes it                                        |
+| `code`, `next`     | of a `failed` result: the error's code and what to run next, as `--json` says them                      |
 
-| type     | status                                                                                                       |
-|----------|--------------------------------------------------------------------------------------------------------------|
+| type     | status                                                                                                                         |
+|----------|--------------------------------------------------------------------------------------------------------------------------------|
 | `plan`   | — the plan the command runs, before anything is done (`plan`, `apply`; the removal of `delete`, the taking back of `rollback`) |
-| `node`   | `running`, `done`, `failed`; `compensating` → `rolled-back` (a rollback, an undo); `removing` → `removed` (`delete`) |
-| `log`    | — a line of a key's step (what the target said) or of the saga                                              |
-| `saga`   | `started`, `failed` (a key failed: the rollback follows), `ended` (or `failed` if recording the end failed), `interrupted` |
-| `result` | `ok` or `failed` — always the last event; the exit code is the command's                                     |
+| `node`   | `running`, `done`, `failed`; `compensating` → `rolled-back` (a rollback, an undo); `removing` → `removed` (`delete`)           |
+| `log`    | — a line of a key's step (what the target said) or of the saga                                                                 |
+| `saga`   | `started`, `failed` (a key failed: the rollback follows), `ended` (or `failed` if recording the end failed), `interrupted`     |
+| `result` | `ok` or `failed` — always the last event; the exit code is the command's                                                       |
 
 A reader that goes away stops the events, not the command: a saga goes on to its end or its rollback, the text on
 stderr says so (pack ignores SIGPIPE while it streams). A removal's events are of its keys alone — no savepoint is
@@ -129,3 +129,24 @@ taken away. `pack test` has no `--stream`: its scenarios run on a stand of their
 A saga's events are the entries of its journal: `pack log --stream [run]` gives a saga that is over in the same
 events, `result` last — what a UI shows again when it lost the stream. pack writes no value of a setting into an
 event (a plan has none); a `log` line is what a target said, the target's to keep clean of secrets.
+
+## The log
+
+What a command says to a person — its text, `--json`, `--stream` — is not the log. The log is what is under it, for
+whoever looks into what pack does. It goes to stderr, at a level: `--log-level` (or `PACK_LOG_LEVEL`) is `trace`,
+`debug`, `info`, `warn` (the default: what goes wrong, nothing of what goes right), `error` or `off`. `--log-format`
+(or `PACK_LOG_FORMAT`) is `console`, a line a person reads, or `json`, an object a line.
+
+| level   | what pack logs                                                                                                                                                                                                                                                                              |
+|---------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `warn`  | a call to a target that failed, a step that failed, a line a target wrote that is not of its log                                                                                                                                                                                            |
+| `debug` | the command and how long it took; the release and the environment; each target started, its calls (method, time, code) and steps; the registry's resolves and pulls; the secret store's reads and writes (the path and the number of fields); the saga's entries; the tools `pack mcp` runs |
+| `trace` | what a step says as the target says it; each request to the secret store, a target's download, the cluster (method, URL without its query, status, time); the size of each call to a target; each CEL formula and rule evaluated (the expression, not its value)                            |
+
+The targets log at the level pack has: pack gives it to each one it starts (`PACK_LOG_LEVEL`, `PACK_LOG_FORMAT=json`
+in its environment — a process's, a container's, a Pod's), reads what the target writes and logs each line again
+under its own log, `target=<name>`, at the level the line says (a line that is not JSON, a panic, at `warn`). A
+target in a Pod has its log followed by pack. `pack mcp` runs its commands at its own level, logs their log again,
+and gives a model what they said, with what of their log is `warn` or above.
+
+No secret is logged: no token, no value of a secret or of a setting, no payload of a call, no header of a request.

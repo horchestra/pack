@@ -1,6 +1,7 @@
 # Emitters: the formats of a file
 
-An emitter turns a values subtree into the bytes of a file (`{Path: "/path", Values: "conf", Format: "…"}` in `Content`). Every format is
+An emitter turns a values subtree into the bytes of a file (`{Path: "/path", Values: "conf", Format: "…"}` in
+`Content`). Every format is
 serialisation — it cannot produce a malformed file; keys are sorted; nothing depends on the clock. Rendering the same
 subtree twice gives the same bytes, which is what lets a Secret be named by its content.
 
@@ -23,7 +24,8 @@ The format is the extension's when no `format` tag says it: `.json`, `.yaml`/`.y
 `.ini`/`.cnf`, `.env`.
 
 A `Template` of `Content` is Go `text/template` with sprig and Helm's functions, its result checked as `ParseAs` when
-named: the one way to a file that can come out malformed. A `Source` is no one's to read: byte for byte. In `Packages` a file may also be a `URL`, downloaded where it lands.
+named: the one way to a file that can come out malformed. A `Source` is no one's to read: byte for byte. In `Packages` a
+file may also be a `URL`, downloaded where it lands.
 
 ## Template data
 

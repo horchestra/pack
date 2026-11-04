@@ -9,11 +9,13 @@ import (
 	"strings"
 
 	"cel.dev/cel-go/cel"
+
 	"github.com/horchestra/pack/sdk/compute"
 	"github.com/horchestra/pack/sdk/packschema"
 	"github.com/horchestra/pack/sdk/schema"
 
 	"github.com/horchestra/pack/pkg/bundle"
+	"github.com/horchestra/pack/pkg/logging"
 )
 
 // Context is what the bundle cannot know: under what name it is being installed, the environment's targets, and
@@ -570,7 +572,10 @@ func (r *render) eval(f *formula, doc map[string]any, instance map[string]any) (
 	if readsPackValues(f.reads) {
 		vars["pack"].(map[string]any)["values"] = r.allValues(doc)
 	}
-	return compute.Eval(r.env, f.ast, vars)
+	v, err := compute.Eval(r.env, f.ast, vars)
+	// the formula and whether it gave anything — not what: a value may be a password
+	logging.For("cel").Trace().Str("key", f.key).Str("at", f.ptr).Str("expr", f.ast.Source().Content()).Bool("value", v != nil).Err(err).Msg("eval")
+	return v, err
 }
 
 // facts are the facts of the target the key runs on; none told — empty.

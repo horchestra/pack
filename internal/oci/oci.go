@@ -10,13 +10,16 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/opencontainers/go-digest"
 
 	"github.com/arenadata/oci-packer/pkg/extract"
 	"github.com/arenadata/oci-packer/pkg/registry/reference"
 	"github.com/arenadata/oci-packer/pkg/registry/remote"
+
 	"github.com/horchestra/pack/pkg/format"
+	"github.com/horchestra/pack/pkg/logging"
 )
 
 // Options of a registry.
@@ -73,10 +76,13 @@ func Pin(ctx context.Context, ref string, o Options) (string, error) {
 	if err != nil {
 		return "", err
 	}
+	start := time.Now()
 	desc, err := c.Resolve(ctx, reference.Reference{Ref: parsed.Ref})
 	if err != nil {
+		logging.For("oci").Debug().Str("ref", ref).Err(err).Msg("resolve")
 		return "", fmt.Errorf("%s: %w", ref, err)
 	}
+	logging.For("oci").Debug().Str("ref", ref).Str("digest", desc.Digest.String()).Dur("took", time.Since(start)).Msg("resolve")
 	return pinned(parsed, desc.Digest), nil
 }
 
@@ -107,10 +113,13 @@ func Pull(ctx context.Context, ref, packs string, o Options) (Pulled, error) {
 	}
 	out := Pulled{Digest: d.String(), Ref: pinned(parsed, d)}
 	dest := filepath.Join(packs, d.Encoded())
+	log := logging.For("oci").With().Str("ref", ref).Str("digest", out.Digest).Logger()
 	if root, err := os.ReadFile(filepath.Join(dest, rootFile)); err == nil {
 		out.Dir = filepath.Join(dest, strings.TrimSpace(string(root)))
+		log.Debug().Str("dir", out.Dir).Msg("pull: already here")
 		return out, nil
 	}
+	start := time.Now()
 
 	if err := os.MkdirAll(packs, 0o700); err != nil {
 		return Pulled{}, err
@@ -138,6 +147,7 @@ func Pull(ctx context.Context, ref, packs string, o Options) (Pulled, error) {
 		return Pulled{}, err
 	}
 	out.Dir = filepath.Join(dest, name)
+	log.Debug().Str("dir", out.Dir).Dur("took", time.Since(start)).Msg("pull")
 	return out, nil
 }
 

@@ -23,7 +23,7 @@ logs:
 expect:
   apply:
     state: failed
-    in_effect: []
+    in_effect: [ ]
   diagnose:
     class: port_conflict
     remedies:

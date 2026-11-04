@@ -1,1 +1,364 @@
-{"$schema":"https://json-schema.org/draft/2020-12/schema","properties":{"id":{"type":"string","maxLength":63,"pattern":"^[a-z0-9_]*$","title":"Node id","description":"Lowercase letters, digits and underscores; the hostname, dashes turned\ninto underscores, when unset.","examples":["db_1"],"x-pack-env":"TEMBO_ID","x-pack-i18n":{"ru":{"description":"Строчные буквы, цифры и подчёркивания; если не задан — имя хоста,\nдефисы заменены подчёркиваниями.","title":"Идентификатор узла"}}},"listen":{"type":"string","title":"Primary proxy","description":"The client proxy to the primary.","default":":5432","x-pack-env":"TEMBO_LISTEN","x-pack-group":"proxies","x-pack-i18n":{"ru":{"description":"Клиентский прокси к первичному узлу.","title":"Прокси к первичному"}}},"listen_ro":{"type":"string","title":"Standby proxy","description":"The client proxy spread over the standbys.","default":":5434","x-pack-env":"TEMBO_LISTEN_RO","x-pack-group":"proxies","x-pack-i18n":{"ru":{"description":"Клиентский прокси, распределяющий по резервным узлам.","title":"Прокси к резервным"}}},"db":{"type":"string","title":"Node database","description":"The bbolt file of the node.","default":"/var/lib/postgresql/tembo.db","x-pack-env":"TEMBO_DB","x-pack-group":"storage","x-pack-i18n":{"ru":{"description":"Файл bbolt узла.","title":"База узла"}}},"pg_data":{"type":"string","title":"Data directory","description":"The Postgres data directory.","default":"/var/lib/postgresql/data","x-pack-env":"TEMBO_PG_DATA","x-pack-group":"storage","x-pack-i18n":{"ru":{"description":"Каталог данных Postgres.","title":"Каталог данных"}}},"pg_port":{"type":"integer","maximum":65535,"minimum":1,"title":"Postgres port","description":"The port of Postgres itself, behind the proxies, the same on every node.","default":5433,"examples":[5433],"x-pack-env":"TEMBO_PG_PORT","x-pack-i18n":{"ru":{"description":"Порт самого Postgres за прокси, одинаковый на всех узлах.","title":"Порт Postgres"}},"x-pack-suggest":{"expr":"has(facts.hosts) \u0026\u0026 facts.hosts.exists(h, has(facts.hosts[h].ports) \u0026\u0026 facts.hosts[h].ports.exists(p, p.port == 5433)) ? 5434 : null","why":"5433 is taken on a host"}},"pg_password":{"type":"string","format":"password","title":"Superuser password","description":"The same on every node; it only bootstraps a new cluster, a running one\nis rotated with `tembo rotate-password`.","x-pack-env":"TEMBO_PG_PASSWORD","x-pack-i18n":{"ru":{"description":"Одинаковый на всех узлах; задаёт только новый кластер, у работающего\nменяется командой `tembo rotate-password`.","title":"Пароль суперпользователя"}}},"config":{"type":"string","title":"Tags file","description":"The file of the node's tags: loaded first, the environment wins over it.","default":"/etc/tembo/tembo.env","x-pack-env":"TEMBO_CONFIG","x-pack-i18n":{"ru":{"description":"Файл тегов узла: читается первым, окружение важнее.","title":"Файл тегов"}}},"node":{"properties":{"raft_retention_log_size":{"type":"integer","title":"Raft log kept","description":"Bytes of applied raft log to keep; older entries are compacted into the snapshot.","default":8388608,"x-pack-i18n":{"ru":{"description":"Сколько байт применённого журнала raft хранить; более старое сжимается в снимок.","title":"Хранимый журнал raft"}}},"nofailover":{"type":"boolean","title":"Never primary","description":"The node is never the primary.","examples":[true],"x-pack-i18n":{"ru":{"description":"Узел никогда не становится первичным.","title":"Никогда не первичный"}}},"nosync":{"type":"boolean","title":"Never synchronous","description":"The node is never a synchronous standby.","x-pack-i18n":{"ru":{"description":"Узел никогда не становится синхронным резервным.","title":"Никогда не синхронный"}}},"failover_priority":{"type":"integer","title":"Failover priority","description":"Higher is preferred as a failover candidate.","x-pack-i18n":{"ru":{"description":"Больший приоритет предпочтительнее при переключении.","title":"Приоритет переключения"}}}},"additionalProperties":false,"type":"object","title":"Node","description":"The node's tags and the log it keeps.","x-pack-i18n":{"ru":{"description":"Теги узла и журнал, который он хранит.","title":"Узел"}}}},"additionalProperties":false,"type":"object","title":"Tembo","description":"PostgreSQL with raft; a node with no peers is a cluster of one.","x-pack":{"ports":{"api":8001,"pg":5432,"pg-ro":5434},"data":{"data":{"mountPath":"/var/lib/postgresql","size":"10Gi"}},"content":[{"path":"/etc/tembo/tembo.env","template":"tembo.env.ptmpl","values":"node","parseAs":"text","mode":"0640"}],"minimum":{"memory":"1Gi"},"readiness":{"http":"api/health"},"command":["tembo","run"]},"x-pack-actions":[{"name":"backup","description":"Dumps the database to a file on the instance.","command":["tembo","backup","--to","{{ .to }}","--format","{{ .format }}"],"timeout":"30m","params":{"type":"object","properties":{"format":{"type":"string","description":"The format of the dump.","default":"custom","enum":["custom","plain"],"x-pack-i18n":{"ru":{"description":"Формат выгрузки."}}},"to":{"type":"string","description":"The file the dump goes to.","x-pack-i18n":{"ru":{"description":"Файл, в который пишется выгрузка."}}}},"required":["to"],"additionalProperties":false},"x-pack-i18n":{"ru":{"description":"Выгружает базу в файл на экземпляре."}}},{"name":"restore","description":"Restores the database from a dump, over what it holds.","command":["tembo","restore","--from","{{ .from }}"],"mutating":true,"approve":true,"params":{"type":"object","properties":{"from":{"type":"string","description":"The dump to restore.","x-pack-i18n":{"ru":{"description":"Выгрузка для восстановления."}}}},"required":["from"],"additionalProperties":false},"x-pack-i18n":{"ru":{"description":"Восстанавливает базу из выгрузки поверх того, что в ней есть."}}}],"x-pack-diagnose":[{"id":"port-taken","match":"address already in use.*:5433|could not bind .*5433","cause":"postgres cannot listen: something on the host already listens on 5433","fix":[{"patch":"/pg_port","expr":"5434","why":"the port next to it"},{"command":"pack discover","why":"see what listens on the hosts"}],"x-pack-i18n":{"ru":{"cause":"postgres не может слушать: на хосте 5433 уже занят"}}}],"x-pack-groups":[{"id":"proxies","title":"Proxies","x-pack-i18n":{"ru":{"title":"Прокси"}}},{"id":"storage","title":"Storage","x-pack-i18n":{"ru":{"title":"Хранилище"}}}],"x-pack-i18n":{"ru":{"description":"PostgreSQL с raft; узел без соседей — кластер из одного.","title":"Tembo"}},"x-pack-langs":["en","ru"]}
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "properties": {
+    "id": {
+      "type": "string",
+      "maxLength": 63,
+      "pattern": "^[a-z0-9_]*$",
+      "title": "Node id",
+      "description": "Lowercase letters, digits and underscores; the hostname, dashes turned\ninto underscores, when unset.",
+      "examples": [
+        "db_1"
+      ],
+      "x-pack-env": "TEMBO_ID",
+      "x-pack-i18n": {
+        "ru": {
+          "description": "Строчные буквы, цифры и подчёркивания; если не задан — имя хоста,\nдефисы заменены подчёркиваниями.",
+          "title": "Идентификатор узла"
+        }
+      }
+    },
+    "listen": {
+      "type": "string",
+      "title": "Primary proxy",
+      "description": "The client proxy to the primary.",
+      "default": ":5432",
+      "x-pack-env": "TEMBO_LISTEN",
+      "x-pack-group": "proxies",
+      "x-pack-i18n": {
+        "ru": {
+          "description": "Клиентский прокси к первичному узлу.",
+          "title": "Прокси к первичному"
+        }
+      }
+    },
+    "listen_ro": {
+      "type": "string",
+      "title": "Standby proxy",
+      "description": "The client proxy spread over the standbys.",
+      "default": ":5434",
+      "x-pack-env": "TEMBO_LISTEN_RO",
+      "x-pack-group": "proxies",
+      "x-pack-i18n": {
+        "ru": {
+          "description": "Клиентский прокси, распределяющий по резервным узлам.",
+          "title": "Прокси к резервным"
+        }
+      }
+    },
+    "db": {
+      "type": "string",
+      "title": "Node database",
+      "description": "The bbolt file of the node.",
+      "default": "/var/lib/postgresql/tembo.db",
+      "x-pack-env": "TEMBO_DB",
+      "x-pack-group": "storage",
+      "x-pack-i18n": {
+        "ru": {
+          "description": "Файл bbolt узла.",
+          "title": "База узла"
+        }
+      }
+    },
+    "pg_data": {
+      "type": "string",
+      "title": "Data directory",
+      "description": "The Postgres data directory.",
+      "default": "/var/lib/postgresql/data",
+      "x-pack-env": "TEMBO_PG_DATA",
+      "x-pack-group": "storage",
+      "x-pack-i18n": {
+        "ru": {
+          "description": "Каталог данных Postgres.",
+          "title": "Каталог данных"
+        }
+      }
+    },
+    "pg_port": {
+      "type": "integer",
+      "maximum": 65535,
+      "minimum": 1,
+      "title": "Postgres port",
+      "description": "The port of Postgres itself, behind the proxies, the same on every node.",
+      "default": 5433,
+      "examples": [
+        5433
+      ],
+      "x-pack-env": "TEMBO_PG_PORT",
+      "x-pack-i18n": {
+        "ru": {
+          "description": "Порт самого Postgres за прокси, одинаковый на всех узлах.",
+          "title": "Порт Postgres"
+        }
+      },
+      "x-pack-suggest": {
+        "expr": "has(facts.hosts) \u0026\u0026 facts.hosts.exists(h, has(facts.hosts[h].ports) \u0026\u0026 facts.hosts[h].ports.exists(p, p.port == 5433)) ? 5434 : null",
+        "why": "5433 is taken on a host"
+      }
+    },
+    "pg_password": {
+      "type": "string",
+      "format": "password",
+      "title": "Superuser password",
+      "description": "The same on every node; it only bootstraps a new cluster, a running one\nis rotated with `tembo rotate-password`.",
+      "x-pack-env": "TEMBO_PG_PASSWORD",
+      "x-pack-i18n": {
+        "ru": {
+          "description": "Одинаковый на всех узлах; задаёт только новый кластер, у работающего\nменяется командой `tembo rotate-password`.",
+          "title": "Пароль суперпользователя"
+        }
+      }
+    },
+    "config": {
+      "type": "string",
+      "title": "Tags file",
+      "description": "The file of the node's tags: loaded first, the environment wins over it.",
+      "default": "/etc/tembo/tembo.env",
+      "x-pack-env": "TEMBO_CONFIG",
+      "x-pack-i18n": {
+        "ru": {
+          "description": "Файл тегов узла: читается первым, окружение важнее.",
+          "title": "Файл тегов"
+        }
+      }
+    },
+    "node": {
+      "properties": {
+        "raft_retention_log_size": {
+          "type": "integer",
+          "title": "Raft log kept",
+          "description": "Bytes of applied raft log to keep; older entries are compacted into the snapshot.",
+          "default": 8388608,
+          "x-pack-i18n": {
+            "ru": {
+              "description": "Сколько байт применённого журнала raft хранить; более старое сжимается в снимок.",
+              "title": "Хранимый журнал raft"
+            }
+          }
+        },
+        "nofailover": {
+          "type": "boolean",
+          "title": "Never primary",
+          "description": "The node is never the primary.",
+          "examples": [
+            true
+          ],
+          "x-pack-i18n": {
+            "ru": {
+              "description": "Узел никогда не становится первичным.",
+              "title": "Никогда не первичный"
+            }
+          }
+        },
+        "nosync": {
+          "type": "boolean",
+          "title": "Never synchronous",
+          "description": "The node is never a synchronous standby.",
+          "x-pack-i18n": {
+            "ru": {
+              "description": "Узел никогда не становится синхронным резервным.",
+              "title": "Никогда не синхронный"
+            }
+          }
+        },
+        "failover_priority": {
+          "type": "integer",
+          "title": "Failover priority",
+          "description": "Higher is preferred as a failover candidate.",
+          "x-pack-i18n": {
+            "ru": {
+              "description": "Больший приоритет предпочтительнее при переключении.",
+              "title": "Приоритет переключения"
+            }
+          }
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "title": "Node",
+      "description": "The node's tags and the log it keeps.",
+      "x-pack-i18n": {
+        "ru": {
+          "description": "Теги узла и журнал, который он хранит.",
+          "title": "Узел"
+        }
+      }
+    }
+  },
+  "additionalProperties": false,
+  "type": "object",
+  "title": "Tembo",
+  "description": "PostgreSQL with raft; a node with no peers is a cluster of one.",
+  "x-pack": {
+    "ports": {
+      "api": 8001,
+      "pg": 5432,
+      "pg-ro": 5434
+    },
+    "data": {
+      "data": {
+        "mountPath": "/var/lib/postgresql",
+        "size": "10Gi"
+      }
+    },
+    "content": [
+      {
+        "path": "/etc/tembo/tembo.env",
+        "template": "tembo.env.ptmpl",
+        "values": "node",
+        "parseAs": "text",
+        "mode": "0640"
+      }
+    ],
+    "minimum": {
+      "memory": "1Gi"
+    },
+    "readiness": {
+      "http": "api/health"
+    },
+    "command": [
+      "tembo",
+      "run"
+    ]
+  },
+  "x-pack-actions": [
+    {
+      "name": "backup",
+      "description": "Dumps the database to a file on the instance.",
+      "command": [
+        "tembo",
+        "backup",
+        "--to",
+        "{{ .to }}",
+        "--format",
+        "{{ .format }}"
+      ],
+      "timeout": "30m",
+      "params": {
+        "type": "object",
+        "properties": {
+          "format": {
+            "type": "string",
+            "description": "The format of the dump.",
+            "default": "custom",
+            "enum": [
+              "custom",
+              "plain"
+            ],
+            "x-pack-i18n": {
+              "ru": {
+                "description": "Формат выгрузки."
+              }
+            }
+          },
+          "to": {
+            "type": "string",
+            "description": "The file the dump goes to.",
+            "x-pack-i18n": {
+              "ru": {
+                "description": "Файл, в который пишется выгрузка."
+              }
+            }
+          }
+        },
+        "required": [
+          "to"
+        ],
+        "additionalProperties": false
+      },
+      "x-pack-i18n": {
+        "ru": {
+          "description": "Выгружает базу в файл на экземпляре."
+        }
+      }
+    },
+    {
+      "name": "restore",
+      "description": "Restores the database from a dump, over what it holds.",
+      "command": [
+        "tembo",
+        "restore",
+        "--from",
+        "{{ .from }}"
+      ],
+      "mutating": true,
+      "approve": true,
+      "params": {
+        "type": "object",
+        "properties": {
+          "from": {
+            "type": "string",
+            "description": "The dump to restore.",
+            "x-pack-i18n": {
+              "ru": {
+                "description": "Выгрузка для восстановления."
+              }
+            }
+          }
+        },
+        "required": [
+          "from"
+        ],
+        "additionalProperties": false
+      },
+      "x-pack-i18n": {
+        "ru": {
+          "description": "Восстанавливает базу из выгрузки поверх того, что в ней есть."
+        }
+      }
+    }
+  ],
+  "x-pack-diagnose": [
+    {
+      "id": "port-taken",
+      "match": "address already in use.*:5433|could not bind .*5433",
+      "cause": "postgres cannot listen: something on the host already listens on 5433",
+      "fix": [
+        {
+          "patch": "/pg_port",
+          "expr": "5434",
+          "why": "the port next to it"
+        },
+        {
+          "command": "pack discover",
+          "why": "see what listens on the hosts"
+        }
+      ],
+      "x-pack-i18n": {
+        "ru": {
+          "cause": "postgres не может слушать: на хосте 5433 уже занят"
+        }
+      }
+    }
+  ],
+  "x-pack-groups": [
+    {
+      "id": "proxies",
+      "title": "Proxies",
+      "x-pack-i18n": {
+        "ru": {
+          "title": "Прокси"
+        }
+      }
+    },
+    {
+      "id": "storage",
+      "title": "Storage",
+      "x-pack-i18n": {
+        "ru": {
+          "title": "Хранилище"
+        }
+      }
+    }
+  ],
+  "x-pack-i18n": {
+    "ru": {
+      "description": "PostgreSQL с raft; узел без соседей — кластер из одного.",
+      "title": "Tembo"
+    }
+  },
+  "x-pack-langs": [
+    "en",
+    "ru"
+  ]
+}

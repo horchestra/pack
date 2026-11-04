@@ -264,3 +264,31 @@ func TestStreamReaderGone(t *testing.T) {
 		t.Errorf("nothing installed:\n%s", out)
 	}
 }
+
+// The log is on stderr at the level asked, as JSON when asked; stdout is the command's alone; a level of none is
+// refused.
+func TestLogFlags(t *testing.T) {
+	d := releaseOf(t, generated(t), nil)
+	out, errOut, code := streamProcess(t, d, "plan", "--json", "--log-level", "trace", "--log-format", "json")
+	if code != 0 {
+		t.Fatalf("exit %d\n%s", code, errOut)
+	}
+	var p map[string]any
+	if err := json.Unmarshal([]byte(out), &p); err != nil || p["direction"] != "install" {
+		t.Errorf("stdout is not the plan alone: %v\n%s", err, out)
+	}
+	for _, want := range []string{`"component":"cmd"`, `"message":"start"`, `"component":"session"`, `"component":"cel"`, `"message":"done"`} {
+		if !strings.Contains(errOut, want) {
+			t.Errorf("stderr has no %s:\n%s", want, errOut)
+		}
+	}
+	// the default: nothing of what goes right
+	_, errOut, _ = streamProcess(t, d, "plan")
+	if strings.Contains(errOut, `"level"`) || strings.Contains(errOut, "DBG") {
+		t.Errorf("a log at the default level:\n%s", errOut)
+	}
+	_, errOut, code = streamProcess(t, d, "plan", "--log-level", "loud")
+	if code != 1 || !strings.Contains(errOut, `log level "loud"`) {
+		t.Errorf("a level of none: %d\n%s", code, errOut)
+	}
+}

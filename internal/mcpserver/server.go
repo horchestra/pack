@@ -17,8 +17,11 @@ import (
 	"os/exec"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+
+	"github.com/horchestra/pack/pkg/logging"
 )
 
 // Instructions are what the server tells the model of how to use it.
@@ -61,9 +64,15 @@ func (s *Server) call(ctx context.Context, args ...string) (*mcp.CallToolResult,
 	if cmd.Env == nil {
 		cmd.Env = os.Environ() // the zero Server's: pack's own, never an empty one
 	}
+	// the command logs at pack mcp's level, as JSON this process logs again; what it says is the log of the answer
+	cmd.Env = append(cmd.Env, logging.Current().Env()...)
 	var out, said bytes.Buffer
-	cmd.Stdout, cmd.Stderr = &out, &said
+	stderr := logging.Split("pack "+strings.Join(args, " "), &said)
+	cmd.Stdout, cmd.Stderr = &out, stderr
+	start := time.Now()
 	err := cmd.Run()
+	_ = stderr.Close()
+	logging.For("mcp").Debug().Strs("args", args).Dur("took", time.Since(start)).Err(err).Msg("tool")
 	r := result{OK: err == nil}
 	if b := bytes.TrimSpace(out.Bytes()); len(b) > 0 && json.Valid(b) {
 		r.Result = b

@@ -23,6 +23,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -43,6 +44,7 @@ import (
 	"k8s.io/client-go/tools/portforward"
 	"k8s.io/client-go/transport/spdy"
 
+	"github.com/horchestra/pack/pkg/logging"
 	"github.com/horchestra/pack/pkg/target/remote"
 )
 
@@ -175,13 +177,18 @@ func objects(in instance) (*corev1.Pod, *corev1.Secret, *corev1.Service, *networ
 		data[k] = []byte(v)
 	}
 	secret := &corev1.Secret{ObjectMeta: in.meta(), Type: corev1.SecretTypeOpaque, Data: data}
+	env := []corev1.EnvVar{{Name: remote.EnvAddress, Value: "tcp://0.0.0.0:" + remote.ImagePort}}
+	for _, kv := range logging.Current().Env() { // the target's log at pack's level, JSON pack follows (followLog)
+		k, v, _ := strings.Cut(kv, "=")
+		env = append(env, corev1.EnvVar{Name: k, Value: v})
+	}
 	pod := &corev1.Pod{ObjectMeta: in.meta(), Spec: corev1.PodSpec{
 		RestartPolicy:      corev1.RestartPolicyNever,
 		ServiceAccountName: in.cfg.serviceAccount,
 		Containers: []corev1.Container{{
 			Name:    "target",
 			Image:   in.image,
-			Env:     []corev1.EnvVar{{Name: remote.EnvAddress, Value: "tcp://0.0.0.0:" + remote.ImagePort}},
+			Env:     env,
 			EnvFrom: []corev1.EnvFromSource{{SecretRef: &corev1.SecretEnvSource{Name: in.name}}},
 			Ports:   []corev1.ContainerPort{{Name: "grpc", ContainerPort: int32(port)}},
 			// the target ends when its stdin closes: a Pod has one open as long as it lives
@@ -258,6 +265,23 @@ func removeOrphans(ctx context.Context, cs kubernetes.Interface, namespace, inst
 			_ = removePod(ctx, cs, namespace, p.Name)
 		}
 	}
+}
+
+// followLog logs again what the target's Pod writes — its log, as a process's stderr is read back — until ctx is
+// done or the Pod's log ends.
+func followLog(ctx context.Context, cs kubernetes.Interface, namespace, pod, target string) {
+	l := logging.For("k8s")
+	s, err := cs.CoreV1().Pods(namespace).GetLogs(pod, &corev1.PodLogOptions{Container: "target", Follow: true}).Stream(ctx)
+	if err != nil {
+		if ctx.Err() == nil {
+			l.Warn().Err(err).Str("pod", namespace+"/"+pod).Msg("the target's log cannot be followed")
+		}
+		return
+	}
+	defer s.Close()
+	w := logging.Writer(target)
+	defer w.Close()
+	_, _ = io.Copy(w, s)
 }
 
 // watchEnd waits for the Pod to end — its phase Failed or Succeeded, its container terminated, the Pod gone — and says
@@ -374,7 +398,8 @@ func forward(rc *rest.Config, cs kubernetes.Interface, namespace, pod string) (s
 		dialer = portforward.NewFallbackDialer(ws, dialer, func(err error) bool { return httpstream.IsUpgradeFailure(err) || httpstream.IsHTTPSProxyError(err) })
 	}
 	stop, ready := make(chan struct{}), make(chan struct{})
-	fw, err := portforward.NewOnAddresses(dialer, []string{"127.0.0.1"}, []string{"0:" + remote.ImagePort}, stop, ready, nil, os.Stderr)
+	fw, err := portforward.NewOnAddresses(dialer, []string{"127.0.0.1"}, []string{"0:" + remote.ImagePort}, stop, ready, nil,
+		logging.Writer("port-forward "+namespace+"/"+pod)) // what goes wrong of it, at warn
 	if err != nil {
 		return "", nil, err
 	}
@@ -449,6 +474,7 @@ func start(name, installation string, rt remote.Runtime) (*remote.Plugin, error)
 		remove()
 		return nil, fmt.Errorf("target %s: %w", name, err)
 	}
+	logging.For("k8s").Debug().Str("target", name).Str("pod", namespace+"/"+in.name).Str("image", rt.Image).Msg("pod created")
 	if err := waitRunning(ctx, cs, namespace, in.name, time.Second); err != nil {
 		remove()
 		return nil, fmt.Errorf("target %s: %w", name, err)
@@ -457,6 +483,7 @@ func start(name, installation string, rt remote.Runtime) (*remote.Plugin, error)
 	watch, unwatch := context.WithCancel(context.Background())
 	exited := make(chan error, 1)
 	go func() { exited <- watchEnd(watch, cs, namespace, in.name, 2*time.Second) }()
+	go followLog(watch, cs, namespace, in.name, name)
 	gone := func() { unwatch(); remove() }
 	addr, isForward := how(cfg, inCluster, in)
 	stop := gone

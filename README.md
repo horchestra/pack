@@ -26,13 +26,13 @@ The reference is in [docs/](docs/README.md). The targets (docker, ansible, k8s) 
 
 The directory a command runs in (`-C` names another), the way terraform runs in a root module:
 
-| file                                  | what                                                                                                                                                                                                      |
-|---------------------------------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| file                                  | what                                                                                                                                                                                                         |
+|---------------------------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | `release.yaml`                        | `pack:` a directory or `oci://host/repo:tag`; `values:` more files; `state: file` (default, `.pack/state.json`) or `target`; `id:` the installation's UUID (`state: target` only — `pack refresh` writes it) |
-| `values.yaml`, `values/`              | what the operator wants, in the pack's own words                                                                                                                                                          |
-| `env.yaml` (`--env x` → `env.x.yaml`) | `target`, `registry`, `run` (`jobs`, `strict`, `no_rollback`, `keep`, `journal_keep`), `secrets`, `store`, `keys` (where and how each key runs: replicas, resources, env)                                 |
-| `release.lock.json`                   | the digest a registry tag meant when `pack init` or `pack refresh` ran; commit it                                                                                                                                           |
-| `.pack/`                              | state, journal, the packs brought from a registry (`packs/<digest>/`)                                                                                                                                     |
+| `values.yaml`, `values/`              | what the operator wants, in the pack's own words                                                                                                                                                             |
+| `env.yaml` (`--env x` → `env.x.yaml`) | `target`, `registry`, `run` (`jobs`, `strict`, `no_rollback`, `keep`, `journal_keep`), `secrets`, `store`, `keys` (where and how each key runs: replicas, resources, env)                                    |
+| `release.lock.json`                   | the digest a registry tag meant when `pack init` or `pack refresh` ran; commit it                                                                                                                            |
+| `.pack/`                              | state, journal, the packs brought from a registry (`packs/<digest>/`)                                                                                                                                        |
 
 The command line adds nothing to a release.
 
@@ -73,14 +73,14 @@ string is what is not a field: the literals of the formula (`'postgres://'`, the
 
 |                                     |                                                                                                      |
 |-------------------------------------|------------------------------------------------------------------------------------------------------|
-| `init <oci://…\|dir> [dir]`         | make a release: `release.yaml`, `env.yaml`, a documented `values.yaml`, `AGENTS.md`; then refresh   |
+| `init <oci://…\|dir> [dir]`         | make a release: `release.yaml`, `env.yaml`, a documented `values.yaml`, `AGENTS.md`; then refresh    |
 | `refresh [--upgrade]`               | bring the pack from a registry into `.pack/packs`, lock its digest; make the `id` of `state: target` |
 | `values write`                      | `values.yaml` from the pack's schema, documented, the values kept                                    |
 | `check [dir\|ref]`                  | author checks on a pack; with no argument, also render the release's values against it               |
 | `plan`                              | the saga between the installed version and the wanted one, with drift                                |
 | `apply`                             | run the saga                                                                                         |
 | `delete`, `rollback [--to N]`       | take the installation away; take back an unfinished saga, or go back to a revision                   |
-| `next`                              | where the release is and what to run next (`--json` on any command: one JSON document on stdout)   |
+| `next`                              | where the release is and what to run next (`--json` on any command: one JSON document on stdout)     |
 | `history`                           | the revisions of the installation: every saga that ended                                             |
 | `template [--key K] [-o dir]`       | the rendered config files, nothing installed                                                         |
 | `graph [-f dot\|mermaid]`           | keys, dependencies, savepoints                                                                       |
@@ -117,7 +117,8 @@ are removed afterwards.
 
 ## Registries
 
-`oci-packer` (`github.com/arenadata/oci-packer`) does all the registry work. `pack init` (and `pack refresh` after it) resolves a tag to a digest
+`oci-packer` (`github.com/arenadata/oci-packer`) does all the registry work. `pack init` (and `pack refresh` after it)
+resolves a tag to a digest
 and extracts the pack with the packs mounted in it into `.pack/packs/<digest>/<name>/`; every other command reads
 that directory, so a release gives the same result whatever the tag becomes. `oci-packer get oci://host/repo:tag:path`
 reads one file of a pack without extracting it.

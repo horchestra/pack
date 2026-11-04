@@ -1,6 +1,6 @@
 name: openbao with the postgres it holds, its storage filled from it
 values:
-  openbao: {}
+  openbao: { }
   postgres:
     database: openbao
     superuser:
@@ -16,7 +16,7 @@ env:
           cpu: 500m
           memory: 1Gi
 expect:
-  problems: []
+  problems: [ ]
   files: golden/with-postgres
   apply:
     state: installed

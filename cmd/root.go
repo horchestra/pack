@@ -4,12 +4,15 @@ package cmd
 import (
 	"context"
 	"os"
+	"strings"
+	"time"
 
 	"github.com/spf13/cobra"
 
 	"github.com/horchestra/pack/internal/release"
 	"github.com/horchestra/pack/internal/session"
 	"github.com/horchestra/pack/internal/workdir"
+	"github.com/horchestra/pack/pkg/logging"
 	"github.com/horchestra/pack/pkg/saga"
 )
 
@@ -28,6 +31,10 @@ Registries: release.yaml names the variables that hold the credentials (username
 var (
 	chdir   string
 	envName string
+	// logLevel and logFormat are the log's (--log-level, --log-format); commandStart when the command started.
+	logLevel, logFormat string
+	commandStart        time.Time
+
 	// dir is the directory of this run; set before any command runs.
 	dir *workdir.Dir
 )
@@ -36,8 +43,11 @@ func init() {
 	pf := rootCmd.PersistentFlags()
 	pf.StringVarP(&chdir, "chdir", "C", "", "run in this directory, as if started there (a release: release.yaml, values, env.yaml)")
 	pf.StringVar(&envName, "env", os.Getenv("PACK_ENV"), "the environment: env.<name>.yaml of the release instead of env.yaml (PACK_ENV)")
+	pf.StringVar(&logLevel, "log-level", os.Getenv(logging.EnvLevel), "the log on stderr: "+strings.Join(logging.Levels, ", ")+" ("+logging.EnvLevel+"; "+logging.DefaultLevel+" by default); the targets log at it too")
+	pf.StringVar(&logFormat, "log-format", os.Getenv(logging.EnvFormat), "the log's format: console (a person's) or json ("+logging.EnvFormat+")")
 	pf.BoolVar(&jsonOut, "json", false, "the result as one JSON document on stdout, what is said along the way on stderr; an error as {\"error\": {code, message}, \"next\": […]}")
-	rootCmd.PersistentPostRun = func(*cobra.Command, []string) {
+	rootCmd.PersistentPostRun = func(c *cobra.Command, _ []string) {
+		logging.For("cmd").Debug().Str("command", c.CommandPath()).Dur("took", time.Since(commandStart)).Msg("done")
 		if f, ok := stdout.(*os.File); ok && jsonOut {
 			os.Stdout = f // the next command of a process (a test's) starts as it was
 		}
@@ -45,7 +55,12 @@ func init() {
 			stopStream()
 		}
 	}
-	rootCmd.PersistentPreRun = run(func(c *cobra.Command, _ []string) error {
+	rootCmd.PersistentPreRun = run(func(c *cobra.Command, args []string) error {
+		if err := logging.Setup(logging.Config{Level: logLevel, Format: logFormat}, os.Stderr); err != nil {
+			return err
+		}
+		commandStart = time.Now()
+		logging.For("cmd").Debug().Str("command", c.CommandPath()).Strs("args", args).Str("version", c.Root().Version).Msg("start")
 		if jsonOut {
 			asJSON()
 		}
@@ -66,10 +81,16 @@ func init() {
 		if err != nil {
 			return err
 		}
+		logging.For("cmd").Debug().Str("dir", mustGetwd()).Str("env", envName).Str("pack", rel.Pack).Msg("release")
 		dir = workdir.New(rel, envName)
 		dir.Ensure()
 		return nil
 	})
+}
+
+func mustGetwd() string {
+	wd, _ := os.Getwd()
+	return wd
 }
 
 // Execute runs the command line.

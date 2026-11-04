@@ -30,12 +30,15 @@ PackSdk.generate(Path.of("out"), new OpenBao());   // out/openbao/…, out/tembo
 
 - `@Setting` takes the Go tags: `json`, `env`, `readOnly`, `omitempty` (without it
   the field is required), `skip`, and what a value may be — `enumOf = {"a", "b"}` (written as text, read as the
-  field's type), `pattern`, `minimum`, `maximum`, `minLength`, `maxLength`. A pack class needs a no-argument constructor; `setDefaults` sets the defaults.
-- The files a pack ships are in `content/` under `Meta.dir(…)` (the working directory by default); `Root.content(new Root.File(path)…)` says which go where.
+  field's type), `pattern`, `minimum`, `maximum`, `minLength`, `maxLength`. A pack class needs a no-argument
+  constructor; `setDefaults` sets the defaults.
+- The files a pack ships are in `content/` under `Meta.dir(…)` (the working directory by default);
+  `Root.content(new Root.File(path)…)` says which go where.
 - The documentation of the settings is in `docs/<lang>.yaml` beside `content/`, read here without a library the way the
   Go sdk reads it ([../../docs/authoring.md](../../docs/authoring.md#documentation)); `new Rule(…).id(…)` names a rule
   whose message it translates.
-- **The names of fields in formulas and rules are not written by hand**: `Paths.pointer(OpenBao.class, "bao", "storage")`
+- **The names of fields in formulas and rules are not written by hand**:
+  `Paths.pointer(OpenBao.class, "bao", "storage")`
   is `/openbao/storage`, `Paths.dotted(OpenBao.class, "postgres")` is `postgres`. The arguments are the Java fields'
   names, the result is the schema's; a field that is not there is a `SchemaException`.
 

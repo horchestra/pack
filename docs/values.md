@@ -45,7 +45,8 @@ postgres:
 - What the release gives is written as it is. A setting it does not give is a commented line — `#log_level: info`, its
   default, an example, or a secret's `secretRef` — to uncomment: the file written again is the same file. A held pack
   not given is commented out whole (named, even empty, it is selected).
-- The description, `e.g.` (examples), `one of`, `pattern`, the bounds (`from 1 to 65535`, `at most 63 characters`), `filled by a formula` and `required` come from the schema;
+- The description, `e.g.` (examples), `one of`, `pattern`, the bounds (`from 1 to 65535`, `at most 63 characters`),
+  `filled by a formula` and `required` come from the schema;
   groups are headings, `# --- Logging ---`.
 - A value the tool filled says where it came from, `# source: suggest — why`, while it is the value it wrote
   (`.pack/values.sources.json`, which what fills values for the operator saves — not values write itself); a value the

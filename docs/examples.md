@@ -1,7 +1,8 @@
 # Examples
 
 `examples/postgres` is one pack — a single-instance PostgreSQL with an install hook, a major-version upgrade hook with
-its compensation, a formula, and `Content`: a `properties` file, a script rendered from the values and one shipped as it is — written
+its compensation, a formula, and `Content`: a `properties` file, a script rendered from the values and one shipped as it
+is — written
 three times, in Go,
 Python and Java. All three generate the same artifacts, byte for byte, which `examples/postgres/golden` keeps and every
 test compares with.
@@ -22,12 +23,15 @@ What each shows, in the same order in all three:
   exclusive, with a compensation that runs in the old image) and `analyze` (`postUpgrade`);
 - **a formula** — `conf.shared_buffers` is a quarter of the memory limit unless the operator wrote it; its key is the
   field's pointer, found from the field itself ([authoring.md](authoring.md#formulas-and-rules));
-- **`Content`** — `postgresql.conf` from `conf`; the scripts the hooks run, mode 0755: `init-extensions.sh` is a template
-  over `init_extensions` and names the server, for a hook is a container of its own; `restore-15.sh` is shipped as it is.
+- **`Content`** — `postgresql.conf` from `conf`; the scripts the hooks run, mode 0755: `init-extensions.sh` is a
+  template
+  over `init_extensions` and names the server, for a hook is a container of its own; `restore-15.sh` is shipped as it
+  is.
 
 The generated directory is what `oci-packer` pushes ([registry.md](registry.md)).
 
-`examples/docker` is a pack with no image: Docker Engine from Docker's own repositories on Debian and Fedora, for a target
+`examples/docker` is a pack with no image: Docker Engine from Docker's own repositories on Debian and Fedora, for a
+target
 that installs OS packages. `examples/postgres` and `examples/openbao` can be installed that way too
 ([authoring.md](authoring.md#installing-from-os-packages)): `tests/e2e` does it on real Debian and Fedora hosts.
 

@@ -12,6 +12,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/horchestra/pack/pkg/logging"
 	"github.com/horchestra/pack/pkg/target"
 )
 
@@ -235,6 +236,9 @@ func containerArgs(c container, rt Runtime) (args []string, addr string, err err
 		args = append(args, "-p", "127.0.0.1:"+c.port+":"+imagePort, "-e", EnvAddress+"=tcp://0.0.0.0:"+imagePort)
 	}
 	args = append(args, "-e", EnvToken+"="+c.token)
+	for _, kv := range logging.Current().Env() { // the container's log at pack's level, JSON pack reads back
+		args = append(args, "-e", kv)
+	}
 	user := rt.User
 	if len(user) == 0 {
 		user = defaultUser()

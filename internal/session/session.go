@@ -19,6 +19,7 @@ import (
 	"github.com/horchestra/pack/pkg/bundle"
 	"github.com/horchestra/pack/pkg/environment"
 	"github.com/horchestra/pack/pkg/graph"
+	"github.com/horchestra/pack/pkg/logging"
 	"github.com/horchestra/pack/pkg/render"
 	"github.com/horchestra/pack/pkg/saga"
 	"github.com/horchestra/pack/pkg/saga/storage"
@@ -75,6 +76,8 @@ func Open(ctx context.Context, d *workdir.Dir, readOnly bool) (*Session, error) 
 	if err := pinRuntime(s.Target, env.Settings, lock, d.Path); err != nil {
 		return nil, err
 	}
+	log := logging.For("session")
+	log.Debug().Str("installation", id).Str("target", s.Target).Str("store", env.Store.Provider).Msg("open")
 	if s.Inst, err = target.Open(s.Target, id, env.Settings); err != nil {
 		return nil, err
 	}
@@ -102,6 +105,7 @@ func Open(ctx context.Context, d *workdir.Dir, readOnly bool) (*Session, error) 
 		if err := pinRuntime(t.Target, t.Settings, lock, d.Path); err != nil {
 			return nil, fmt.Errorf("targets.%s: %w", tn, err)
 		}
+		log.Debug().Str("entry", tn).Str("target", t.Target).Msg("open another target")
 		oi, err := target.Open(t.Target, id, t.Settings)
 		if err != nil {
 			return nil, fmt.Errorf("targets.%s: %w", tn, err)

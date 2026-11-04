@@ -13,6 +13,8 @@ import (
 	"os"
 	"strings"
 	"time"
+
+	"github.com/horchestra/pack/pkg/logging"
 )
 
 func init() {
@@ -54,7 +56,7 @@ func openKV2(c Config) (Store, error) {
 		mount = defaultMount
 	}
 	return &kv2{addr: strings.TrimRight(c.Addr, "/"), mount: mount, token: c.Token,
-		client: &http.Client{Transport: tr, Timeout: 30 * time.Second}}, nil
+		client: &http.Client{Transport: logging.Transport("store", tr), Timeout: 30 * time.Second}}, nil
 }
 
 func (s *kv2) url(path string) string {
@@ -77,7 +79,11 @@ func (s *kv2) do(ctx context.Context, method, path string, body []byte) (*http.R
 	return s.client.Do(req)
 }
 
-func (s *kv2) Get(ctx context.Context, path string) (map[string]string, bool, error) {
+func (s *kv2) Get(ctx context.Context, path string) (fields map[string]string, found bool, err error) {
+	defer func() {
+		// the names of the fields, never their values
+		logging.For("store").Debug().Str("op", "get").Str("path", path).Bool("found", found).Int("fields", len(fields)).Err(err).Msg("secret")
+	}()
 	resp, err := s.do(ctx, http.MethodGet, path, nil)
 	if err != nil {
 		return nil, false, err
@@ -113,7 +119,10 @@ func (s *kv2) Get(ctx context.Context, path string) (map[string]string, bool, er
 	return out, true, nil
 }
 
-func (s *kv2) Put(ctx context.Context, path string, fields map[string]string) error {
+func (s *kv2) Put(ctx context.Context, path string, fields map[string]string) (err error) {
+	defer func() {
+		logging.For("store").Debug().Str("op", "put").Str("path", path).Int("fields", len(fields)).Err(err).Msg("secret")
+	}()
 	body, err := json.Marshal(map[string]any{"data": fields})
 	if err != nil {
 		return err

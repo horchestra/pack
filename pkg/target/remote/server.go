@@ -23,12 +23,14 @@ import (
 	"os"
 	"strings"
 	"sync"
+	"time"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 
+	"github.com/horchestra/pack/pkg/logging"
 	"github.com/horchestra/pack/pkg/render"
 	"github.com/horchestra/pack/pkg/target"
 	"github.com/horchestra/pack/pkg/target/remote/remotepb"
@@ -85,17 +87,24 @@ func Serve(name string, f target.Factory, caps ...string) error {
 	if err != nil {
 		return err
 	}
-	s := grpc.NewServer(grpc.MaxRecvMsgSize(MaxMessage), grpc.MaxSendMsgSize(MaxMessage), grpc.UnaryInterceptor(func(ctx context.Context, req any, _ *grpc.UnaryServerInfo, h grpc.UnaryHandler) (any, error) {
+	// a target logs as pack tells it (PACK_LOG_LEVEL, PACK_LOG_FORMAT): JSON on stderr, which pack reads back
+	if err := logging.Setup(logging.FromEnv(), os.Stderr); err != nil {
+		return err
+	}
+	log := logging.For("serve")
+	logUnary, logStream := serverLog("")
+	s := grpc.NewServer(grpc.MaxRecvMsgSize(MaxMessage), grpc.MaxSendMsgSize(MaxMessage), grpc.ChainUnaryInterceptor(func(ctx context.Context, req any, _ *grpc.UnaryServerInfo, h grpc.UnaryHandler) (any, error) {
 		if err := authorized(ctx, token); err != nil {
 			return nil, err
 		}
 		return h(ctx, req)
-	}), grpc.StreamInterceptor(func(srv any, ss grpc.ServerStream, _ *grpc.StreamServerInfo, h grpc.StreamHandler) error {
+	}, logUnary), grpc.ChainStreamInterceptor(func(srv any, ss grpc.ServerStream, _ *grpc.StreamServerInfo, h grpc.StreamHandler) error {
 		if err := authorized(ss.Context(), token); err != nil {
 			return err
 		}
 		return h(srv, ss)
-	}))
+	}, logStream))
+	log.Debug().Str("target", name).Str("network", l.Addr().Network()).Strs("caps", caps).Msg("listening")
 	srv := &server{name: name, f: f, caps: caps}
 	defer srv.close()
 	remotepb.RegisterTargetServer(s, srv)
@@ -104,6 +113,7 @@ func Serve(name string, f target.Factory, caps ...string) error {
 	go func() {
 		// pack holds our stdin; EOF means pack is gone or done with us.
 		_, _ = io.Copy(io.Discard, os.Stdin)
+		log.Debug().Str("target", name).Msg("stdin closed: stopping")
 		s.GracefulStop()
 	}()
 	if err := <-done; err != nil && !errors.Is(err, grpc.ErrServerStopped) {
@@ -368,18 +378,26 @@ func (s *server) Execute(req *remotepb.ExecuteRequest, stream remotepb.Target_Ex
 	if err != nil {
 		return status.Error(codes.InvalidArgument, err.Error())
 	}
+	log := logging.For("step").With().Str("target", s.name).Int("n", step.N).Str("key", step.Key).Str("kind", step.Kind).
+		Str("name", step.Name).Bool("rollback", step.Rollback).Logger()
+	log.Debug().Msg("step")
 	var sendErr error
 	events := func(msg string) {
+		log.Trace().Msg(msg) // what the step says pack hears too: here, as the target said it
 		if sendErr == nil {
 			sendErr = stream.Send(&remotepb.ExecuteEvent{Message: msg})
 		}
 	}
 	last := &remotepb.ExecuteEvent{Done: true}
+	start := time.Now()
 	if err := inst.Execute(stream.Context(), step, events); err != nil {
 		last.Error = err.Error()
 		if len(last.Error) == 0 {
 			last.Error = "failed"
 		}
+		log.Warn().Err(err).Dur("took", time.Since(start)).Msg("step failed")
+	} else {
+		log.Debug().Dur("took", time.Since(start)).Msg("step done")
 	}
 	if sendErr != nil {
 		return sendErr

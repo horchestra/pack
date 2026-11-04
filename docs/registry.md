@@ -31,7 +31,8 @@ being `packs` unless `generate --repo` says otherwise; the packs a pack holds ar
 
 The order is not a convention: an `oci://repo:tag` item of a pack file names **no registry**; it is mounted from the
 registry being pushed to, so the image and every held pack must already be there. `pack.yaml` is
-the pack file: `repository`, `Meta` as annotations (`pack.name`, `pack.version` and the `org.opencontainers.image.*` ones),
+the pack file: `repository`, `Meta` as annotations (`pack.name`, `pack.version` and the `org.opencontainers.image.*`
+ones),
 the image (marked `pack.image`), the schema, the templates (`dir://templates/`) and each held pack.
 When a pack is extracted, an index that mixes an image with built files is unpacked; an index
 of images with
@@ -77,7 +78,8 @@ packs mounted in it, into `.pack/packs/<digest>/<name>/`. The digest goes into `
 
 Every other command reads that directory and never the registry, so **a release gives the same result whatever the tag
 becomes**: commit the lock. `pack refresh` brings what the release names — after a clone, or a change of
-`release.yaml` — reading the locked digest; `--upgrade` takes what the tag means now and rewrites the lock. A plain-HTTP registry (`localhost:5001`) needs `registry: {plain_http: true}` in
+`release.yaml` — reading the locked digest; `--upgrade` takes what the tag means now and rewrites the lock. A plain-HTTP
+registry (`localhost:5001`) needs `registry: {plain_http: true}` in
 `release.yaml`; a target from a plain-HTTP registry says so in its own source
 (`targets: {docker: {url: oci://…, plain_http: true}}`).
 

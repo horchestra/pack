@@ -6,9 +6,11 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"time"
 
 	"github.com/horchestra/pack/internal/oci"
 	"github.com/horchestra/pack/internal/release"
+	"github.com/horchestra/pack/pkg/logging"
 	"github.com/horchestra/pack/pkg/render"
 	"github.com/horchestra/pack/pkg/target"
 )
@@ -179,6 +181,7 @@ func fail(err error) {
 		b, _ := json.MarshalIndent(failure{Error: e, Next: nextOf(err, e.Code)}, "", "  ")
 		_, _ = stdout.Write(append(b, '\n'))
 	}
+	logging.For("cmd").Debug().Err(err).Dur("took", time.Since(commandStart)).Msg("failed")
 	_, _ = fmt.Fprintln(os.Stderr, "pack:", err)
 	os.Exit(1)
 }

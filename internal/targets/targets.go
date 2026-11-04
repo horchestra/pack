@@ -33,6 +33,7 @@ import (
 	"time"
 
 	"github.com/horchestra/pack/internal/oci"
+	"github.com/horchestra/pack/pkg/logging"
 )
 
 // Prefix names the program of a target: pack-target-<name>.
@@ -71,6 +72,7 @@ func Fetch(ctx context.Context, name, source, dir string, o oci.Options) (string
 	if err != nil {
 		return "", fmt.Errorf("target %s: source %q: %w", name, source, err)
 	}
+	logging.For("targets").Debug().Str("target", name).Str("source", u.Redacted()).Msg("fetch")
 	var data []byte
 	switch u.Scheme {
 	case "http", "https":
@@ -113,7 +115,7 @@ func fromHTTP(ctx context.Context, name, src string, u *url.URL) ([]byte, error)
 	if err != nil {
 		return nil, err
 	}
-	resp, err := (&http.Client{Timeout: 10 * time.Minute}).Do(req)
+	resp, err := (&http.Client{Timeout: 10 * time.Minute, Transport: logging.Transport("targets", nil)}).Do(req)
 	if err != nil {
 		return nil, err
 	}

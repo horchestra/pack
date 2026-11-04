@@ -24,12 +24,12 @@ Postgres *tembo.Config `json:"postgres,omitempty"` // a pack of its own; a point
 The fields are the application's own settings: the `json` tag is the key in the schema (use the application's own
 name), **a field without `omitempty` is required**. Other tags:
 
-| tag                                                      |                                                                                  |
-|----------------------------------------------------------|----------------------------------------------------------------------------------|
-| `env:"NAME"`                                             | the field is the environment variable `NAME`                                     |
-| `jsonschema:"readOnly=true"`                             | the operator does not set it: a value written for it is refused                  |
-| `jsonschema:"enum=a,enum=b"`                             | the values it may be (a string, an integer, a number)                            |
-| `jsonschema:"minimum=1,maximum=65535"`                   | the least and the most a number is                                               |
+| tag                                                      |                                                                                                                                                                                                                                               |
+|----------------------------------------------------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `env:"NAME"`                                             | the field is the environment variable `NAME`                                                                                                                                                                                                  |
+| `jsonschema:"readOnly=true"`                             | the operator does not set it: a value written for it is refused                                                                                                                                                                               |
+| `jsonschema:"enum=a,enum=b"`                             | the values it may be (a string, an integer, a number)                                                                                                                                                                                         |
+| `jsonschema:"minimum=1,maximum=65535"`                   | the least and the most a number is                                                                                                                                                                                                            |
 | `jsonschema:"pattern=^[a-z]+$,minLength=1,maxLength=63"` | what a string matches, its least and most characters; a comma in a value is `\,` — so a value cannot end with a backslash (it would swallow the next clause), and a tag in backquotes holds no backquote: `pack author scaffold` refuses both |
 
 `sdk.Secret` is a credential leaf: the operator gives a reference (`secretRef: {name, key}`), never a value.

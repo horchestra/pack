@@ -20,6 +20,7 @@ import (
 	"time"
 
 	"github.com/horchestra/pack/pkg/graph"
+	"github.com/horchestra/pack/pkg/logging"
 	"github.com/horchestra/pack/pkg/runner"
 )
 
@@ -217,6 +218,9 @@ func (r *Run) noteStep(kind Kind, node, step, msg string, err error) {
 	e := Entry{Time: time.Now().UTC(), Run: r.runID, Kind: kind, Node: node, Step: step, Message: msg}
 	if err != nil {
 		e.Error = err.Error()
+	}
+	if l := logging.For("saga"); l.Debug().Enabled() {
+		l.Debug().Str("saga", e.Run).Str("kind", string(e.Kind)).Str("node", e.Node).Str("step", e.Step).Str("error", e.Error).Msg(e.Message)
 	}
 	r.jmu.Lock()
 	defer r.jmu.Unlock()

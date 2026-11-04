@@ -1,21 +1,22 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
-  <modelVersion>4.0.0</modelVersion>
-  <groupId>io.horchestra</groupId>
-  <artifactId>pack-sdk</artifactId>
-  <version>0.1.0</version>
-  <packaging>jar</packaging>
-  <name>pack-sdk</name>
-  <description>Author side of pack: write a pack as a Java class, generate schema.json, pack.yaml and templates/</description>
+    <modelVersion>4.0.0</modelVersion>
+    <groupId>io.horchestra</groupId>
+    <artifactId>pack-sdk</artifactId>
+    <version>0.1.0</version>
+    <packaging>jar</packaging>
+    <name>pack-sdk</name>
+    <description>Author side of pack: write a pack as a Java class, generate schema.json, pack.yaml and templates/
+    </description>
 
-  <properties>
-    <maven.compiler.release>21</maven.compiler.release>
-    <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-  </properties>
+    <properties>
+        <maven.compiler.release>21</maven.compiler.release>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+    </properties>
 
-  <!-- no dependencies: the JSON and the little YAML are written here -->
-  <build>
-    <testSourceDirectory>src/test/java</testSourceDirectory>
-  </build>
+    <!-- no dependencies: the JSON and the little YAML are written here -->
+    <build>
+        <testSourceDirectory>src/test/java</testSourceDirectory>
+    </build>
 </project>

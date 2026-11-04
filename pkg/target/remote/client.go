@@ -24,6 +24,7 @@ import (
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 
+	"github.com/horchestra/pack/pkg/logging"
 	"github.com/horchestra/pack/pkg/render"
 	"github.com/horchestra/pack/pkg/target"
 	"github.com/horchestra/pack/pkg/target/remote/remotepb"
@@ -93,6 +94,7 @@ type Plugin struct {
 	conn    *grpc.ClientConn
 	client  remotepb.TargetClient
 	caps    []string
+	relay   io.WriteCloser // the process's stdout and stderr: its log, logged again
 }
 
 // Launch finds the program of a target in .pack/bin (Find), starts it and shakes hands with it.
@@ -136,9 +138,16 @@ func startTCP(name, bin string) (*Plugin, error) {
 // start runs the process and shakes hands with it at addr, retrying until it
 // answers, it exits, or the time is up.
 func (p *Plugin) start(addr, token string, within time.Duration) (*Plugin, error) {
-	p.cmd.Stdout = os.Stderr // a provider has nothing to say on pack's stdout
+	// a target has nothing to say on pack's stdout: what it writes is its log, logged again under pack's
+	p.relay = logging.Writer(p.name)
+	p.cmd.Stdout, p.cmd.Stderr = p.relay, p.relay
+	p.cmd.WaitDelay = 5 * time.Second // a child of the target that keeps the pipe open does not keep Wait from returning
+	if p.cmd.Env == nil {
+		p.cmd.Env = os.Environ()
+	}
+	p.cmd.Env = append(p.cmd.Env, logging.Current().Env()...)
 	detach(p.cmd)
-	p.cmd.Stderr = os.Stderr
+	logging.For("target").Debug().Str("target", p.name).Str("program", p.what).Str("addr", addr).Msg("starting")
 	var err error
 	if p.stdin, err = p.cmd.StdinPipe(); err != nil {
 		p.cleanup()
@@ -149,7 +158,11 @@ func (p *Plugin) start(addr, token string, within time.Duration) (*Plugin, error
 		return nil, fmt.Errorf("target %s: %w", p.name, err)
 	}
 	p.exited = make(chan error, 1)
-	go func() { p.exited <- p.cmd.Wait() }()
+	go func() {
+		err := p.cmd.Wait()
+		_ = p.relay.Close()
+		p.exited <- err
+	}()
 	return p.dial(addr, token, within)
 }
 
@@ -175,8 +188,9 @@ func (p *Plugin) dial(addr, token string, within time.Duration) (*Plugin, error)
 	}
 	// the provider is starting: try often, not after gRPC's usual second
 	connect := grpc.ConnectParams{Backoff: backoff.Config{BaseDelay: 20 * time.Millisecond, Multiplier: 1.5, MaxDelay: time.Second}, MinConnectTimeout: time.Second}
+	logUnary, logStream := clientLog(p.name)
 	if p.conn, err = grpc.NewClient(addr, grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithConnectParams(connect),
-		grpc.WithUnaryInterceptor(auth), grpc.WithStreamInterceptor(authStream),
+		grpc.WithChainUnaryInterceptor(auth, logUnary), grpc.WithChainStreamInterceptor(authStream, logStream),
 		grpc.WithDefaultCallOptions(grpc.MaxCallRecvMsgSize(MaxMessage), grpc.MaxCallSendMsgSize(MaxMessage))); err != nil {
 		p.Close()
 		return nil, err
