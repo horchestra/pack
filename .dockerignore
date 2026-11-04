@@ -1,0 +1,10 @@
+.git
+.github
+bin
+out
+operator
+targets
+tests/e2e/testdata
+*.tar.gz
+.dockerignore
+Dockerfile

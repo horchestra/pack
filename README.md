@@ -28,7 +28,7 @@ The directory a command runs in (`-C` names another), the way terraform runs in 
 
 | file                                  | what                                                                                                                                                                                                         |
 |---------------------------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| `release.yaml`                        | `pack:` a directory or `oci://host/repo:tag`; `values:` more files; `state: file` (default, `.pack/state.json`) or `target`; `id:` the installation's UUID (`state: target` only — `pack refresh` writes it) |
+| `release.yaml`                        | `pack:` a directory or `oci://host/repo:tag`; `values:` more files; `state: file` (default, `.pack/state.json`), `target` or `db` (a database, the DSN in `PACK_STATE_DSN`); `id:` the installation's UUID (`state: target` and `state: db` — `pack refresh` writes it) |
 | `values.yaml`, `values/`              | what the operator wants, in the pack's own words                                                                                                                                                             |
 | `env.yaml` (`--env x` → `env.x.yaml`) | `target`, `registry`, `run` (`jobs`, `strict`, `no_rollback`, `keep`, `journal_keep`), `secrets`, `store`, `keys` (where and how each key runs: replicas, resources, env)                                    |
 | `release.lock.json`                   | the digest a registry tag meant when `pack init` or `pack refresh` ran; commit it                                                                                                                            |
@@ -125,9 +125,13 @@ are removed afterwards.
 
 `oci-packer` (`github.com/arenadata/oci-packer`) does all the registry work. `pack init` (and `pack refresh` after it)
 resolves a tag to a digest
-and extracts the pack with the packs mounted in it into `.pack/packs/<digest>/<name>/`; every other command reads
+and extracts the pack with the packs mounted in it into the cache's `packs/<digest>/<name>/` (`PACK_CACHE`,
+`~/.cache/pack` by default, shared by every release); every other command reads
 that directory, so a release gives the same result whatever the tag becomes. `oci-packer get oci://host/repo:tag:path`
 reads one file of a pack without extracting it.
+
+The `Dockerfile` builds pack into an image (with git and openssh-client, as the unprivileged `pack`,
+`PACK_CACHE=/cache`): how an operator's job runs it. The release workflow publishes it to ghcr.io and says its digest.
 
 ## Tests
 

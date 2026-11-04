@@ -60,6 +60,9 @@ test-e2e: ## openbao from a registry on a real Docker engine (dev, raft, postgre
 test-e2e-hosts: ## the packs from OS packages on real Debian and Fedora hosts and from a registry mirror (ansible): slow, needs the internet
 	cd tests/e2e && $(GO) test -count=1 -timeout 20m -run 'TestFromOSPackages|TestFromARegistryMirror' ./...
 
+test-e2e-image: ## the image of pack (the Dockerfile): pack version and an apply inside it, and the state on PostgreSQL
+	cd tests/e2e && $(GO) test -count=1 -timeout 20m -run 'TestPackInAContainer|TestStateInPostgres' ./...
+
 test-e2e-all: ## all of the e2e
 	cd tests/e2e && $(GO) test -count=1 -timeout 20m ./...
 
