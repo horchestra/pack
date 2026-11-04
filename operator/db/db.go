@@ -43,6 +43,16 @@ func Open(ctx context.Context, dsn string) (*DB, error) {
 	}
 	if driver == "sqlite" {
 		sdb.SetMaxOpenConns(1) // one writer, no "database is locked"
+		for _, pragma := range []string{
+			"PRAGMA journal_mode = WAL", // readers never block the one writer
+			"PRAGMA busy_timeout = 10000",
+			"PRAGMA synchronous = NORMAL",
+		} {
+			if _, err := sdb.ExecContext(ctx, pragma); err != nil {
+				_ = sdb.Close()
+				return nil, fmt.Errorf("sqlite: %w", err)
+			}
+		}
 	}
 	d := &DB{DB: sdb, driver: driver}
 	if err := d.migrate(ctx); err != nil {
@@ -70,7 +80,9 @@ func parse(dsn string) (driver, name string, err error) {
 	return "", "", fmt.Errorf("db %q: postgres://… or sqlite://<path>", dsn)
 }
 
-// migrate applies the migrations after the newest applied, each in a transaction, in name order.
+// migrate applies the migrations after the newest applied, each in a transaction, in version order. A migration
+// is NNNN_what.sql, or NNNN_what.pg.sql / NNNN_what.sqlite.sql where the dialects differ — the driver's own file
+// wins; the version is recorded once either way.
 func (d *DB) migrate(ctx context.Context) error {
 	if _, err := d.ExecContext(ctx, `create table if not exists operator_migrations (
 		version integer primary key,
@@ -85,14 +97,42 @@ func (d *DB) migrate(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	sort.Strings(names)
+	dialect := "pg"
+	if d.SQLite() {
+		dialect = "sqlite"
+	}
+	byVersion := map[int]map[string]string{} // version → variant ("" | pg | sqlite) → file
 	for _, name := range names {
 		var v int
-		if _, err := fmt.Sscanf(name, "migrations/%d_", &v); err != nil {
+		rest := ""
+		if _, err := fmt.Sscanf(name, "migrations/%d_%s", &v, &rest); err != nil {
 			return fmt.Errorf("a migration's name is NNNN_what.sql: %s", name)
 		}
+		variant := ""
+		base := strings.TrimSuffix(strings.TrimPrefix(name, "migrations/"), ".sql")
+		if i := strings.LastIndex(base, "."); i >= 0 {
+			variant = base[i+1:]
+		}
+		if byVersion[v] == nil {
+			byVersion[v] = map[string]string{}
+		}
+		byVersion[v][variant] = name
+	}
+	versions := make([]int, 0, len(byVersion))
+	for v := range byVersion {
+		versions = append(versions, v)
+	}
+	sort.Ints(versions)
+	for _, v := range versions {
 		if v <= applied {
 			continue
+		}
+		name := byVersion[v][dialect]
+		if len(name) == 0 {
+			name = byVersion[v][""]
+		}
+		if len(name) == 0 {
+			return fmt.Errorf("migration %d has no file for %s", v, dialect)
 		}
 		body, err := migrations.ReadFile(name)
 		if err != nil {
