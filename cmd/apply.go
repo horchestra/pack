@@ -8,7 +8,6 @@ import (
 
 	"github.com/horchestra/pack/internal/interrupt"
 	"github.com/horchestra/pack/pkg/api"
-	"github.com/horchestra/pack/pkg/plan"
 )
 
 func init() {
@@ -49,23 +48,6 @@ directory, or a registry reference.`,
 			return withCode(api.CodeSagaFailed, err)
 		}
 		fmt.Println(strings.Join(strings.Fields(fmt.Sprintf("installed %s %s on %s (%s)", c.ToB.Name, c.ToB.Version, s.Target, s.ID)), " "))
-		return result(installedResult{Installed: versionOf(c.ToB.Name, c.ToB.Version, c.Ref), Target: s.Target, Installation: s.ID, Plan: c.Plan})
+		return result(api.InstalledResult{Installed: api.VersionOf(c.ToB.Name, c.ToB.Version, c.Ref), Target: s.Target, Installation: s.ID, Plan: c.Plan})
 	}),
 }
-
-// installedResult is what apply and rollback did, as --json says it.
-type installedResult struct {
-	Installed    version    `json:"installed"`
-	Target       string     `json:"target"`
-	Installation string     `json:"installation"`
-	Plan         *plan.Plan `json:"plan,omitempty"`
-}
-
-// version is a pack at a version, and where it is from.
-type version struct {
-	Name    string `json:"name,omitempty"`
-	Version string `json:"version,omitempty"`
-	Pack    string `json:"pack"`
-}
-
-func versionOf(name, v, ref string) version { return version{Name: name, Version: v, Pack: ref} }

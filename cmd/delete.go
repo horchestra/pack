@@ -59,12 +59,7 @@ var deleteCmd = &cobra.Command{
 		plan.Seal(p, rel, nil)
 		fmt.Println("plan", p.Digest)
 		planned(p)
-		removed := struct {
-			Removed version  `json:"removed"`
-			Keys    []string `json:"keys"`
-			Digest  string   `json:"digest"`
-			DryRun  bool     `json:"dry_run,omitempty"`
-		}{versionOf(b.Name, rec.Version, rec.Pack), keys, p.Digest, deleteDry}
+		removed := api.RemovedResult{Removed: api.VersionOf(b.Name, rec.Version, rec.Pack), Keys: keys, Digest: p.Digest, DryRun: deleteDry}
 		if deleteDry {
 			return result(removed)
 		}

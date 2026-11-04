@@ -571,25 +571,12 @@ func jsonText(v any) string {
 	return string(b)
 }
 
-// explanation is what values explain says of a setting.
-type explanation struct {
-	Pointer string             `json:"pointer"`
-	Given   bool               `json:"given"`
-	Value   any                `json:"value,omitempty"`
-	Source  string             `json:"source,omitempty"`
-	Why     string             `json:"why,omitempty"`
-	Default any                `json:"default,omitempty"`
-	Formula string             `json:"formula,omitempty"`
-	Offered []render.Candidate `json:"offered,omitempty"`
-	Schema  map[string]any     `json:"schema"`
-}
-
-func (rs *asking) explain(ptr string) (*explanation, error) {
+func (rs *asking) explain(ptr string) (*api.Explanation, error) {
 	n, err := rs.node(ptr)
 	if err != nil {
 		return nil, err
 	}
-	ex := &explanation{Pointer: ptr, Schema: n.Raw, Formula: n.Compute}
+	ex := &api.Explanation{Pointer: ptr, Schema: n.Raw, Formula: n.Compute}
 	if n.HasDefault {
 		ex.Default = n.Default
 	}

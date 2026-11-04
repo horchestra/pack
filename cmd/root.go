@@ -4,6 +4,7 @@ package cmd
 import (
 	"context"
 	"os"
+	"runtime/debug"
 	"strings"
 	"time"
 
@@ -18,8 +19,9 @@ import (
 )
 
 var rootCmd = &cobra.Command{
-	Use:   "pack",
-	Short: "the package format, and the tool that renders and installs it",
+	Use:     "pack",
+	Version: buildVersion(),
+	Short:   "the package format, and the tool that renders and installs it",
 	Long: `pack checks, renders, plans and installs a pack — from a directory or a registry
 — on a target, through the target's provider.
 
@@ -92,6 +94,15 @@ func init() {
 func mustGetwd() string {
 	wd, _ := os.Getwd()
 	return wd
+}
+
+// buildVersion is pack's version as the build says it: the module's — "(devel)" for a go build of the tree — or
+// "unknown" for a binary with no build info.
+func buildVersion() string {
+	if bi, ok := debug.ReadBuildInfo(); ok && len(bi.Main.Version) > 0 {
+		return bi.Main.Version
+	}
+	return "unknown"
 }
 
 // Execute runs the command line.

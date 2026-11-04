@@ -56,17 +56,13 @@ func newLogCmd() *cobra.Command {
 				return err
 			}
 			fmt.Printf("removed %d saga(s)\n", len(gone))
-			return result(struct {
-				Removed []string `json:"removed"`
-			}{gone})
+			return result(api.LogPruneResult{Removed: gone})
 		}
 		if *list {
 			for _, r := range runs {
 				fmt.Println(r)
 			}
-			return result(struct {
-				Runs []string `json:"runs"`
-			}{runs})
+			return result(api.LogRunsResult{Runs: runs})
 		}
 		if len(runs) == 0 {
 			return fmt.Errorf("no journal of %s in %s", installation, dir.JournalPath())
@@ -90,19 +86,13 @@ func newLogCmd() *cobra.Command {
 		}
 		if streamOut {
 			// each entry was an event: the result says which saga, not the entries again
-			return result(struct {
-				Saga string `json:"saga"`
-			}{run})
+			return result(api.LogSagaResult{Saga: run})
 		}
 		truncated := len(shown) > maxEntries
 		if truncated {
 			shown = shown[len(shown)-maxEntries:] // the last ones: where it ended
 		}
-		return result(struct {
-			Saga      string       `json:"saga"`
-			Entries   []saga.Entry `json:"entries"`
-			Truncated bool         `json:"truncated,omitempty"`
-		}{run, shown, truncated})
+		return result(api.LogResult{Saga: run, Entries: shown, Truncated: truncated})
 	})
 	return cmd
 }

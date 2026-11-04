@@ -69,10 +69,7 @@ rendered against it.`,
 			return withProblems(api.CodeCheckFailed, fmt.Errorf("%d problem(s)", n), ps)
 		}
 		fmt.Println("ok")
-		return result(struct {
-			OK       bool             `json:"ok"`
-			Problems []render.Problem `json:"problems,omitempty"`
-		}{true, ps})
+		return result(api.CheckResult{OK: true, Problems: ps})
 	}),
 }
 

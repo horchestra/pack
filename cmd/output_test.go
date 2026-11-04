@@ -58,7 +58,7 @@ func TestJSONOutput(t *testing.T) {
 	}
 	out = pack(t, d, "apply", "--json")
 	jsonOut = false
-	var r installedResult
+	var r api.InstalledResult
 	if err := json.Unmarshal([]byte(out), &r); err != nil || r.Installed.Version != "2.1.0" || len(r.Installation) == 0 || r.Plan == nil {
 		t.Fatalf("apply --json (the saga's events not in it): %v\n%s", err, out)
 	}
@@ -75,10 +75,10 @@ func TestJSONOutput(t *testing.T) {
 	out = pack(t, d, "template", "--json")
 	jsonOut = false
 	var tf struct {
-		Files []templateFile `json:"files"`
+		Files []api.TemplateFile `json:"files"`
 	}
 	err := json.Unmarshal([]byte(out), &tf)
-	if err != nil || !slices.ContainsFunc(tf.Files, func(f templateFile) bool { return f.Key == "openbao" && strings.Contains(f.Content, "api_addr") }) {
+	if err != nil || !slices.ContainsFunc(tf.Files, func(f api.TemplateFile) bool { return f.Key == "openbao" && strings.Contains(f.Content, "api_addr") }) {
 		t.Errorf("template --json: %v\n%s", err, out)
 	}
 	out = pack(t, d, "graph", "--json")

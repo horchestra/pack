@@ -13,6 +13,7 @@ import (
 
 	"github.com/horchestra/pack/internal/interrupt"
 	"github.com/horchestra/pack/internal/session"
+	"github.com/horchestra/pack/pkg/api"
 	"github.com/horchestra/pack/pkg/render"
 	"github.com/horchestra/pack/pkg/target"
 )
@@ -95,10 +96,7 @@ and pack next says how old they are.`,
 				return err
 			}
 		}
-		return result(struct {
-			Told   map[string]*target.Facts `json:"told"`
-			Untold []string                 `json:"untold,omitempty"`
-		}{told, untold})
+		return result(api.DiscoverResult{Told: told, Untold: untold})
 	}),
 }
 

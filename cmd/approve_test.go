@@ -46,7 +46,7 @@ func TestApprove(t *testing.T) {
 	if err := approved(s, c.Plan, "sha256:0000", howApply); err == nil || !strings.Contains(err.Error(), "is "+c.Plan.Digest+" now") {
 		t.Errorf("another digest: %v", err)
 	}
-	if n := whatNext(ctx); n.State != StatePlanned || len(n.Blocking) != 1 || n.Next[1] != "pack apply --approve "+c.Plan.Digest {
+	if n := whatNext(ctx); n.State != api.StatePlanned || len(n.Blocking) != 1 || n.Next[1] != "pack apply --approve "+c.Plan.Digest {
 		t.Errorf("next: %+v", n)
 	}
 	out := pack(t, d, "apply", "--approve", c.Plan.Digest)

@@ -11,6 +11,7 @@ import (
 
 	"github.com/horchestra/pack/internal/diagnose"
 	"github.com/horchestra/pack/internal/storage"
+	"github.com/horchestra/pack/pkg/api"
 	"github.com/horchestra/pack/pkg/saga"
 )
 
@@ -56,7 +57,7 @@ func TestDiagnose(t *testing.T) {
 		t.Fatalf("the case: %+v", c)
 	}
 	inRelease(t, d)
-	if n := whatNext(context.Background()); n.State != StateFailed || n.Next[1] != "pack diagnose --apply r1" || !strings.Contains(n.Blocking[0].Message, "port-taken") {
+	if n := whatNext(context.Background()); n.State != api.StateFailed || n.Next[1] != "pack diagnose --apply r1" || !strings.Contains(n.Blocking[0].Message, "port-taken") {
 		t.Errorf("next of a failed saga: %+v", n)
 	}
 	pack(t, d, "diagnose", "--apply", "r1")

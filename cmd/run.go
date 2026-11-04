@@ -61,9 +61,11 @@ too. --approve <digest> runs the one --dry-run showed.`,
 		actions := session.Actions(b, rel)
 		if len(args) == 0 {
 			printActions(actions)
-			return result(struct {
-				Actions []session.Action `json:"actions"`
-			}{actions})
+			out := api.ActionsResult{Actions: make([]api.Action, len(actions))}
+			for i, a := range actions {
+				out.Actions[i] = api.Action(a)
+			}
+			return result(out)
 		}
 		if rec.State != saga.Installed {
 			return withCode(api.CodeSagaUnfinished, fmt.Errorf("the installation is %s: an action runs on what a saga finished (pack next)", rec.State))
@@ -86,13 +88,7 @@ too. --approve <digest> runs the one --dry-run showed.`,
 			fmt.Printf("risk: %s: %s\n", r.Kind, r.Why)
 		}
 		fmt.Println("plan", p.Digest)
-		ran := struct {
-			Action string         `json:"action"`
-			Key    string         `json:"key"`
-			Params map[string]any `json:"params,omitempty"`
-			Digest string         `json:"digest"`
-			DryRun bool           `json:"dry_run,omitempty"`
-		}{a.Action.Name, a.Key, params, p.Digest, runDry}
+		ran := api.RanResult{Action: a.Action.Name, Key: a.Key, Params: params, Digest: p.Digest, DryRun: runDry}
 		if runDry {
 			return result(ran)
 		}

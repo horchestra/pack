@@ -74,7 +74,7 @@ func TestStatus(t *testing.T) {
 	if out := pack(t, d, "status"); !strings.Contains(out, "postgres: ready") || !strings.HasSuffix(out, "healthy\n") || strings.Contains(out, "not healthy") {
 		t.Fatalf("status:\n%s", out)
 	}
-	if n := whatNext(context.Background()); n.State != StateApplied {
+	if n := whatNext(context.Background()); n.State != api.StateApplied {
 		t.Errorf("next, healthy: %+v", n)
 	}
 	write(t, d, "env.yaml", map[string]any{"target": "memory", "observe": "true", "unready": "postgres",
@@ -83,7 +83,7 @@ func TestStatus(t *testing.T) {
 		t.Errorf("status, postgres down:\n%s", out)
 	}
 	n := whatNext(context.Background())
-	if n.State != StateFailed || n.Blocking[0].Code != api.CodeUnhealthy || !strings.Contains(n.Blocking[0].Message, "postgres: postgres is not ready: exited") ||
+	if n.State != api.StateFailed || n.Blocking[0].Code != api.CodeUnhealthy || !strings.Contains(n.Blocking[0].Message, "postgres: postgres is not ready: exited") ||
 		n.Next[0] != "pack status" {
 		t.Errorf("next, postgres down: %+v", n)
 	}

@@ -4,7 +4,6 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
-	"runtime/debug"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/spf13/cobra"
@@ -42,13 +41,4 @@ no secret's value — a password is a reference to a secret.`,
 		s := &mcpserver.Server{Pack: self, Dir: wd, Env: os.Environ(), Envname: envName}
 		return mcpserver.New(s, buildVersion()).Run(ctx, &mcp.StdioTransport{})
 	}),
-}
-
-// buildVersion is pack's version as the build says it: the module's — "(devel)" for a go build of the tree — or
-// "unknown" for a binary with no build info.
-func buildVersion() string {
-	if bi, ok := debug.ReadBuildInfo(); ok && len(bi.Main.Version) > 0 {
-		return bi.Main.Version
-	}
-	return "unknown"
 }

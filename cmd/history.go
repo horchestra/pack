@@ -9,6 +9,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/horchestra/pack/internal/interrupt"
+	"github.com/horchestra/pack/pkg/api"
 	"github.com/horchestra/pack/pkg/saga"
 )
 
@@ -38,14 +39,10 @@ a revision that was installed. As many are kept as run.journal_keep says of the 
 			return fmt.Errorf("no revision is recorded on %s", s.Target)
 		}
 		if jsonOut {
-			type revision struct {
-				saga.Revision
-				Current bool `json:"current,omitempty"` // the one installed now
-			}
 			cur := rec.Current()
-			out := make([]revision, len(rec.History))
+			out := make([]api.Revision, len(rec.History))
 			for i, h := range rec.History {
-				out[i] = revision{Revision: h, Current: cur != nil && h.N == cur.N}
+				out[i] = api.Revision{Revision: h, Current: cur != nil && h.N == cur.N}
 			}
 			b, err := json.MarshalIndent(out, "", "  ")
 			if err != nil {

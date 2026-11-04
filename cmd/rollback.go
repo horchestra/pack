@@ -75,12 +75,7 @@ first (pack rollback, without --to).`,
 			plan.Seal(p, nil, nil) // a taking back is recovery: no risk of its own, run.approve: plan asks as for any plan
 			fmt.Println("plan", p.Digest)
 			planned(p)
-			undone := struct {
-				Undone version `json:"undone"`
-				Back   version `json:"back"`
-				Digest string  `json:"digest"`
-				DryRun bool    `json:"dry_run,omitempty"`
-			}{versionOf("", sg.Version, sg.Pack), versionOf("", rec.Version, rec.Pack), p.Digest, rollbackDry}
+			undone := api.UndoneResult{Undone: api.VersionOf("", sg.Version, sg.Pack), Back: api.VersionOf("", rec.Version, rec.Pack), Digest: p.Digest, DryRun: rollbackDry}
 			if rollbackDry {
 				return result(undone)
 			}
@@ -119,10 +114,10 @@ func rollbackToRevision(ctx context.Context, s *session.Session, rec *saga.Recor
 	}
 	if cur := rec.Current(); cur != nil && cur.N == n {
 		fmt.Printf("revision %d is what is installed: nothing to do\n", n)
-		return result(installedResult{Installed: versionOf("", rec.Version, rec.Pack), Target: s.Target, Installation: s.ID})
+		return result(api.InstalledResult{Installed: api.VersionOf("", rec.Version, rec.Pack), Target: s.Target, Installation: s.ID})
 	} else if rec.State == saga.Installed && rev.Same(rec.Installation) {
 		fmt.Printf("revision %d is the same as what is installed (%s %s): nothing to do\n", n, rec.Pack, rec.Version)
-		return result(installedResult{Installed: versionOf("", rec.Version, rec.Pack), Target: s.Target, Installation: s.ID})
+		return result(api.InstalledResult{Installed: api.VersionOf("", rec.Version, rec.Pack), Target: s.Target, Installation: s.ID})
 	}
 	return rollForwardTo(ctx, s, curB, curRel, rev.Installation, fmt.Sprintf("revision %d", n))
 }
@@ -155,5 +150,5 @@ func rollForwardTo(ctx context.Context, s *session.Session, curB *bundle.Bundle,
 		return withCode(api.CodeSagaFailed, err)
 	}
 	fmt.Printf("back to %s: %s %s\n", what, in.Pack, in.Version)
-	return result(installedResult{Installed: versionOf(name, in.Version, in.Pack), Target: s.Target, Installation: s.ID, Plan: p})
+	return result(api.InstalledResult{Installed: api.VersionOf(name, in.Version, in.Pack), Target: s.Target, Installation: s.ID, Plan: p})
 }

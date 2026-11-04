@@ -10,6 +10,7 @@ import (
 
 	"github.com/horchestra/pack/internal/adapter"
 	"github.com/horchestra/pack/internal/graph"
+	"github.com/horchestra/pack/pkg/api"
 )
 
 func init() {
@@ -46,22 +47,15 @@ var graphCmd = &cobra.Command{
 			return err
 		}
 		if jsonOut {
-			type node struct {
-				Name      string   `json:"name"`
-				Savepoint bool     `json:"savepoint,omitempty"`
-				Waits     []string `json:"waits,omitempty"` // what must be ready before it starts
-			}
-			var nodes []node
+			var nodes []api.GraphNode
 			for _, n := range g.Order() {
-				nd := node{Name: n.Name, Savepoint: n.Savepoint}
+				nd := api.GraphNode{Name: n.Name, Savepoint: n.Savepoint}
 				for _, d := range g.Deps(n) {
 					nd.Waits = append(nd.Waits, d.Name)
 				}
 				nodes = append(nodes, nd)
 			}
-			return result(struct {
-				Nodes []node `json:"nodes"`
-			}{nodes})
+			return result(api.GraphResult{Nodes: nodes})
 		}
 		if graphFormat == "mermaid" {
 			fmt.Print(g.Mermaid())

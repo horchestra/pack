@@ -7,19 +7,14 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/horchestra/pack/pkg/api"
 	"github.com/horchestra/pack/pkg/render"
 	"github.com/horchestra/pack/pkg/saga"
 	"github.com/horchestra/pack/pkg/target"
 )
 
 // Drift is a key whose state in the target is not what the record says.
-type Drift struct {
-	Key string `json:"key"`
-	// Why: "missing", or what differs.
-	Why string `json:"why"`
-}
-
-func (d Drift) String() string { return d.Key + ": " + d.Why }
+type Drift = api.Drift
 
 // Drifts compares the installed version (from, rendered with the recorded values) with what the target holds.
 // Only an installation that finished is compared — one that is under way or failed has its own state — and only

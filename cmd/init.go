@@ -16,6 +16,8 @@ import (
 	"github.com/spf13/cobra"
 	"sigs.k8s.io/yaml"
 
+	"github.com/horchestra/pack/pkg/api"
+
 	"github.com/horchestra/pack/internal/interrupt"
 	"github.com/horchestra/pack/internal/oci"
 	"github.com/horchestra/pack/internal/release"
@@ -87,9 +89,9 @@ without --force; pack refresh brings what a release that is there needs.`,
 			return nil
 		}
 		return result(struct {
-			Dir  string    `json:"dir"`
-			Said []string  `json:"said"`
-			Next nextState `json:"next"` // what pack next says of the release made
+			Dir  string        `json:"dir"`
+			Said []string      `json:"said"`
+			Next api.NextState `json:"next"` // what pack next says of the release made
 		}{abs, said, whatNext(ctx)})
 	}),
 }

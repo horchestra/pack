@@ -27,27 +27,6 @@ import (
 
 func init() { rootCmd.AddCommand(nextCmd) }
 
-// The states of a release, in the order a release goes through them.
-const (
-	StateNew         = "new"         // no release here: pack init makes one
-	StateUnrefreshed = "unrefreshed" // the pack or a target is not brought into .pack: pack refresh
-	StateUnfilled    = "unfilled"    // settings the pack requires are not given
-	StateInvalid     = "invalid"     // values the schema or the pack's rules refuse
-	StateFailed      = "failed"      // a saga failed or was cut short, or what is installed is not well (pack status)
-	StatePlanned     = "planned"     // what the release wants is not what is installed: an apply does it
-	StateApplied     = "applied"     // what is installed is what the release wants
-	StateError       = "error"       // something else stops it: blocking says what
-)
-
-// nextState is what pack next says: where the release is, what stops it, what to run.
-type nextState struct {
-	State    string      `json:"state"`
-	Blocking []api.Error `json:"blocking,omitempty"`
-	Next     []string    `json:"next"`
-	// Facts say when the targets told their facts (pack discover), by target: what a formula reads is that old.
-	Facts map[string]time.Time `json:"facts,omitempty"`
-}
-
 var nextCmd = &cobra.Command{
 	Use:   "next",
 	Short: "where the release is and what to run next: new, unrefreshed, unfilled, invalid, failed, planned, applied",
@@ -87,7 +66,7 @@ model that follows it instead of planning: with --json it is {state, blocking, n
 }
 
 // whatNext works the state out, from the first thing a release needs to the last, and says how old the facts are.
-func whatNext(ctx context.Context) nextState {
+func whatNext(ctx context.Context) api.NextState {
 	n := stateNow(ctx)
 	if facts, _, err := session.LoadFacts(dir); err == nil {
 		for name, f := range facts {
@@ -100,10 +79,10 @@ func whatNext(ctx context.Context) nextState {
 	return n
 }
 
-func stateNow(ctx context.Context) nextState {
+func stateNow(ctx context.Context) api.NextState {
 	rel := dir.Release
 	if _, err := os.Stat(filepath.Join(rel.Dir, release.File)); os.IsNotExist(err) || err == nil && len(rel.Pack) == 0 {
-		return nextState{State: StateNew, Next: []string{"pack init <oci://registry/repo:tag|dir> ."}}
+		return api.NextState{State: api.StateNew, Next: []string{"pack init <oci://registry/repo:tag|dir> ."}}
 	} else if err != nil {
 		return stopped(err)
 	}
@@ -112,7 +91,7 @@ func stateNow(ctx context.Context) nextState {
 		return stopped(err) // a lock or an environment that does not read: refresh would not mend it
 	}
 	if len(b) > 0 {
-		return nextState{State: StateUnrefreshed, Blocking: b, Next: []string{"pack refresh"}}
+		return api.NextState{State: api.StateUnrefreshed, Blocking: b, Next: []string{"pack refresh"}}
 	}
 	s, err := open(ctx, true)
 	if err != nil {
@@ -137,7 +116,7 @@ func stateNow(ctx context.Context) nextState {
 				next = append([]string{"pack diagnose", "pack diagnose --apply " + c.Remedies[0].ID}, next[1:]...)
 			}
 		}
-		return nextState{State: StateFailed, Blocking: []api.Error{{Code: api.CodeSagaUnfinished, Message: msg}}, Next: next}
+		return api.NextState{State: api.StateFailed, Blocking: []api.Error{{Code: api.CodeSagaUnfinished, Message: msg}}, Next: next}
 	}
 	c, err := s.Prepare(false)
 	if err != nil {
@@ -148,41 +127,41 @@ func stateNow(ctx context.Context) nextState {
 				for _, p := range ps.Problems {
 					where = append(where, p.Where)
 				}
-				return nextState{State: StateUnfilled, Blocking: []api.Error{e},
+				return api.NextState{State: api.StateUnfilled, Blocking: []api.Error{e},
 					Next: []string{"pack fill", "pack answer <pointer> <value>: " + strings.Join(where, ", "), "pack check"}}
 			}
-			return nextState{State: StateInvalid, Blocking: []api.Error{e}, Next: []string{"edit values.yaml", "pack check"}}
+			return api.NextState{State: api.StateInvalid, Blocking: []api.Error{e}, Next: []string{"edit values.yaml", "pack check"}}
 		}
 		return stopped(err)
 	}
 	if len(c.Plan.Steps) > 0 {
 		if err := approved(s, c.Plan, "", howApply); err != nil {
-			return nextState{State: StatePlanned, Blocking: []api.Error{classify(err)}, Next: nextOf(err, api.CodeNeedsApproval)}
+			return api.NextState{State: api.StatePlanned, Blocking: []api.Error{classify(err)}, Next: nextOf(err, api.CodeNeedsApproval)}
 		}
-		return nextState{State: StatePlanned, Next: []string{"pack plan", "pack apply"}}
+		return api.NextState{State: api.StatePlanned, Next: []string{"pack plan", "pack apply"}}
 	}
 	// what is wanted is what the record says is there: is it there, and well
 	if st, err := statusOf(ctx, s); err != nil {
 		return stopped(err)
-	} else if !st.Healthy && len(st.unwell()) > 0 {
-		e := api.Error{Code: api.CodeUnhealthy, Message: strings.Join(st.unwell(), "\n")}
-		return nextState{State: StateFailed, Blocking: []api.Error{e}, Next: nextFor(api.CodeUnhealthy)}
+	} else if !st.Healthy && len(unwell(st)) > 0 {
+		e := api.Error{Code: api.CodeUnhealthy, Message: strings.Join(unwell(st), "\n")}
+		return api.NextState{State: api.StateFailed, Blocking: []api.Error{e}, Next: nextFor(api.CodeUnhealthy)}
 	}
-	return nextState{State: StateApplied, Next: []string{}}
+	return api.NextState{State: api.StateApplied, Next: []string{}}
 }
 
 // stopped is the state of an error that stops the release: its code says what to run.
-func stopped(err error) nextState {
+func stopped(err error) api.NextState {
 	e := classify(err)
-	state := StateError
+	state := api.StateError
 	if e.Code == api.CodeNotRefreshed {
-		state = StateUnrefreshed
+		state = api.StateUnrefreshed
 	}
 	next := nextOf(err, e.Code)
 	if next == nil {
 		next = []string{}
 	}
-	return nextState{State: state, Blocking: []api.Error{e}, Next: next}
+	return api.NextState{State: state, Blocking: []api.Error{e}, Next: next}
 }
 
 // unbrought is what pack refresh has yet to bring: the pack of a registry the lock does not pin, the program or the

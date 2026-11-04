@@ -68,7 +68,7 @@ func TestFill(t *testing.T) {
 	}
 	pack(t, d, "answer", "/postgres/pg_password", "db/password")
 	inRelease(t, d)
-	if n := whatNext(context.Background()); n.State != StatePlanned {
+	if n := whatNext(context.Background()); n.State != api.StatePlanned {
 		t.Errorf("answered, next: %+v", n)
 	}
 	text, _ = os.ReadFile(filepath.Join(d, "values.yaml"))

@@ -9,6 +9,7 @@ import (
 	"text/template"
 	"time"
 
+	"github.com/horchestra/pack/pkg/api"
 	"github.com/horchestra/pack/pkg/bundle"
 	"github.com/horchestra/pack/pkg/plan"
 	"github.com/horchestra/pack/pkg/render"
@@ -17,12 +18,8 @@ import (
 	"github.com/horchestra/pack/sdk/packschema"
 )
 
-// Action is an action of the installed version on one of its keys.
-type Action struct {
-	Key    string            `json:"key"`
-	Pack   string            `json:"pack"`
-	Action packschema.Action `json:"action"`
-}
+// Action is an action of the installed version on one of its keys — api.Action with its plan and parameters.
+type Action api.Action
 
 // Actions are the actions of the installed version, by key in the order of the keys, the keys the release has.
 func Actions(b *bundle.Bundle, rel *render.Release) []Action {

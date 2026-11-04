@@ -11,22 +11,11 @@ import (
 
 	"github.com/horchestra/pack/internal/interrupt"
 	"github.com/horchestra/pack/internal/session"
+	"github.com/horchestra/pack/pkg/api"
 	"github.com/horchestra/pack/pkg/saga"
-	"github.com/horchestra/pack/pkg/target"
 )
 
 func init() { rootCmd.AddCommand(statusCmd) }
-
-// status is what pack status says.
-type status struct {
-	State     string                   `json:"state"` // none | installed | in-progress | failed …, the record's
-	Installed *version                 `json:"installed,omitempty"`
-	Target    string                   `json:"target"`
-	Drift     []session.Drift          `json:"drift,omitempty"`
-	Health    map[string]target.Health `json:"health,omitempty"`
-	// Healthy: installed, no drift, and every key a target says the health of is ready.
-	Healthy bool `json:"healthy"`
-}
 
 var statusCmd = &cobra.Command{
 	Use:   "status",
@@ -55,8 +44,8 @@ pack next says failed when it is not.`,
 }
 
 // statusOf asks the targets how the installation is.
-func statusOf(ctx context.Context, s *session.Session) (status, error) {
-	st := status{State: "none", Target: s.Target}
+func statusOf(ctx context.Context, s *session.Session) (api.Status, error) {
+	st := api.Status{State: "none", Target: s.Target}
 	rec, _, rel, err := s.Installed()
 	if err != nil {
 		return st, err
@@ -66,7 +55,7 @@ func statusOf(ctx context.Context, s *session.Session) (status, error) {
 	}
 	st.State = string(rec.State)
 	if len(rec.Pack) > 0 {
-		v := versionOf("", rec.Version, rec.Pack)
+		v := api.VersionOf("", rec.Version, rec.Pack)
 		st.Installed = &v
 	}
 	if st.Drift, err = s.Drifts(ctx, rec, rel); err != nil {
@@ -83,7 +72,7 @@ func statusOf(ctx context.Context, s *session.Session) (status, error) {
 }
 
 // unwell is what keeps the installation from being healthy, one line each.
-func (st status) unwell() []string {
+func unwell(st api.Status) []string {
 	var out []string
 	if st.State != string(saga.Installed) {
 		out = append(out, "the record says "+st.State)
@@ -108,7 +97,7 @@ func (st status) unwell() []string {
 	return out
 }
 
-func printStatus(st status) {
+func printStatus(st api.Status) {
 	if st.Installed == nil {
 		fmt.Printf("nothing is installed on %s (%s)\n", st.Target, st.State)
 		return
