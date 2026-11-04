@@ -20,7 +20,7 @@ import (
 const (
 	RuntimeNative = "native" // the program of .pack/bin, a process of the machine pack runs on
 	RuntimeDocker = "docker" // the target's image, in a container of podman or docker
-	RuntimeK8s    = "k8s"    // the target's image, in a Pod of a cluster behind a Service (pkg/target/remote/kube)
+	RuntimeK8s    = "k8s"    // the target's image, in a Pod of a cluster behind a Service (internal/target/kube)
 )
 
 // FromImage says whether a runtime runs the target's image, which the lock pins, rather than its program.
@@ -66,7 +66,7 @@ const ImageHome = "/home/pack"
 // Runtime is where a target's program runs: the section runtime of the target's entry in env.yaml.
 //
 //	runtime:
-//	  type: docker                 # native (the default) | docker | k8s (pkg/target/remote/kube: its own settings, Extra)
+//	  type: docker                 # native (the default) | docker | k8s (internal/target/kube: its own settings, Extra)
 //	  network: host                # the container's network; host — the machine's
 //	  mounts:                      # what the program reads of the machine: source:destination[:ro]
 //	    - ~/.ssh/known_hosts:/home/pack/.ssh/known_hosts:ro

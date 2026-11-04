@@ -16,6 +16,7 @@ import (
 	"github.com/horchestra/pack/internal/session"
 	"github.com/horchestra/pack/internal/values"
 	"github.com/horchestra/pack/internal/valuesfile"
+	"github.com/horchestra/pack/pkg/api"
 	"github.com/horchestra/pack/pkg/bundle"
 	"github.com/horchestra/pack/pkg/environment"
 )
@@ -129,7 +130,7 @@ func (f *valuesFile) save(ctx context.Context, b *bundle.Bundle, values map[stri
 	}
 	if len(f.have) > 0 && !rewrite {
 		if lost := valuesfile.Foreign(f.have, want); len(lost) > 0 {
-			return "", withCode(CodeForeignComments, fmt.Errorf("values.yaml: %s — they would be lost; --rewrite writes it anyway", strings.Join(lost, "; ")))
+			return "", withCode(api.CodeForeignComments, fmt.Errorf("values.yaml: %s — they would be lost; --rewrite writes it anyway", strings.Join(lost, "; ")))
 		}
 	}
 	msg := "values.yaml is up to date"

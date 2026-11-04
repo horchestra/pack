@@ -7,11 +7,12 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/horchestra/pack/internal/adapter"
+	"github.com/horchestra/pack/internal/graph"
 	"github.com/horchestra/pack/internal/interrupt"
 	"github.com/horchestra/pack/internal/session"
-	"github.com/horchestra/pack/pkg/adapter"
+	"github.com/horchestra/pack/pkg/api"
 	"github.com/horchestra/pack/pkg/bundle"
-	"github.com/horchestra/pack/pkg/graph"
 	"github.com/horchestra/pack/pkg/plan"
 	"github.com/horchestra/pack/pkg/render"
 	"github.com/horchestra/pack/pkg/saga"
@@ -52,7 +53,7 @@ first (pack rollback, without --to).`,
 			return err
 		}
 		if rec == nil || (len(rec.Pack) == 0 && !rec.Unfinished() && (rollbackTo == 0 || len(rec.History) == 0)) {
-			return withCode(CodeNothingInstalled, fmt.Errorf("nothing is installed on %s", s.Target))
+			return withCode(api.CodeNothingInstalled, fmt.Errorf("nothing is installed on %s", s.Target))
 		}
 		if rollbackTo != 0 {
 			return rollbackToRevision(ctx, s, rec, curB, curRel, rollbackTo)
@@ -87,7 +88,7 @@ first (pack rollback, without --to).`,
 				return err
 			}
 			if err := s.Undo(ctx, g, curRel, toRel); err != nil {
-				return withCode(CodeSagaFailed, err)
+				return withCode(api.CodeSagaFailed, err)
 			}
 			if len(rec.Pack) == 0 {
 				fmt.Println("not installed any more")
@@ -151,7 +152,7 @@ func rollForwardTo(ctx context.Context, s *session.Session, curB *bundle.Bundle,
 		return err
 	}
 	if err := s.RollForward(ctx, p, curRel, toRel, in); err != nil {
-		return withCode(CodeSagaFailed, err)
+		return withCode(api.CodeSagaFailed, err)
 	}
 	fmt.Printf("back to %s: %s %s\n", what, in.Pack, in.Version)
 	return result(installedResult{Installed: versionOf(name, in.Version, in.Pack), Target: s.Target, Installation: s.ID, Plan: p})

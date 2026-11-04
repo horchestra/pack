@@ -1,4 +1,4 @@
-"""tembo, the pack of the Go tests (internal/testpacks/tembo), written in Python."""
+"""tembo, the pack of the Go tests (sdk/internal/testpacks/tembo), written in Python."""
 
 from dataclasses import dataclass
 

@@ -68,7 +68,7 @@ fails writes
 }
 ```
 
-and exits with 1. The codes are a closed list:
+and exits with 1 (in Go, `pkg/api`: `Failure`, and `Event` of `--stream` below). The codes are a closed list:
 
 | code                | what                                                   | next                             |
 |---------------------|--------------------------------------------------------|----------------------------------|

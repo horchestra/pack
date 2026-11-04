@@ -41,6 +41,6 @@ service, the named port, the database the operator gave postgres), a preMutate r
 Written three times like postgres
 is — [Go](../examples/openbao/go/openbao.go), [Python](../examples/openbao/python/openbao.py),
 [Java](../examples/openbao/java/OpenBao.java) — with `examples/openbao/golden` keeping the artifacts all three
-generate. More packs that hold packs are the test packs of the core: `internal/testpacks/openbao` holds
-`internal/testpacks/tembo`, in Go, and the same two in [Python](../sdk/python/tests/packs) and
+generate. More packs that hold packs are the test packs of the SDK: `sdk/internal/testpacks/openbao` holds
+`sdk/internal/testpacks/tembo`, in Go, and the same two in [Python](../sdk/python/tests/packs) and
 [Java](../sdk/java/src/test/java/io/horchestra/pack/sdk/packs).

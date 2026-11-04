@@ -10,6 +10,7 @@ import (
 
 	"github.com/horchestra/pack/internal/interrupt"
 	"github.com/horchestra/pack/internal/session"
+	"github.com/horchestra/pack/pkg/api"
 	"github.com/horchestra/pack/pkg/saga"
 )
 
@@ -55,7 +56,7 @@ too. --approve <digest> runs the one --dry-run showed.`,
 			return err
 		}
 		if rec == nil || len(rec.Pack) == 0 {
-			return withCode(CodeNothingInstalled, fmt.Errorf("nothing is installed on %s: an action runs on what is", s.Target))
+			return withCode(api.CodeNothingInstalled, fmt.Errorf("nothing is installed on %s: an action runs on what is", s.Target))
 		}
 		actions := session.Actions(b, rel)
 		if len(args) == 0 {
@@ -65,7 +66,7 @@ too. --approve <digest> runs the one --dry-run showed.`,
 			}{actions})
 		}
 		if rec.State != saga.Installed {
-			return withCode(CodeSagaUnfinished, fmt.Errorf("the installation is %s: an action runs on what a saga finished (pack next)", rec.State))
+			return withCode(api.CodeSagaUnfinished, fmt.Errorf("the installation is %s: an action runs on what a saga finished (pack next)", rec.State))
 		}
 		a, err := session.FindAction(actions, args[0], runKey)
 		if err != nil {
@@ -73,7 +74,7 @@ too. --approve <digest> runs the one --dry-run showed.`,
 		}
 		params, err := a.Params(runParams)
 		if err != nil {
-			return withCode(CodeValuesInvalid, err)
+			return withCode(api.CodeValuesInvalid, err)
 		}
 		p, err := a.Plan(b, rel, params)
 		if err != nil {
@@ -101,7 +102,7 @@ too. --approve <digest> runs the one --dry-run showed.`,
 			}
 		}
 		if err := s.RunAction(ctx, rel, p); err != nil {
-			return withCode(CodeSagaFailed, err)
+			return withCode(api.CodeSagaFailed, err)
 		}
 		fmt.Printf("%s on %s: done\n", a.Action.Name, a.Key)
 		return result(ran)

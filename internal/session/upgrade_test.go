@@ -4,9 +4,9 @@ import (
 	"context"
 	"errors"
 
-	"github.com/horchestra/pack/pkg/adapter"
-	"github.com/horchestra/pack/pkg/graph"
-	"github.com/horchestra/pack/sdk"
+	"github.com/horchestra/pack/internal/adapter"
+	"github.com/horchestra/pack/internal/graph"
+	"github.com/horchestra/pack/internal/testpacks"
 	"github.com/horchestra/pack/sdk/packschema"
 
 	"os"
@@ -15,17 +15,16 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/horchestra/pack/internal/release"
-	"github.com/horchestra/pack/internal/testpacks/openbao"
-	"github.com/horchestra/pack/internal/testpacks/tembo"
-	"github.com/horchestra/pack/internal/workdir"
 	"sigs.k8s.io/yaml"
 
+	"github.com/horchestra/pack/internal/release"
+	"github.com/horchestra/pack/internal/workdir"
+
+	"github.com/horchestra/pack/internal/target/memory"
 	"github.com/horchestra/pack/pkg/plan"
 	"github.com/horchestra/pack/pkg/render"
 	"github.com/horchestra/pack/pkg/saga"
 	"github.com/horchestra/pack/pkg/target"
-	"github.com/horchestra/pack/pkg/target/memory"
 )
 
 // apply is what `pack apply` does: open, prepare, run.
@@ -179,43 +178,24 @@ func TestNoDriftWhereTheTargetDoesNotTell(t *testing.T) {
 	}
 }
 
-// OpenBaoNext is the next version of the pack: another image, and a hook that migrates before it is applied.
-type openbaoNext struct {
-	Bao      openbao.Config `json:"openbao"`
-	Postgres *tembo.Config  `json:"postgres,omitempty"`
-}
-
-func (o *openbaoNext) SetDefaults() { o.Bao.LogLevel = "info" }
-func (*openbaoNext) PackCompute() map[string]string {
-	return (&openbao.OpenBao{}).PackCompute()
-}
-func (*openbaoNext) PackRules() map[string][]packschema.Rule { return (&openbao.OpenBao{}).PackRules() }
-
-func (*openbaoNext) Meta() sdk.Meta {
-	m := (&openbao.OpenBao{}).Meta()
-	m.Version, m.Image = "2.2.0", "images/openbao:2.2.0"
-	return m
-}
-
-func (*openbaoNext) PackRoot() packschema.Root {
-	r := (&openbao.OpenBao{}).PackRoot()
-	r.Hooks = []packschema.Hook{{
-		Name: "migrate", Phase: "preUpgrade", Command: []string{"bao", "migrate"},
-		Compensate: &packschema.Step{Image: "old", Command: []string{"bao", "migrate", "--undo"}},
-	}, {
-		Name: "unmigrate", Phase: "preDowngrade", Command: []string{"bao", "migrate", "--undo"},
-	}}
-	return r
-}
+// nextHooks are what the next version of the pack adds: a hook that migrates before it is applied, one that
+// takes the migration back before a downgrade (testpacks.Next: its version and image 2.2.0).
+var nextHooks = []packschema.Hook{{
+	Name: "migrate", Phase: "preUpgrade", Command: []string{"bao", "migrate"},
+	Compensate: &packschema.Step{Image: "old", Command: []string{"bao", "migrate", "--undo"}},
+}, {
+	Name: "unmigrate", Phase: "preDowngrade", Command: []string{"bao", "migrate", "--undo"},
+}}
 
 // point makes the release use the next version of the pack.
-func point(t *testing.T, d *workdir.Dir, p sdk.Pack, name string) *workdir.Dir {
+func point(t *testing.T, d *workdir.Dir, next bool, name string) *workdir.Dir {
 	t.Helper()
 	packs := filepath.Join(root(d), name)
-	if err := sdk.Generate(packs, p); err != nil {
-		t.Fatal(err)
+	bao := testpacks.Generated(t, packs)
+	if next {
+		bao = testpacks.Next(t, packs, nextHooks)
 	}
-	if err := os.WriteFile(filepath.Join(root(d), "release.yaml"), []byte("pack: "+filepath.Join(packs, "openbao")+"\n"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(root(d), "release.yaml"), []byte("pack: "+bao+"\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	rel, err := release.Load(root(d), "")
@@ -250,7 +230,7 @@ func TestVersionUpgradeAndDowngrade(t *testing.T) {
 	d := stand(t, both)
 	apply(t, d)
 
-	up := point(t, d, &openbaoNext{}, "packs2")
+	up := point(t, d, true, "packs2")
 	c, m := apply(t, up)
 	if c.Plan.Direction != "upgrade" {
 		t.Fatalf("direction = %s", c.Plan.Direction)
@@ -270,7 +250,7 @@ func TestVersionUpgradeAndDowngrade(t *testing.T) {
 	}
 
 	// back to the first version
-	down := point(t, d, &openbao.OpenBao{}, "packs")
+	down := point(t, d, false, "packs")
 	c, m = apply(t, down)
 	if c.Plan.Direction != "downgrade" {
 		t.Fatalf("direction = %s", c.Plan.Direction)
@@ -290,7 +270,7 @@ func TestFailedUpgradeIsTakenBack(t *testing.T) {
 	d := stand(t, both)
 	apply(t, d)
 
-	up := point(t, d, &openbaoNext{}, "packs2")
+	up := point(t, d, true, "packs2")
 	s, m := failApply(t, up, "openbao")
 	c, err := s.Prepare(false)
 	if err != nil {

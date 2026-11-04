@@ -13,11 +13,12 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/horchestra/pack/internal/diagnose"
 	"github.com/horchestra/pack/internal/interrupt"
 	"github.com/horchestra/pack/internal/oci"
 	"github.com/horchestra/pack/internal/release"
 	"github.com/horchestra/pack/internal/session"
-	"github.com/horchestra/pack/pkg/diagnose"
+	"github.com/horchestra/pack/pkg/api"
 	"github.com/horchestra/pack/pkg/environment"
 	"github.com/horchestra/pack/pkg/render"
 	"github.com/horchestra/pack/pkg/target"
@@ -40,9 +41,9 @@ const (
 
 // nextState is what pack next says: where the release is, what stops it, what to run.
 type nextState struct {
-	State    string     `json:"state"`
-	Blocking []apiError `json:"blocking,omitempty"`
-	Next     []string   `json:"next"`
+	State    string      `json:"state"`
+	Blocking []api.Error `json:"blocking,omitempty"`
+	Next     []string    `json:"next"`
 	// Facts say when the targets told their facts (pack discover), by target: what a formula reads is that old.
 	Facts map[string]time.Time `json:"facts,omitempty"`
 }
@@ -136,7 +137,7 @@ func stateNow(ctx context.Context) nextState {
 				next = append([]string{"pack diagnose", "pack diagnose --apply " + c.Remedies[0].ID}, next[1:]...)
 			}
 		}
-		return nextState{State: StateFailed, Blocking: []apiError{{Code: CodeSagaUnfinished, Message: msg}}, Next: next}
+		return nextState{State: StateFailed, Blocking: []api.Error{{Code: api.CodeSagaUnfinished, Message: msg}}, Next: next}
 	}
 	c, err := s.Prepare(false)
 	if err != nil {
@@ -147,16 +148,16 @@ func stateNow(ctx context.Context) nextState {
 				for _, p := range ps.Problems {
 					where = append(where, p.Where)
 				}
-				return nextState{State: StateUnfilled, Blocking: []apiError{e},
+				return nextState{State: StateUnfilled, Blocking: []api.Error{e},
 					Next: []string{"pack fill", "pack answer <pointer> <value>: " + strings.Join(where, ", "), "pack check"}}
 			}
-			return nextState{State: StateInvalid, Blocking: []apiError{e}, Next: []string{"edit values.yaml", "pack check"}}
+			return nextState{State: StateInvalid, Blocking: []api.Error{e}, Next: []string{"edit values.yaml", "pack check"}}
 		}
 		return stopped(err)
 	}
 	if len(c.Plan.Steps) > 0 {
 		if err := approved(s, c.Plan, "", howApply); err != nil {
-			return nextState{State: StatePlanned, Blocking: []apiError{classify(err)}, Next: nextOf(err, CodeNeedsApproval)}
+			return nextState{State: StatePlanned, Blocking: []api.Error{classify(err)}, Next: nextOf(err, api.CodeNeedsApproval)}
 		}
 		return nextState{State: StatePlanned, Next: []string{"pack plan", "pack apply"}}
 	}
@@ -164,8 +165,8 @@ func stateNow(ctx context.Context) nextState {
 	if st, err := statusOf(ctx, s); err != nil {
 		return stopped(err)
 	} else if !st.Healthy && len(st.unwell()) > 0 {
-		e := apiError{Code: CodeUnhealthy, Message: strings.Join(st.unwell(), "\n")}
-		return nextState{State: StateFailed, Blocking: []apiError{e}, Next: nextFor(CodeUnhealthy)}
+		e := api.Error{Code: api.CodeUnhealthy, Message: strings.Join(st.unwell(), "\n")}
+		return nextState{State: StateFailed, Blocking: []api.Error{e}, Next: nextFor(api.CodeUnhealthy)}
 	}
 	return nextState{State: StateApplied, Next: []string{}}
 }
@@ -174,23 +175,23 @@ func stateNow(ctx context.Context) nextState {
 func stopped(err error) nextState {
 	e := classify(err)
 	state := StateError
-	if e.Code == CodeNotRefreshed {
+	if e.Code == api.CodeNotRefreshed {
 		state = StateUnrefreshed
 	}
 	next := nextOf(err, e.Code)
 	if next == nil {
 		next = []string{}
 	}
-	return nextState{State: state, Blocking: []apiError{e}, Next: next}
+	return nextState{State: state, Blocking: []api.Error{e}, Next: next}
 }
 
 // unbrought is what pack refresh has yet to bring: the pack of a registry the lock does not pin, the program or the
 // image of a target that is a program of its own.
-func unbrought(ctx context.Context) ([]apiError, error) {
+func unbrought(ctx context.Context) ([]api.Error, error) {
 	rel := dir.Release
-	var out []apiError
+	var out []api.Error
 	add := func(format string, a ...any) {
-		out = append(out, apiError{Code: CodeNotRefreshed, Message: fmt.Sprintf(format, a...)})
+		out = append(out, api.Error{Code: api.CodeNotRefreshed, Message: fmt.Sprintf(format, a...)})
 	}
 	lock, err := release.ReadLock(rel.Dir)
 	if err != nil {

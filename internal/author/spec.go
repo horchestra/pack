@@ -13,8 +13,8 @@ import (
 
 	"sigs.k8s.io/yaml"
 
-	"github.com/horchestra/pack/pkg/format"
 	"github.com/horchestra/pack/sdk/docs"
+	"github.com/horchestra/pack/sdk/format"
 	"github.com/horchestra/pack/sdk/packschema"
 	"github.com/horchestra/pack/sdk/schema"
 )

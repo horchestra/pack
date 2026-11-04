@@ -12,6 +12,7 @@ import (
 	"github.com/horchestra/pack/internal/release"
 	"github.com/horchestra/pack/internal/session"
 	"github.com/horchestra/pack/internal/workdir"
+	"github.com/horchestra/pack/pkg/api"
 	"github.com/horchestra/pack/pkg/logging"
 	"github.com/horchestra/pack/pkg/saga"
 )
@@ -114,7 +115,7 @@ func run(f func(*cobra.Command, []string) error) func(*cobra.Command, []string) 
 func open(ctx context.Context, readOnly bool) (*session.Session, error) {
 	s, err := session.Open(ctx, dir, readOnly)
 	if err == nil && streamOut {
-		s.Hear = func(e saga.Entry) { streamEvent(entryEvent(e)) }
+		s.Hear = func(e saga.Entry) { streamEvent(api.FromEntry(e)) }
 	}
 	return s, err
 }

@@ -9,7 +9,7 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/horchestra/pack/pkg/graph"
+	"github.com/horchestra/pack/internal/graph"
 )
 
 // stand: zk is a savepoint, then nn, then dn (a savepoint too), and the stand itself.

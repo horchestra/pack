@@ -6,8 +6,9 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/horchestra/pack/internal/interrupt"
 	"sigs.k8s.io/yaml"
+
+	"github.com/horchestra/pack/internal/interrupt"
 )
 
 func init() {

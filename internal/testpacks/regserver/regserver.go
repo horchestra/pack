@@ -1,4 +1,4 @@
-// Package regserver serves the packs an author wrote — what sdk.Generate makes of a root pack — from a registry
+// Package regserver serves the packs an author wrote — what sdk.Generate made of a root pack, a directory — from a registry
 // built for the test: oci-packer packs each of them into a layout, the pack that holds others gets them as members
 // of its index (what a registry does with an oci:// item; a layout resolves no repository by name, so it is done
 // here), and regtest serves the layout over the distribution API. One level of held packs.
@@ -14,27 +14,25 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/horchestra/pack/sdk"
 	"github.com/opencontainers/go-digest"
 	ocispecv1 "github.com/opencontainers/image-spec/specs-go/v1"
 	"sigs.k8s.io/yaml"
 
 	packer "github.com/arenadata/oci-packer"
-	"github.com/arenadata/oci-packer/pkg/registry/oci-layout"
+	layout "github.com/arenadata/oci-packer/pkg/registry/oci-layout"
 	"github.com/arenadata/oci-packer/pkg/registry/regtest"
-	"github.com/horchestra/pack/pkg/format"
+
+	"github.com/horchestra/pack/sdk"
+	"github.com/horchestra/pack/sdk/format"
 )
 
 // Serve makes a registry that holds the pack the sdk generated, built by oci-packer. The dependency is built first;
 // the mount of it in the pack that holds it is what a registry does with an oci:// item (the member lands in the
 // index, manifest and blobs), done here by hand, since a layout resolves no repository by name.
-func Serve(t testing.TB, root sdk.Pack) (host string) {
+func Serve(t testing.TB, pack string) (host string) {
 	t.Helper()
 	ctx := context.Background()
-	gen := t.TempDir()
-	if err := sdk.Generate(gen, root); err != nil {
-		t.Fatal(err)
-	}
+	gen := filepath.Dir(pack) // the generated packs: the pack and those it holds, side by side
 	lay := filepath.Join(t.TempDir(), "layout")
 	build := func(name, version string, mounted ...ocispecv1.Descriptor) (*layout.Layout, ocispecv1.Descriptor) {
 		r, err := layout.New("oci://" + lay + ":packs/" + name + ":" + version)
@@ -76,15 +74,40 @@ func Serve(t testing.TB, root sdk.Pack) (host string) {
 		}
 		return res, desc
 	}
-	all, err := sdk.Packs(root)
+	// the pack and the packs it holds, as the generator wrote them side by side: the held ones built first
+	meta := func(dir string) (name, version string) {
+		raw, err := os.ReadFile(filepath.Join(gen, dir, "pack.yaml"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		var p packer.Pack
+		if err := yaml.Unmarshal(raw, &p); err != nil {
+			t.Fatal(err)
+		}
+		return p.Annotations[format.AnnotationName], p.Annotations[format.AnnotationVersion]
+	}
+	entries, err := os.ReadDir(gen)
 	if err != nil {
 		t.Fatal(err)
 	}
 	var held []ocispecv1.Descriptor
-	for _, p := range all[1:] {
-		_, d := build(p.Meta().Name, p.Meta().Version)
-		held = append(held, d)
+	for _, e := range entries {
+		if e.IsDir() && e.Name() != filepath.Base(pack) {
+			_, d := build(meta(e.Name()))
+			held = append(held, d)
+		}
 	}
-	res, _ := build(all[0].Meta().Name, all[0].Meta().Version, held...)
-	return regtest.Host(regtest.Serve(t, res, "packs/"+all[0].Meta().Name))
+	name, version := meta(filepath.Base(pack))
+	res, _ := build(name, version, held...)
+	return regtest.Host(regtest.Serve(t, res, "packs/"+name))
+}
+
+// ServePack is Serve of a pack a test writes in Go: generated first.
+func ServePack(t testing.TB, root sdk.Pack) (host string) {
+	t.Helper()
+	gen := t.TempDir()
+	if err := sdk.Generate(gen, root); err != nil {
+		t.Fatal(err)
+	}
+	return Serve(t, filepath.Join(gen, root.Meta().Name))
 }

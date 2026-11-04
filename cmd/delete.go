@@ -5,9 +5,10 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/horchestra/pack/internal/adapter"
+	"github.com/horchestra/pack/internal/graph"
 	"github.com/horchestra/pack/internal/interrupt"
-	"github.com/horchestra/pack/pkg/adapter"
-	"github.com/horchestra/pack/pkg/graph"
+	"github.com/horchestra/pack/pkg/api"
 	"github.com/horchestra/pack/pkg/plan"
 )
 
@@ -39,10 +40,10 @@ var deleteCmd = &cobra.Command{
 			return err
 		}
 		if rec == nil || len(rec.Pack) == 0 {
-			return withCode(CodeNothingInstalled, fmt.Errorf("nothing is installed on %s", s.Target))
+			return withCode(api.CodeNothingInstalled, fmt.Errorf("nothing is installed on %s", s.Target))
 		}
 		if rec.Unfinished() {
-			return withCode(CodeSagaUnfinished, fmt.Errorf("a saga towards %s did not finish (%s: %s): apply it again, or pack rollback", rec.Saga.Pack, rec.State, rec.Saga.Error))
+			return withCode(api.CodeSagaUnfinished, fmt.Errorf("a saga towards %s did not finish (%s: %s): apply it again, or pack rollback", rec.Saga.Pack, rec.State, rec.Saga.Error))
 		}
 		g, err := graph.New(adapter.Specs(rel, nil))
 		if err != nil {
@@ -71,7 +72,7 @@ var deleteCmd = &cobra.Command{
 			return err
 		}
 		if err := s.Remove(ctx, g, rel); err != nil {
-			return withCode(CodeSagaFailed, err)
+			return withCode(api.CodeSagaFailed, err)
 		}
 		fmt.Println("not installed any more")
 		return result(removed)

@@ -6,9 +6,9 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/horchestra/pack/internal/target/memory"
 	"github.com/horchestra/pack/pkg/bundle"
 	"github.com/horchestra/pack/pkg/render"
-	"github.com/horchestra/pack/pkg/target/memory"
 	"github.com/horchestra/pack/sdk"
 	"github.com/horchestra/pack/sdk/packschema"
 )

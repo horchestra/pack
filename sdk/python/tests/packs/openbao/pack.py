@@ -1,4 +1,4 @@
-"""openbao, which holds tembo, the pack of the Go tests (internal/testpacks/openbao), written in Python."""
+"""openbao, which holds tembo, the pack of the Go tests (sdk/internal/testpacks/openbao), written in Python."""
 
 from dataclasses import dataclass
 from typing import Any, Optional

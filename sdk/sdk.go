@@ -29,14 +29,15 @@ import (
 	"strings"
 
 	packer "github.com/arenadata/oci-packer/types"
+	"github.com/spf13/cobra"
+	"sigs.k8s.io/yaml"
+
 	"github.com/horchestra/pack/sdk/check"
 	"github.com/horchestra/pack/sdk/docs"
 	packschema2 "github.com/horchestra/pack/sdk/packschema"
 	"github.com/horchestra/pack/sdk/schema"
-	"github.com/spf13/cobra"
-	"sigs.k8s.io/yaml"
 
-	"github.com/horchestra/pack/pkg/format"
+	"github.com/horchestra/pack/sdk/format"
 )
 
 // Meta is everything about a pack that goes into its OCI artifact. Name and Version are required; the rest is

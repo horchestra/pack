@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/horchestra/pack/pkg/graph"
+	"github.com/horchestra/pack/internal/graph"
 )
 
 func standSpecs() []graph.Spec {

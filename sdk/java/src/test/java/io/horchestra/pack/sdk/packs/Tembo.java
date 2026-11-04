@@ -12,7 +12,7 @@ import io.horchestra.pack.sdk.Root;
 import io.horchestra.pack.sdk.Secret;
 import io.horchestra.pack.sdk.Setting;
 
-/** tembo, the pack of the Go tests (internal/testpacks/tembo), written in Java. */
+/** tembo, the pack of the Go tests (sdk/internal/testpacks/tembo), written in Java. */
 public class Tembo extends Pack {
     /** The node's tags and the log it keeps. */
     public static class Node {

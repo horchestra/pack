@@ -17,18 +17,18 @@ import (
 	"github.com/spf13/cobra"
 	"sigs.k8s.io/yaml"
 
+	"github.com/horchestra/pack/internal/adapter"
+	"github.com/horchestra/pack/internal/diagnose"
+	"github.com/horchestra/pack/internal/graph"
 	"github.com/horchestra/pack/internal/interrupt"
 	"github.com/horchestra/pack/internal/oci"
 	"github.com/horchestra/pack/internal/release"
 	"github.com/horchestra/pack/internal/session"
+	"github.com/horchestra/pack/internal/target/memory"
 	"github.com/horchestra/pack/internal/workdir"
-	"github.com/horchestra/pack/pkg/adapter"
-	"github.com/horchestra/pack/pkg/diagnose"
-	"github.com/horchestra/pack/pkg/graph"
 	"github.com/horchestra/pack/pkg/render"
 	"github.com/horchestra/pack/pkg/saga"
 	"github.com/horchestra/pack/pkg/target"
-	"github.com/horchestra/pack/pkg/target/memory"
 	"github.com/horchestra/pack/pkg/target/remote"
 )
 

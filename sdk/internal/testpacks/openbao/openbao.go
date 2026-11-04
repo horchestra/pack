@@ -4,8 +4,8 @@ package openbao
 import (
 	"fmt"
 
-	"github.com/horchestra/pack/internal/testpacks/tembo"
 	"github.com/horchestra/pack/sdk"
+	"github.com/horchestra/pack/sdk/internal/testpacks/tembo"
 	packschema2 "github.com/horchestra/pack/sdk/packschema"
 )
 

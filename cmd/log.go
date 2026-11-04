@@ -5,9 +5,10 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/horchestra/pack/internal/storage"
 	"github.com/horchestra/pack/internal/workdir"
+	"github.com/horchestra/pack/pkg/api"
 	"github.com/horchestra/pack/pkg/saga"
-	"github.com/horchestra/pack/pkg/saga/storage"
 )
 
 var logCmd = newLogCmd()
@@ -84,7 +85,7 @@ func newLogCmd() *cobra.Command {
 			if len(*node) == 0 || e.Node == *node {
 				fmt.Println(e)
 				shown = append(shown, e)
-				streamEvent(entryEvent(e)) // the same events as the saga's, for a UI that reconnects
+				streamEvent(api.FromEntry(e)) // the same events as the saga's, for a UI that reconnects
 			}
 		}
 		if streamOut {

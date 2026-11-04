@@ -8,17 +8,16 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/horchestra/pack/sdk"
 	"sigs.k8s.io/yaml"
 
+	"github.com/horchestra/pack/internal/adapter"
+	"github.com/horchestra/pack/internal/graph"
 	"github.com/horchestra/pack/internal/release"
-	"github.com/horchestra/pack/internal/testpacks/openbao"
+	"github.com/horchestra/pack/internal/target/memory"
+	"github.com/horchestra/pack/internal/testpacks"
 	"github.com/horchestra/pack/internal/workdir"
-	"github.com/horchestra/pack/pkg/adapter"
-	"github.com/horchestra/pack/pkg/graph"
 	"github.com/horchestra/pack/pkg/saga"
 	"github.com/horchestra/pack/pkg/target"
-	"github.com/horchestra/pack/pkg/target/memory"
 )
 
 // A release of the packs the sdk generated: openbao, which holds tembo (installed as `postgres`) — the way an
@@ -27,9 +26,7 @@ func stand(t *testing.T, values map[string]any) *workdir.Dir {
 	t.Helper()
 	d := t.TempDir()
 	packs := filepath.Join(d, "packs")
-	if err := sdk.Generate(packs, &openbao.OpenBao{}); err != nil {
-		t.Fatal(err)
-	}
+	testpacks.Generated(t, packs)
 	write := func(name string, v any) {
 		t.Helper()
 		b, err := yaml.Marshal(v)

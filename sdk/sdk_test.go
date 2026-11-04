@@ -13,8 +13,8 @@ import (
 	"github.com/spf13/cobra"
 	"sigs.k8s.io/yaml"
 
-	"github.com/horchestra/pack/internal/testpacks/openbao"
-	"github.com/horchestra/pack/internal/testpacks/tembo"
+	"github.com/horchestra/pack/sdk/internal/testpacks/openbao"
+	"github.com/horchestra/pack/sdk/internal/testpacks/tembo"
 )
 
 func generate(t *testing.T, roots ...sdk.Pack) string {

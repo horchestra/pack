@@ -9,9 +9,9 @@ import (
 	"testing"
 	"unicode/utf8"
 
-	"github.com/horchestra/pack/pkg/diagnose"
+	"github.com/horchestra/pack/internal/diagnose"
+	"github.com/horchestra/pack/internal/storage"
 	"github.com/horchestra/pack/pkg/saga"
-	"github.com/horchestra/pack/pkg/saga/storage"
 )
 
 // fail makes the record of d say its last saga failed at key with err, the journal holding lines of it.

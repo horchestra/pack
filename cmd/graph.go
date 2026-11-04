@@ -8,8 +8,8 @@ import (
 
 	"github.com/horchestra/pack/internal/interrupt"
 
-	"github.com/horchestra/pack/pkg/adapter"
-	"github.com/horchestra/pack/pkg/graph"
+	"github.com/horchestra/pack/internal/adapter"
+	"github.com/horchestra/pack/internal/graph"
 )
 
 func init() {

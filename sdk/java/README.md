@@ -50,4 +50,4 @@ javac --release 21 -cp out/main -d out/test $(find src/test -name '*.java')
 java -cp out/main:out/test io.horchestra.pack.sdk.GoldenTest
 ```
 
-The generated artifacts of the test packs equal `sdk/testdata/golden` (written by the Go sdk) byte for byte.
+The generated artifacts of the test packs equal `sdk/internal/testdata/golden` (written by the Go sdk) byte for byte.

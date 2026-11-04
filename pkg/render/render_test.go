@@ -6,11 +6,11 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/horchestra/pack/internal/testpacks/openbao"
+	"github.com/horchestra/pack/internal/target/memory"
+	"github.com/horchestra/pack/internal/testpacks"
 	"github.com/horchestra/pack/pkg/bundle"
 	"github.com/horchestra/pack/pkg/render"
 	"github.com/horchestra/pack/pkg/target"
-	"github.com/horchestra/pack/pkg/target/memory"
 	"github.com/horchestra/pack/sdk"
 	"github.com/horchestra/pack/sdk/packschema"
 )
@@ -18,9 +18,7 @@ import (
 func loadOpenbao(t *testing.T) *bundle.Bundle {
 	t.Helper()
 	dir := t.TempDir()
-	if err := sdk.Generate(dir, &openbao.OpenBao{}); err != nil {
-		t.Fatal(err)
-	}
+	testpacks.Generated(t, dir)
 	b, err := bundle.Load(filepath.Join(dir, "openbao"))
 	if err != nil {
 		t.Fatal(err)

@@ -2,8 +2,8 @@
 package main
 
 import (
-	"github.com/horchestra/pack/internal/testpacks/openbao"
 	"github.com/horchestra/pack/sdk"
+	"github.com/horchestra/pack/sdk/internal/testpacks/openbao"
 )
 
 func main() { sdk.Run(&openbao.OpenBao{}) }

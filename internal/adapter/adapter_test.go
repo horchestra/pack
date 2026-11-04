@@ -5,7 +5,7 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/horchestra/pack/pkg/graph"
+	"github.com/horchestra/pack/internal/graph"
 	"github.com/horchestra/pack/pkg/plan"
 	"github.com/horchestra/pack/pkg/render"
 	"github.com/horchestra/pack/pkg/target"

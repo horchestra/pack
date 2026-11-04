@@ -9,7 +9,7 @@ import (
 	"runtime"
 	"slices"
 
-	"github.com/horchestra/pack/pkg/graph"
+	"github.com/horchestra/pack/internal/graph"
 )
 
 // Status is where a node ended up.

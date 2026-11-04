@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/horchestra/pack/internal/valuesfile"
+	"github.com/horchestra/pack/pkg/api"
 	"github.com/horchestra/pack/pkg/render"
 )
 
@@ -105,7 +106,7 @@ func TestAnswerRefuses(t *testing.T) {
 	}
 	before, _ := os.ReadFile(filepath.Join(d, "values.yaml"))
 	_, err = rs.apply(ctx, []answer{{Pointer: "/openbao/log_level", Value: float64(7), Source: valuesfile.FromLLM}})
-	if err == nil || classify(err).Code != CodeValuesInvalid || len(classify(err).Problems) == 0 {
+	if err == nil || classify(err).Code != api.CodeValuesInvalid || len(classify(err).Problems) == 0 {
 		t.Errorf("a value the schema refuses: %v", err)
 	}
 	if after, _ := os.ReadFile(filepath.Join(d, "values.yaml")); string(after) != string(before) {

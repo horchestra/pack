@@ -10,6 +10,8 @@ import (
 	"slices"
 	"strings"
 	"testing"
+
+	"github.com/horchestra/pack/pkg/api"
 )
 
 // streamProcess is pack run as a process of its own (this test binary): a command that fails ends the process, and
@@ -42,13 +44,13 @@ func TestStreamHelper(t *testing.T) {
 }
 
 // events reads NDJSON: every line an event, seq 1, 2, … with no gap.
-func events(t *testing.T, out string) []Event {
+func events(t *testing.T, out string) []api.Event {
 	t.Helper()
-	var evs []Event
+	var evs []api.Event
 	sc := bufio.NewScanner(strings.NewReader(out))
 	sc.Buffer(nil, 1<<24)
 	for sc.Scan() {
-		var e Event
+		var e api.Event
 		if err := json.Unmarshal(sc.Bytes(), &e); err != nil {
 			t.Fatalf("not an event: %v\n%s", err, sc.Text())
 		}
@@ -64,10 +66,10 @@ func events(t *testing.T, out string) []Event {
 }
 
 // said is the events as "type key status", what the order of a saga is read by.
-func said(evs []Event) []string {
+func said(evs []api.Event) []string {
 	var out []string
 	for _, e := range evs {
-		if e.Type == EventLog {
+		if e.Type == api.EventLog {
 			continue
 		}
 		out = append(out, strings.Join(strings.Fields(e.Type+" "+e.Key+" "+e.Status), " "))
@@ -97,15 +99,15 @@ func TestStreamApplyThatFails(t *testing.T) {
 		t.Errorf("the plan: %+v", evs[0])
 	}
 	last := evs[len(evs)-1]
-	if last.Code != CodeSagaFailed || !strings.Contains(last.Error, "address already in use") || len(last.Next) == 0 {
+	if last.Code != api.CodeSagaFailed || !strings.Contains(last.Error, "address already in use") || len(last.Next) == 0 {
 		t.Errorf("the result: %+v", last)
 	}
 	var stepped bool
 	for _, e := range evs {
-		if e.Type == EventLog && e.Key == "openbao" && len(e.Step) > 0 {
+		if e.Type == api.EventLog && e.Key == "openbao" && len(e.Step) > 0 {
 			stepped = true
 		}
-		if e.Type != EventPlan && e.Type != EventResult && e.Type != EventSaga && len(e.Saga) == 0 && e.Type != EventLog {
+		if e.Type != api.EventPlan && e.Type != api.EventResult && e.Type != api.EventSaga && len(e.Saga) == 0 && e.Type != api.EventLog {
 			t.Errorf("an event of no saga: %+v", e)
 		}
 	}
@@ -159,7 +161,7 @@ func slicesWithout(xs []string, drop ...string) []string {
 func TestStreamPlan(t *testing.T) {
 	d := releaseOf(t, generated(t), nil)
 	evs := events(t, pack(t, d, "plan", "--stream"))
-	if len(evs) != 2 || evs[0].Type != EventPlan || evs[0].Plan == nil || evs[1].Type != EventResult || evs[1].Status != StatusOK || evs[1].Result == nil {
+	if len(evs) != 2 || evs[0].Type != api.EventPlan || evs[0].Plan == nil || evs[1].Type != api.EventResult || evs[1].Status != api.StatusOK || evs[1].Result == nil {
 		t.Errorf("plan --stream: %+v", evs)
 	}
 	if out := pack(t, d, "plan"); strings.HasPrefix(out, "{") {
@@ -189,7 +191,7 @@ func TestStreamDeleteAndRollback(t *testing.T) {
 		t.Errorf("delete --stream:\n%s\nwant\n%s", strings.Join(got, "\n"), strings.Join(want, "\n"))
 	}
 	for _, e := range gone {
-		if e.Type == EventNode && len(e.Step) > 0 {
+		if e.Type == api.EventNode && len(e.Step) > 0 {
 			t.Errorf("a node's event with a step: %+v", e)
 		}
 	}
@@ -227,9 +229,9 @@ func TestStreamInterrupt(t *testing.T) {
 		"node openbao rolled-back", "result failed"}) {
 		t.Fatalf("events:\n%s\nstderr:\n%s", strings.Join(got, "\n"), errOut.String())
 	}
-	var interrupted Event
+	var interrupted api.Event
 	for _, e := range evs {
-		if e.Status == StatusInterrupted {
+		if e.Status == api.StatusInterrupted {
 			interrupted = e
 		}
 	}

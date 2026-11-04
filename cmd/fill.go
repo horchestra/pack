@@ -19,6 +19,7 @@ import (
 	"github.com/horchestra/pack/internal/interrupt"
 	"github.com/horchestra/pack/internal/session"
 	"github.com/horchestra/pack/internal/valuesfile"
+	"github.com/horchestra/pack/pkg/api"
 	"github.com/horchestra/pack/pkg/bundle"
 	"github.com/horchestra/pack/pkg/render"
 	"github.com/horchestra/pack/sdk/docs"
@@ -430,7 +431,7 @@ func (rs *asking) apply(ctx context.Context, answers []answer) ([]change, error)
 		for i, p := range made {
 			lines[i] = p.String()
 		}
-		return nil, withProblems(CodeValuesInvalid, fmt.Errorf("the answers make the values wrong, nothing is written:\n  %s", strings.Join(lines, "\n  ")), made)
+		return nil, withProblems(api.CodeValuesInvalid, fmt.Errorf("the answers make the values wrong, nothing is written:\n  %s", strings.Join(lines, "\n  ")), made)
 	}
 	msg, err := rs.f.save(ctx, rs.b, values, src, fillRewrite)
 	if err != nil {

@@ -6,8 +6,9 @@ import (
 	"testing"
 
 	"github.com/horchestra/pack/internal/session"
+	"github.com/horchestra/pack/internal/storage"
+	"github.com/horchestra/pack/pkg/api"
 	"github.com/horchestra/pack/pkg/plan"
-	"github.com/horchestra/pack/pkg/saga/storage"
 )
 
 // pack run lists the actions of what is installed and runs one on its key, into the journal; a parameter is typed by
@@ -82,7 +83,7 @@ func TestStatus(t *testing.T) {
 		t.Errorf("status, postgres down:\n%s", out)
 	}
 	n := whatNext(context.Background())
-	if n.State != StateFailed || n.Blocking[0].Code != CodeUnhealthy || !strings.Contains(n.Blocking[0].Message, "postgres: postgres is not ready: exited") ||
+	if n.State != StateFailed || n.Blocking[0].Code != api.CodeUnhealthy || !strings.Contains(n.Blocking[0].Message, "postgres: postgres is not ready: exited") ||
 		n.Next[0] != "pack status" {
 		t.Errorf("next, postgres down: %+v", n)
 	}

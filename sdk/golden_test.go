@@ -6,12 +6,12 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/horchestra/pack/internal/testpacks/openbao"
+	"github.com/horchestra/pack/sdk/internal/testpacks/openbao"
 )
 
 // goldenDir holds the artifacts of the test packs as this SDK writes them. The SDKs of the other languages
 // (python/, java/) generate the same two packs and are compared with these files, so the three agree on the format.
-const goldenDir = "testdata/golden"
+const goldenDir = "internal/testdata/golden"
 
 // UPDATE_GOLDEN=1 go test ./sdk -run Golden rewrites the files after a deliberate change of the format.
 func TestGoldenArtifacts(t *testing.T) {

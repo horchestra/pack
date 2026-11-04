@@ -7,8 +7,8 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/horchestra/pack/pkg/format"
 	"github.com/horchestra/pack/sdk/docs"
+	"github.com/horchestra/pack/sdk/format"
 	"github.com/horchestra/pack/sdk/schema"
 )
 

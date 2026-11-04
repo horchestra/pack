@@ -22,12 +22,13 @@ import (
 	"github.com/horchestra/pack/internal/author"
 	"github.com/horchestra/pack/internal/interrupt"
 	"github.com/horchestra/pack/internal/session"
+	"github.com/horchestra/pack/internal/target/memory"
+	"github.com/horchestra/pack/pkg/api"
 	"github.com/horchestra/pack/pkg/bundle"
 	"github.com/horchestra/pack/pkg/environment"
-	"github.com/horchestra/pack/pkg/format"
 	"github.com/horchestra/pack/pkg/render"
-	"github.com/horchestra/pack/pkg/target/memory"
 	"github.com/horchestra/pack/sdk/docs"
+	"github.com/horchestra/pack/sdk/format"
 	"github.com/horchestra/pack/sdk/schema"
 )
 
@@ -168,7 +169,7 @@ each fix until it is.`,
 		printChecked(res)
 		if !res.OK {
 			// one document, the error's: what to fix is its detail
-			return withDetail(CodeCheckFailed, errors.New("the pack's source has problems to fix"), res)
+			return withDetail(api.CodeCheckFailed, errors.New("the pack's source has problems to fix"), res)
 		}
 		return result(res)
 	}),
@@ -330,7 +331,7 @@ rendered as far as they go: a check of an expression with no generating and no r
 		}
 		got, err := render.Eval(b, v, rc, key, args[0])
 		if err != nil {
-			return withCode(CodeValuesInvalid, err)
+			return withCode(api.CodeValuesInvalid, err)
 		}
 		text, _ := json.Marshal(got)
 		fmt.Println(string(text))
@@ -485,7 +486,7 @@ in, write it to docs/<lang>.yaml beside the source, run pack author check.`,
 			return err
 		}
 		if len(res.Generate) > 0 {
-			return withCode(CodeCheckFailed, fmt.Errorf("the generator failed:\n%s", res.Generate))
+			return withCode(api.CodeCheckFailed, fmt.Errorf("the generator failed:\n%s", res.Generate))
 		}
 		raw, err := os.ReadFile(filepath.Join(out, root, format.SchemaFile))
 		if err != nil {
@@ -542,7 +543,7 @@ in another language, its templates/ for content/.`,
 			}
 			spec = &author.Spec{}
 			if err := yaml.UnmarshalStrict(raw, spec); err != nil {
-				return withCode(CodeValuesInvalid, fmt.Errorf("%s: %w", scaffoldSpec, err))
+				return withCode(api.CodeValuesInvalid, fmt.Errorf("%s: %w", scaffoldSpec, err))
 			}
 		case len(scaffoldFrom) > 0:
 			var err error
@@ -555,7 +556,7 @@ in another language, its templates/ for content/.`,
 		}
 		files, err := author.Scaffold(spec, scaffoldLang, scaffoldOut, author.ScaffoldOptions{GoImport: scaffoldGoImport, Templates: templates, Force: scaffoldForce})
 		if err != nil {
-			return withCode(CodeValuesInvalid, err)
+			return withCode(api.CodeValuesInvalid, err)
 		}
 		for _, f := range files {
 			fmt.Println("wrote", filepath.Join(scaffoldOut, f))

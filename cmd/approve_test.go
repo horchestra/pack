@@ -10,6 +10,7 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/horchestra/pack/pkg/api"
 	"github.com/horchestra/pack/pkg/plan"
 	"github.com/horchestra/pack/pkg/secretstore"
 )
@@ -39,7 +40,7 @@ func TestApprove(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := approved(s, c.Plan, "", howApply); err == nil || classify(err).Code != CodeNeedsApproval || !strings.Contains(err.Error(), "secret") {
+	if err := approved(s, c.Plan, "", howApply); err == nil || classify(err).Code != api.CodeNeedsApproval || !strings.Contains(err.Error(), "secret") {
 		t.Fatalf("a credential changed, auto-safe: %v", err)
 	}
 	if err := approved(s, c.Plan, "sha256:0000", howApply); err == nil || !strings.Contains(err.Error(), "is "+c.Plan.Digest+" now") {
@@ -65,8 +66,8 @@ func TestApprove(t *testing.T) {
 	}
 	err = approved(s, c.Plan, "", howRollback(3))
 	if !strings.Contains(err.Error(), "pack rollback --to 3 --approve "+c.Plan.Digest) ||
-		!slices.Equal(nextOf(err, CodeNeedsApproval), []string{"pack rollback --to 3 --dry-run", "pack rollback --to 3 --approve " + c.Plan.Digest}) {
-		t.Errorf("a rollback's refusal names the rollback: %v %v", err, nextOf(err, CodeNeedsApproval))
+		!slices.Equal(nextOf(err, api.CodeNeedsApproval), []string{"pack rollback --to 3 --dry-run", "pack rollback --to 3 --approve " + c.Plan.Digest}) {
+		t.Errorf("a rollback's refusal names the rollback: %v %v", err, nextOf(err, api.CodeNeedsApproval))
 	}
 	undo := &plan.Plan{Pack: "openbao", Direction: plan.DirUndo, Order: []string{"postgres"}}
 	plan.Seal(undo, nil, nil)

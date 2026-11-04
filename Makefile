@@ -33,8 +33,9 @@ build: ## build pack into bin/
 
 test: test-core test-sdk ## everything
 
-test-core: ## the core, its SDK and the Go example
-	$(GO) test -race ./pkg/... ./internal/... ./cmd/... ./sdk/... ./examples/...
+test-core: ## the core, the Go SDK (a module of its own) and the Go examples
+	$(GO) test -race ./pkg/... ./internal/... ./cmd/... ./examples/...
+	cd sdk && $(GO) test -race ./...
 
 test-sdk: ## the Python and Java SDKs and examples against the golden files
 	cd sdk/python && python3 -I -m unittest discover -s tests
@@ -63,10 +64,12 @@ test-e2e-all: ## all of the e2e
 	cd tests/e2e && $(GO) test -count=1 -timeout 20m ./...
 
 golden: ## rewrite the golden files the SDKs and examples are compared with (after a deliberate change of the format)
-	UPDATE_GOLDEN=1 $(GO) test ./sdk ./examples/postgres/go ./examples/openbao/go ./examples/docker/go -run 'Golden'
+	cd sdk && UPDATE_GOLDEN=1 $(GO) test . -run 'Golden'
+	UPDATE_GOLDEN=1 $(GO) test ./examples/postgres/go ./examples/openbao/go ./examples/docker/go -run 'Golden'
 
-vet: ## go vet of the core and of tests/e2e, a module of its own
-	$(GO) vet ./pkg/... ./internal/... ./cmd/... ./sdk/... ./examples/...
+vet: ## go vet of the core, of the SDK and of tests/e2e, modules of their own
+	$(GO) vet ./pkg/... ./internal/... ./cmd/... ./examples/...
+	cd sdk && $(GO) vet ./...
 	cd tests/e2e && $(GO) vet ./...
 
 fmt: ## gofmt of the core

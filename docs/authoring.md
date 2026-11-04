@@ -2,7 +2,8 @@
 
 A pack is **an application's configuration as a type**, plus a few methods that say how the application runs. The
 same pack can be written in Go (`sdk/`), Python (`sdk/python`) or Java (`sdk/java`); all three write the same
-artifacts, byte for byte (`sdk/testdata/golden` is the proof the tests compare with).
+artifacts, byte for byte (`sdk/internal/testdata/golden` is the proof the tests compare with). The Go SDK is a module of its own,
+`github.com/horchestra/pack/sdk`: a pack depends on it alone, not on the tool.
 
 | method          |                                                                                                                                         |
 |-----------------|-----------------------------------------------------------------------------------------------------------------------------------------|

@@ -12,8 +12,7 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"sigs.k8s.io/yaml"
 
-	"github.com/horchestra/pack/internal/testpacks/openbao"
-	"github.com/horchestra/pack/sdk"
+	"github.com/horchestra/pack/internal/testpacks"
 )
 
 var packBin string
@@ -95,9 +94,7 @@ func (s *session) state() string {
 // back. What is a person's — an approval — no tool gives.
 func TestOperator(t *testing.T) {
 	p := filepath.Join(t.TempDir(), "packs")
-	if err := sdk.Generate(p, &openbao.OpenBao{}); err != nil {
-		t.Fatal(err)
-	}
+	testpacks.Generated(t, p)
 	d := t.TempDir()
 	write(t, d, "release.yaml", map[string]any{"pack": filepath.Join(p, "openbao")})
 	env := map[string]any{"target": "memory", // no observe: what it holds is a process's, and each tool is a process of pack

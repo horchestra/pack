@@ -11,7 +11,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
-/** openbao, which holds tembo, the pack of the Go tests (internal/testpacks/openbao), written in Java. */
+/** openbao, which holds tembo, the pack of the Go tests (sdk/internal/testpacks/openbao), written in Java. */
 public class OpenBao extends Pack {
     public static class StorageBlock {
         public String type = "";

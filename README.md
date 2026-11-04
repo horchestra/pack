@@ -93,18 +93,24 @@ ends the process, and the record stays `in-progress` for `rollback` or the next 
 
 ```
 cmd/            the commands (cobra), nothing else
-internal/       release, session (a command's connection to the world), workdir, oci, values, interrupt, testpacks
-sdk             author side: Pack, Meta, schema generation, packschema (PackRoot vocabulary), compute (CEL)
-sdk/python      the same author side in Python (packsdk); sdk/java the same in Java (io.horchestra.pack.sdk)
-pkg/bundle      a pack read from disk: the virtual composition of the pack and the packs it holds
+pkg/            what another project imports — the targets, a UI's backend:
+pkg/api         the documents of --json and --stream: Failure and its codes, Event
+pkg/target      what a target must do (Resolve, Execute; optional Recorder, Observer); target/remote serves a target
+                that is a program of its own and starts one (gRPC, proto/target.proto, remotepb)
 pkg/render      values → units, files, report (configure → resolve → collect → mutate → validate → convert)
+pkg/bundle      a pack read from disk: the virtual composition of the pack and the packs it holds
 pkg/plan        the plan between two versions (changes, hooks, savepoints, drift)
-pkg/graph       the dependency graph; pkg/runner runs it; pkg/saga makes it transactional (journal, store, rollback)
-pkg/adapter     graph nodes ↔ plan steps ↔ target steps
-pkg/target      what a target must do (Resolve, Execute; optional Recorder, Observer); target/memory runs nothing;
-                target/remote starts a target that is a program of its own (gRPC, proto/target.proto) and serves one
+pkg/saga        the saga: its record, its history, the entries of its journal; it runs transactionally
+pkg/environment env.yaml
+pkg/secretstore the secret store clients; pkg/logging the log of pack and of the targets
+internal/       the rest: release, session (a command's connection to the world), workdir, oci, values, interrupt,
+                graph (the dependency graph), runner (walks it), adapter (graph nodes ↔ plan steps ↔ target steps),
+                emit (configuration files), diagnose, storage (a saga's record and journal on disk), target/memory
+                (a target that runs nothing), target/kube (the k8s runtime of a target), testpacks
+sdk             author side, a module of its own (github.com/horchestra/pack/sdk): Pack, Meta, schema generation,
+                packschema (PackRoot vocabulary), compute (CEL), format (names of artifacts and annotations)
+sdk/python      the same author side in Python (packsdk); sdk/java the same in Java (io.horchestra.pack.sdk)
 examples/       postgres, written in Go, Python and Java; the golden files all three are compared with
-pkg/environment env.yaml; pkg/format names of artifacts and annotations
 ```
 
 ## The flow of `apply`
@@ -129,5 +135,7 @@ reads one file of a pack without extracting it.
 go test -race ./...
 ```
 
-`internal/testpacks` are packs written the way an author writes them (`tembo`, `openbao`, which holds tembo);
-`regserver` serves them from an in-process registry.
+The Go SDK is a module of its own: `cd sdk && go test -race ./...`. Its test packs, `sdk/internal/testpacks`, are packs
+written the way an author writes them (`tembo`, `openbao`, which holds tembo); its golden test keeps
+`sdk/internal/testdata/golden`, what it generates of them, honest. The core's tests read the packs generated
+(`internal/testpacks`); `internal/testpacks/regserver` serves them from an in-process registry.

@@ -10,6 +10,7 @@ import (
 
 	"github.com/horchestra/pack/internal/oci"
 	"github.com/horchestra/pack/internal/release"
+	"github.com/horchestra/pack/pkg/api"
 	"github.com/horchestra/pack/pkg/logging"
 	"github.com/horchestra/pack/pkg/render"
 	"github.com/horchestra/pack/pkg/target"
@@ -32,7 +33,7 @@ func asJSON() {
 // result writes v, the command's result, as the JSON document of --json; nothing without it.
 func result(v any) error {
 	if streamOut {
-		streamEvent(Event{Type: EventResult, Status: StatusOK, Result: v})
+		streamEvent(api.Event{Type: api.EventResult, Status: api.StatusOK, Result: v})
 		return nil
 	}
 	if !jsonOut {
@@ -45,23 +46,6 @@ func result(v any) error {
 	_, err = stdout.Write(append(b, '\n'))
 	return err
 }
-
-// The codes of an error, the closed list a reader of --json acts on.
-const (
-	CodeNoRelease        = "no_release"        // no release.yaml, or it names no pack: pack init
-	CodeNotRefreshed     = "not_refreshed"     // the pack or a target is not brought into .pack: pack refresh
-	CodeValuesMissing    = "values_missing"    // settings the schema requires are not given
-	CodeValuesInvalid    = "values_invalid"    // the schema refuses a value, a rule of the pack does not hold, the environment's resources fall short
-	CodeCheckFailed      = "check_failed"      // pack check found problems
-	CodeSagaFailed       = "saga_failed"       // a saga failed; the record says what is in effect
-	CodeSagaUnfinished   = "saga_unfinished"   // a saga did not finish: apply it again, or take it back
-	CodeNothingInstalled = "nothing_installed" // nothing is installed to remove or roll back
-	CodeForeignComments  = "foreign_comments"  // values.yaml has comments pack did not write
-	CodeTarget           = "target"            // the target refused, or could not be reached
-	CodeNeedsApproval    = "needs_approval"    // run.approve keeps the plan from being applied unasked: --approve <its digest>
-	CodeUnhealthy        = "unhealthy"         // what is installed drifted from the record, or a key is not ready (pack status)
-	CodeError            = "error"             // anything else
-)
 
 // coded is an error with the code a command knows it by, and the problems it found.
 type coded struct {
@@ -97,39 +81,25 @@ func withProblems(code string, err error, problems []render.Problem) error {
 	return &coded{code: code, err: err, problems: problems}
 }
 
-// apiError is an error as --json writes it.
-type apiError struct {
-	Code     string           `json:"code"`
-	Message  string           `json:"message"`
-	Problems []render.Problem `json:"problems,omitempty"`
-	Detail   any              `json:"detail,omitempty"` // what the command found: the scenarios of pack test, what pack author check says
-}
-
-// failure is the JSON of a command that failed: what went wrong, and what to run next.
-type failure struct {
-	Error apiError `json:"error"`
-	Next  []string `json:"next,omitempty"`
-}
-
 // classify gives an error its code: the one a command said, or the one its kind says.
-func classify(err error) apiError {
-	out := apiError{Code: CodeError, Message: err.Error()}
+func classify(err error) api.Error {
+	out := api.Error{Code: api.CodeError, Message: err.Error()}
 	var c *coded
 	var ps *render.Problems
 	switch {
 	case errors.As(err, &ps):
-		out.Code, out.Problems = CodeValuesInvalid, ps.Problems
+		out.Code, out.Problems = api.CodeValuesInvalid, ps.Problems
 		if ps.OnlyRequired() {
-			out.Code = CodeValuesMissing
+			out.Code = api.CodeValuesMissing
 		}
 	case errors.As(err, &c):
 		out.Code, out.Problems, out.Detail = c.code, c.problems, c.detail
 	case errors.Is(err, oci.ErrNoLock), errors.Is(err, target.ErrNotBrought):
-		out.Code = CodeNotRefreshed
+		out.Code = api.CodeNotRefreshed
 	case errors.Is(err, release.ErrNoPack):
-		out.Code = CodeNoRelease
+		out.Code = api.CodeNoRelease
 	case errors.As(err, new(*target.Error)):
-		out.Code = CodeTarget
+		out.Code = api.CodeTarget
 	}
 	return out
 }
@@ -146,25 +116,25 @@ func nextOf(err error, code string) []string {
 // nextFor is what to run after an error of the code.
 func nextFor(code string) []string {
 	switch code {
-	case CodeNoRelease:
+	case api.CodeNoRelease:
 		return []string{"pack init <oci://registry/repo:tag|dir> ."}
-	case CodeNotRefreshed:
+	case api.CodeNotRefreshed:
 		return []string{"pack refresh"}
-	case CodeValuesMissing:
+	case api.CodeValuesMissing:
 		return []string{"pack fill", "pack answer <pointer> <value>", "pack check"}
-	case CodeValuesInvalid:
+	case api.CodeValuesInvalid:
 		return []string{"pack answer <pointer> <value>", "edit values.yaml", "pack check"}
-	case CodeCheckFailed:
+	case api.CodeCheckFailed:
 		return []string{"pack check"}
-	case CodeSagaFailed, CodeSagaUnfinished:
+	case api.CodeSagaFailed, api.CodeSagaUnfinished:
 		return []string{"pack log", "pack apply", "pack rollback"}
-	case CodeForeignComments:
+	case api.CodeForeignComments:
 		return []string{"pack values write --rewrite"}
-	case CodeNothingInstalled:
+	case api.CodeNothingInstalled:
 		return []string{"pack plan", "pack apply"}
-	case CodeUnhealthy:
+	case api.CodeUnhealthy:
 		return []string{"pack status", "pack log", "pack apply"}
-	case CodeNeedsApproval:
+	case api.CodeNeedsApproval:
 		return []string{"pack plan", "pack apply --approve <the plan's digest>"} // the command's own, as a rule (approved)
 	}
 	return nil
@@ -174,11 +144,11 @@ func nextFor(code string) []string {
 func fail(err error) {
 	if streamOut {
 		e := classify(err)
-		streamEvent(Event{Type: EventResult, Status: StatusFailed, Code: e.Code, Error: e.Message, Next: nextOf(err, e.Code)})
+		streamEvent(api.Event{Type: api.EventResult, Status: api.StatusFailed, Code: e.Code, Error: e.Message, Next: nextOf(err, e.Code)})
 	}
 	if jsonOut {
 		e := classify(err)
-		b, _ := json.MarshalIndent(failure{Error: e, Next: nextOf(err, e.Code)}, "", "  ")
+		b, _ := json.MarshalIndent(api.Failure{Error: e, Next: nextOf(err, e.Code)}, "", "  ")
 		_, _ = stdout.Write(append(b, '\n'))
 	}
 	logging.For("cmd").Debug().Err(err).Dur("took", time.Since(commandStart)).Msg("failed")

@@ -9,6 +9,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/horchestra/pack/pkg/api"
 	"github.com/horchestra/pack/pkg/saga"
 )
 
@@ -25,12 +26,12 @@ func TestNext(t *testing.T) {
 	write(t, d, "values.yaml", map[string]any{"postgres": map[string]any{"id": "n1"}}) // openbao.api_addr is required
 	inRelease(t, d)
 	n := whatNext(ctx)
-	if n.State != StateUnfilled || len(n.Blocking) != 1 || n.Blocking[0].Code != CodeValuesMissing || !strings.Contains(n.Next[1], "/openbao/api_addr") {
+	if n.State != StateUnfilled || len(n.Blocking) != 1 || n.Blocking[0].Code != api.CodeValuesMissing || !strings.Contains(n.Next[1], "/openbao/api_addr") {
 		t.Fatalf("a required setting not given: %+v", n)
 	}
 
 	write(t, d, "values.yaml", map[string]any{"openbao": map[string]any{"api_addr": "https://bao:8200", "log_level": 7}})
-	if n := whatNext(ctx); n.State != StateInvalid || n.Blocking[0].Code != CodeValuesInvalid {
+	if n := whatNext(ctx); n.State != StateInvalid || n.Blocking[0].Code != api.CodeValuesInvalid {
 		t.Errorf("a value the schema refuses: %+v", n)
 	}
 
@@ -80,7 +81,7 @@ func TestNextFailed(t *testing.T) {
 		t.Fatal(err)
 	}
 	n := whatNext(context.Background())
-	if n.State != StateFailed || n.Blocking[0].Code != CodeSagaUnfinished || !strings.Contains(n.Blocking[0].Message, "boom") || n.Next[0] != "pack diagnose" {
+	if n.State != StateFailed || n.Blocking[0].Code != api.CodeSagaUnfinished || !strings.Contains(n.Blocking[0].Message, "boom") || n.Next[0] != "pack diagnose" {
 		t.Errorf("a failed saga: %+v", n)
 	}
 }

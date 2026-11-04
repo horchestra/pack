@@ -13,21 +13,21 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/horchestra/pack/internal/graph"
 	"github.com/horchestra/pack/internal/oci"
 	"github.com/horchestra/pack/internal/release"
+	"github.com/horchestra/pack/internal/storage"
+	_ "github.com/horchestra/pack/internal/target/kube"   // runtime k8s: a target's image in a Pod
+	_ "github.com/horchestra/pack/internal/target/memory" // the targets there are
 	"github.com/horchestra/pack/internal/workdir"
 	"github.com/horchestra/pack/pkg/bundle"
 	"github.com/horchestra/pack/pkg/environment"
-	"github.com/horchestra/pack/pkg/graph"
 	"github.com/horchestra/pack/pkg/logging"
 	"github.com/horchestra/pack/pkg/render"
 	"github.com/horchestra/pack/pkg/saga"
-	"github.com/horchestra/pack/pkg/saga/storage"
 	"github.com/horchestra/pack/pkg/secretstore"
 	"github.com/horchestra/pack/pkg/target"
-	_ "github.com/horchestra/pack/pkg/target/memory"      // the targets there are
-	"github.com/horchestra/pack/pkg/target/remote"        // a target that is not compiled in is a program of its own
-	_ "github.com/horchestra/pack/pkg/target/remote/kube" // runtime k8s: a target's image in a Pod
+	"github.com/horchestra/pack/pkg/target/remote" // a target that is not compiled in is a program of its own
 )
 
 // Session is what a command works with.

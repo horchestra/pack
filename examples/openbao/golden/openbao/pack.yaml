@@ -6,11 +6,11 @@ annotations:
   pack.name: openbao
   pack.version: 2.6.5
 items:
-  - annotations:
-      pack.image: "true"
-    from: oci://images/openbao:2.6.5
-  - from: file://schema.json
-    type: application/vnd.pack.schema.v1+json
-  - from: oci://packs/postgres:16.4
+- annotations:
+    pack.image: "true"
+  from: oci://images/openbao:2.6.5
+- from: file://schema.json
+  type: application/vnd.pack.schema.v1+json
+- from: oci://packs/postgres:16.4
 repository: packs/openbao:2.6.5
 type: application/vnd.pack.pack.v1+json

@@ -13,7 +13,7 @@ import (
 )
 
 // The test packs as the Go sdk writes them: openbao holds tembo, both documented in en and ru.
-const packs = "../../sdk/testdata/golden/openbao"
+const packs = "../../sdk/internal/testdata/golden/openbao"
 
 func load(t *testing.T) *bundle.Bundle {
 	t.Helper()

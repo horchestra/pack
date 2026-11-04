@@ -42,7 +42,7 @@ func TestPull(t *testing.T) {
 	_ = os.MkdirAll("testdata/db/content", 0o755)
 	_ = os.WriteFile("testdata/db/content/db.ptmpl", []byte("port={{ .port }}\n"), 0o644)
 	t.Cleanup(func() { _ = os.RemoveAll("testdata") })
-	host := regserver.Serve(t, &Shop{})
+	host := regserver.ServePack(t, &Shop{})
 	ctx := context.Background()
 	o := oci.Options{PlainHTTP: true}
 	ref := "oci://" + host + "/packs/shop:2.0.0"
@@ -114,7 +114,7 @@ func TestPullFile(t *testing.T) {
 	_ = os.MkdirAll("testdata/prog/content", 0o755)
 	_ = os.WriteFile("testdata/prog/content/pack-target-fake", []byte("#!/bin/sh\necho fake\n"), 0o755)
 	t.Cleanup(func() { _ = os.RemoveAll("testdata") })
-	host := regserver.Serve(t, &Prog{})
+	host := regserver.ServePack(t, &Prog{})
 	o := oci.Options{PlainHTTP: true}
 	got, err := oci.PullFile(context.Background(), "oci://"+host+"/packs/fake:0.1.0", "pack-target-fake", o)
 	if err != nil || string(got) != "#!/bin/sh\necho fake\n" {

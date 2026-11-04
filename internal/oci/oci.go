@@ -18,8 +18,8 @@ import (
 	"github.com/arenadata/oci-packer/pkg/registry/reference"
 	"github.com/arenadata/oci-packer/pkg/registry/remote"
 
-	"github.com/horchestra/pack/pkg/format"
 	"github.com/horchestra/pack/pkg/logging"
+	"github.com/horchestra/pack/sdk/format"
 )
 
 // Options of a registry.

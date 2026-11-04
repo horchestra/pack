@@ -11,8 +11,8 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/horchestra/pack/internal/emit"
 	"github.com/horchestra/pack/pkg/bundle"
-	"github.com/horchestra/pack/pkg/emit"
 	"github.com/horchestra/pack/sdk/packschema"
 	"github.com/horchestra/pack/sdk/schema"
 )

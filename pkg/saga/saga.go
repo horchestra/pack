@@ -19,9 +19,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/horchestra/pack/pkg/graph"
+	"github.com/horchestra/pack/internal/graph"
+	"github.com/horchestra/pack/internal/runner"
 	"github.com/horchestra/pack/pkg/logging"
-	"github.com/horchestra/pack/pkg/runner"
 )
 
 // Executor performs a node in its own system. Both calls must be safe to repeat:

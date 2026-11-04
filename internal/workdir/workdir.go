@@ -16,10 +16,10 @@ import (
 	"path/filepath"
 	"uuid"
 
+	"github.com/horchestra/pack/internal/adapter"
 	"github.com/horchestra/pack/internal/release"
-	"github.com/horchestra/pack/pkg/adapter"
+	"github.com/horchestra/pack/internal/storage"
 	"github.com/horchestra/pack/pkg/saga"
-	"github.com/horchestra/pack/pkg/saga/storage"
 	"github.com/horchestra/pack/pkg/target"
 )
 

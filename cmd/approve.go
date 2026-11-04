@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/horchestra/pack/internal/session"
+	"github.com/horchestra/pack/pkg/api"
 	"github.com/horchestra/pack/pkg/environment"
 	"github.com/horchestra/pack/pkg/plan"
 	"github.com/horchestra/pack/pkg/render"
@@ -49,7 +50,7 @@ func approved(s *session.Session, p *plan.Plan, approve string, h how) error {
 	}
 	if len(approve) > 0 {
 		if approve != p.Digest {
-			return withNext(CodeNeedsApproval, fmt.Errorf("--approve %s: the plan is %s now — look at it again (%s)", approve, p.Digest, h.look), h.next(p.Digest))
+			return withNext(api.CodeNeedsApproval, fmt.Errorf("--approve %s: the plan is %s now — look at it again (%s)", approve, p.Digest, h.look), h.next(p.Digest))
 		}
 		return nil
 	}
@@ -69,7 +70,7 @@ func approved(s *session.Session, p *plan.Plan, approve string, h how) error {
 		}
 		why = "run.approve: auto-safe, and the plan has risks: " + strings.Join(kinds, ", ")
 	}
-	err = withProblems(CodeNeedsApproval, fmt.Errorf("%s — %s --approve %s runs this very plan", why, h.run, p.Digest), problems)
+	err = withProblems(api.CodeNeedsApproval, fmt.Errorf("%s — %s --approve %s runs this very plan", why, h.run, p.Digest), problems)
 	err.(*coded).next = h.next(p.Digest)
 	return err
 }

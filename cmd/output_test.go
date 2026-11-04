@@ -10,6 +10,7 @@ import (
 
 	"github.com/horchestra/pack/internal/oci"
 	"github.com/horchestra/pack/internal/release"
+	"github.com/horchestra/pack/pkg/api"
 	"github.com/horchestra/pack/pkg/plan"
 	"github.com/horchestra/pack/pkg/render"
 	"github.com/horchestra/pack/pkg/target"
@@ -19,13 +20,13 @@ func TestClassify(t *testing.T) {
 	missing := &render.Problems{Problems: []render.Problem{{Kind: render.KindRequired, Where: "/a", Message: "missing"}}}
 	wrong := &render.Problems{Problems: []render.Problem{{Kind: render.KindRequired, Where: "/a"}, {Kind: render.KindRule, Where: "/b"}}}
 	for err, want := range map[error]string{
-		fmt.Errorf("render: %w", missing):  CodeValuesMissing,
-		wrong:                              CodeValuesInvalid,
-		fmt.Errorf("x: %w", oci.ErrNoLock): CodeNotRefreshed,
-		fmt.Errorf("target x: %w", target.ErrNotBrought): CodeNotRefreshed,
-		fmt.Errorf("%w: write pack:", release.ErrNoPack): CodeNoRelease,
-		withCode(CodeSagaFailed, errors.New("boom")):     CodeSagaFailed,
-		errors.New("anything"):                           CodeError,
+		fmt.Errorf("render: %w", missing):  api.CodeValuesMissing,
+		wrong:                              api.CodeValuesInvalid,
+		fmt.Errorf("x: %w", oci.ErrNoLock): api.CodeNotRefreshed,
+		fmt.Errorf("target x: %w", target.ErrNotBrought): api.CodeNotRefreshed,
+		fmt.Errorf("%w: write pack:", release.ErrNoPack): api.CodeNoRelease,
+		withCode(api.CodeSagaFailed, errors.New("boom")): api.CodeSagaFailed,
+		errors.New("anything"):                           api.CodeError,
 	} {
 		if got := classify(err); got.Code != want {
 			t.Errorf("%v: %s, want %s", err, got.Code, want)
@@ -35,10 +36,10 @@ func TestClassify(t *testing.T) {
 		t.Errorf("problems: %+v", e)
 	}
 	ps := []render.Problem{{Kind: render.KindCheck, Where: "/x", Message: "no"}}
-	if e := classify(withProblems(CodeCheckFailed, errors.New("1 problem(s)"), ps)); e.Code != CodeCheckFailed || len(e.Problems) != 1 {
+	if e := classify(withProblems(api.CodeCheckFailed, errors.New("1 problem(s)"), ps)); e.Code != api.CodeCheckFailed || len(e.Problems) != 1 {
 		t.Errorf("a check's problems in its error: %+v", e)
 	}
-	for _, code := range []string{CodeNoRelease, CodeNotRefreshed, CodeValuesMissing, CodeSagaFailed} {
+	for _, code := range []string{api.CodeNoRelease, api.CodeNotRefreshed, api.CodeValuesMissing, api.CodeSagaFailed} {
 		if len(nextFor(code)) == 0 {
 			t.Errorf("%s: nothing to run next", code)
 		}

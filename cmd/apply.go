@@ -7,6 +7,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/horchestra/pack/internal/interrupt"
+	"github.com/horchestra/pack/pkg/api"
 	"github.com/horchestra/pack/pkg/plan"
 )
 
@@ -45,7 +46,7 @@ directory, or a registry reference.`,
 			return err
 		}
 		if err := s.Apply(ctx, c); err != nil {
-			return withCode(CodeSagaFailed, err)
+			return withCode(api.CodeSagaFailed, err)
 		}
 		fmt.Println(strings.Join(strings.Fields(fmt.Sprintf("installed %s %s on %s (%s)", c.ToB.Name, c.ToB.Version, s.Target, s.ID)), " "))
 		return result(installedResult{Installed: versionOf(c.ToB.Name, c.ToB.Version, c.Ref), Target: s.Target, Installation: s.ID, Plan: c.Plan})

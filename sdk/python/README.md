@@ -40,4 +40,4 @@ generate("out", OpenBao())     # out/openbao/…, out/tembo/…
 - `packsdk.main(*roots)` is a ready CLI: `generate [-o dir]`, `schema <name>`.
 
 Tests: `python3 -I -m unittest discover -s tests` — the generated artifacts of the test packs equal
-`sdk/testdata/golden` (written by the Go sdk) byte for byte.
+`sdk/internal/testdata/golden` (written by the Go sdk) byte for byte.

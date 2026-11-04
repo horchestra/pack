@@ -7,7 +7,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/horchestra/pack/pkg/format"
+	"github.com/horchestra/pack/sdk/format"
 )
 
 // The artifact types and annotations of a pack's members are format's.

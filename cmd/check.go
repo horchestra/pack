@@ -7,14 +7,16 @@ import (
 	"maps"
 	"slices"
 
+	"github.com/spf13/cobra"
+
 	"github.com/horchestra/pack/sdk/check"
 	"github.com/horchestra/pack/sdk/docs"
 	"github.com/horchestra/pack/sdk/schema"
-	"github.com/spf13/cobra"
 
 	"github.com/horchestra/pack/internal/interrupt"
 	"github.com/horchestra/pack/internal/session"
 	"github.com/horchestra/pack/internal/values"
+	"github.com/horchestra/pack/pkg/api"
 	"github.com/horchestra/pack/pkg/bundle"
 	"github.com/horchestra/pack/pkg/render"
 )
@@ -64,7 +66,7 @@ rendered against it.`,
 		}
 		if n > 0 {
 			// the problems are the error's: one document, the error's
-			return withProblems(CodeCheckFailed, fmt.Errorf("%d problem(s)", n), ps)
+			return withProblems(api.CodeCheckFailed, fmt.Errorf("%d problem(s)", n), ps)
 		}
 		fmt.Println("ok")
 		return result(struct {

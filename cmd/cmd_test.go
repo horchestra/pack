@@ -16,11 +16,10 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/horchestra/pack/sdk"
 	"sigs.k8s.io/yaml"
 
 	"github.com/horchestra/pack/internal/release"
-	"github.com/horchestra/pack/internal/testpacks/openbao"
+	"github.com/horchestra/pack/internal/testpacks"
 	"github.com/horchestra/pack/internal/testpacks/regserver"
 	"github.com/horchestra/pack/internal/workdir"
 	"github.com/horchestra/pack/pkg/environment"
@@ -85,10 +84,7 @@ func releaseOf(t *testing.T, packRef string, env map[string]any) string {
 func generated(t *testing.T) string {
 	t.Helper()
 	p := filepath.Join(t.TempDir(), "packs")
-	if err := sdk.Generate(p, &openbao.OpenBao{}); err != nil {
-		t.Fatal(err)
-	}
-	return filepath.Join(p, "openbao")
+	return testpacks.Generated(t, p)
 }
 
 func TestGraph(t *testing.T) {
@@ -159,7 +155,7 @@ func TestLogPrune(t *testing.T) {
 
 // A pack in a registry: init writes the lock and brings the pack, and the commands that follow read it from there.
 func TestRefreshFromARegistry(t *testing.T) {
-	host := regserver.Serve(t, &openbao.OpenBao{})
+	host := regserver.Serve(t, testpacks.Generated(t, t.TempDir()))
 	ref := "oci://" + host + "/packs/openbao:2.1.0"
 	d := releaseOf(t, ref, nil)
 	write(t, d, "release.yaml", map[string]any{"pack": ref, "registry": map[string]any{"plain_http": true}})
@@ -280,7 +276,7 @@ func TestRefreshBringsTheTargets(t *testing.T) {
 
 // A target that runs in a container: refresh locks the digest its image's tag means, and again keeps it.
 func TestRefreshLocksATargetsImage(t *testing.T) {
-	host := regserver.Serve(t, &openbao.OpenBao{})
+	host := regserver.Serve(t, testpacks.Generated(t, t.TempDir()))
 	image := "oci://" + host + "/packs/openbao:2.1.0" // any manifest pins: the pack's stands for an image here
 	d := releaseOf(t, generated(t), map[string]any{"target": "fake", "runtime": map[string]any{"type": "docker"}})
 	write(t, d, "release.yaml", map[string]any{

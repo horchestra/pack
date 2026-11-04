@@ -5,8 +5,7 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/horchestra/pack/internal/testpacks/openbao"
-	"github.com/horchestra/pack/internal/testpacks/tembo"
+	"github.com/horchestra/pack/internal/testpacks"
 	"github.com/horchestra/pack/pkg/bundle"
 	"github.com/horchestra/pack/sdk"
 	"github.com/horchestra/pack/sdk/packschema"
@@ -18,17 +17,38 @@ func load(t *testing.T, root sdk.Pack) *bundle.Bundle {
 	if err := sdk.Generate(dir, root); err != nil {
 		t.Fatal(err)
 	}
-	b, err := bundle.Load(filepath.Join(dir, root.Meta().Name))
+	return loadDir(t, filepath.Join(dir, root.Meta().Name))
+}
+
+// openbaoBundle is the test pack that holds another, as the sdk generated it.
+func openbaoBundle(t *testing.T) *bundle.Bundle {
+	t.Helper()
+	return loadDir(t, testpacks.Generated(t, t.TempDir()))
+}
+
+func loadDir(t *testing.T, dir string) *bundle.Bundle {
+	t.Helper()
+	b, err := bundle.Load(dir)
 	if err != nil {
 		t.Fatal(err)
 	}
 	return b
 }
 
-// Mid holds a tembo, and is held by Outer: three levels.
+// Inner is held by Mid, Mid by Outer: three levels.
+type Inner struct {
+	ID string `json:"id,omitempty"`
+}
+
+func (*Inner) SetDefaults() {}
+func (*Inner) Meta() sdk.Meta {
+	return sdk.Meta{Name: "inner", Version: "1", Dir: "/nonexistent"}
+}
+func (*Inner) PackRoot() packschema.Root { return packschema.Root{} }
+
 type Mid struct {
-	Name  string        `json:"name,omitempty"`
-	Inner *tembo.Config `json:"inner,omitempty"`
+	Name  string `json:"name,omitempty"`
+	Inner *Inner `json:"inner,omitempty"`
 }
 
 func (*Mid) SetDefaults() {}
@@ -50,7 +70,7 @@ func (*Outer) PackRoot() packschema.Root { return packschema.Root{} }
 
 // The instances: the pack itself, and each pack held in a field — held ones before the one that holds them.
 func TestInstances(t *testing.T) {
-	b := load(t, &openbao.OpenBao{})
+	b := openbaoBundle(t)
 	if !slices.Equal(b.Keys, []string{"postgres", "openbao"}) {
 		t.Fatalf("keys = %v", b.Keys)
 	}
@@ -73,7 +93,7 @@ func TestInstances(t *testing.T) {
 
 // The pack's own schema has its settings and not those of the pack it holds; its order is the author's.
 func TestOwnSchemaCutsOutWhatIsHeld(t *testing.T) {
-	b := load(t, &openbao.OpenBao{})
+	b := openbaoBundle(t)
 	root := b.Packs["openbao"].Schema.Root
 	if _, held := root.Properties["postgres"]; held {
 		t.Fatal("the held pack is not a property of the pack's own schema")
