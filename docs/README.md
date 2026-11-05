@@ -2,6 +2,7 @@
 
 |                              |                                                                                                                          |
 |------------------------------|--------------------------------------------------------------------------------------------------------------------------|
+| [architecture.md](architecture.md) | the three processes — pack, pack-operator, pack-ui: who holds what, a deploy end to end, the authentication |
 | [authoring.md](authoring.md) | writing a pack: the struct, `Meta`, `PackRoot`, formulas and rules, files, packs that hold packs; in Go, Python and Java |
 | [values.md](values.md)       | the values document, the effective document, the CEL environment, the credentials pack creates                           |
 | [emitters.md](emitters.md)   | the formats a file can be written in, the template language                                                              |
