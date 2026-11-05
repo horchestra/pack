@@ -21,6 +21,8 @@ import (
 func streamProcess(t *testing.T, dir string, args ...string) (stdout, stderr string, code int) {
 	t.Helper()
 	cmd := exec.Command(os.Args[0], "-test.run=^TestStreamHelper$")
+	// an explicit cwd: the test binary's own may be a release another test already removed (getwd fails at init)
+	cmd.Dir = dir
 	cmd.Env = append(os.Environ(), "PACK_STREAM_HELPER="+strings.Join(append([]string{"-C", dir}, args...), "\x1f"))
 	var o, e bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &o, &e
@@ -203,6 +205,8 @@ func TestStreamDeleteAndRollback(t *testing.T) {
 func TestStreamInterrupt(t *testing.T) {
 	d := releaseOf(t, generated(t), map[string]any{"hold_at": "openbao/apply", "run": map[string]any{"jobs": 1}})
 	cmd := exec.Command(os.Args[0], "-test.run=^TestStreamHelper$")
+	// an explicit cwd: the test binary's own may be a release another test already removed (getwd fails at init)
+	cmd.Dir = d
 	cmd.Env = append(os.Environ(), "PACK_STREAM_HELPER="+strings.Join([]string{"-C", d, "apply", "--stream"}, "\x1f"))
 	out, err := cmd.StdoutPipe()
 	if err != nil {
@@ -247,6 +251,8 @@ func TestStreamInterrupt(t *testing.T) {
 func TestStreamReaderGone(t *testing.T) {
 	d := releaseOf(t, generated(t), nil)
 	cmd := exec.Command(os.Args[0], "-test.run=^TestStreamHelper$")
+	// an explicit cwd: the test binary's own may be a release another test already removed (getwd fails at init)
+	cmd.Dir = d
 	cmd.Env = append(os.Environ(), "PACK_STREAM_HELPER="+strings.Join([]string{"-C", d, "apply", "--stream"}, "\x1f"))
 	r, w, err := os.Pipe()
 	if err != nil {
@@ -363,6 +369,8 @@ func TestStreamEveryCommand(t *testing.T) {
 func TestStreamInterruptSIGTERM(t *testing.T) {
 	d := releaseOf(t, generated(t), map[string]any{"hold_at": "openbao/apply", "run": map[string]any{"jobs": 1}})
 	cmd := exec.Command(os.Args[0], "-test.run=^TestStreamHelper$")
+	// an explicit cwd: the test binary's own may be a release another test already removed (getwd fails at init)
+	cmd.Dir = d
 	cmd.Env = append(os.Environ(), "PACK_STREAM_HELPER="+strings.Join([]string{"-C", d, "apply", "--stream"}, "\x1f"))
 	out, err := cmd.StdoutPipe()
 	if err != nil {

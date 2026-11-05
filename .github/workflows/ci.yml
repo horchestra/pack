@@ -70,6 +70,7 @@ jobs:
           cache: npm
           cache-dependency-path: sdk/ts/package-lock.json
       - run: cd sdk/ts && npm ci && npm run typecheck && npm test
+      - run: node --experimental-strip-types --test examples/*/ts/*.test.ts
 
   java:
     name: java sdk
