@@ -16,15 +16,15 @@ import (
 	"github.com/horchestra/pack/pkg/api"
 	"github.com/horchestra/pack/pkg/logging"
 
-	"github.com/horchestra/pack-operator/authn"
-	"github.com/horchestra/pack-operator/authz"
-	"github.com/horchestra/pack-operator/bus"
-	"github.com/horchestra/pack-operator/config"
-	"github.com/horchestra/pack-operator/db"
-	"github.com/horchestra/pack-operator/git"
-	"github.com/horchestra/pack-operator/packbin"
-	"github.com/horchestra/pack-operator/policy"
-	"github.com/horchestra/pack-operator/sync"
+	"github.com/horchestra/pack/operator/authn"
+	"github.com/horchestra/pack/operator/authz"
+	"github.com/horchestra/pack/operator/bus"
+	"github.com/horchestra/pack/operator/config"
+	"github.com/horchestra/pack/operator/db"
+	"github.com/horchestra/pack/operator/git"
+	"github.com/horchestra/pack/operator/packbin"
+	"github.com/horchestra/pack/operator/policy"
+	"github.com/horchestra/pack/operator/sync"
 )
 
 // Version is the operator's own version; a build stamps it.

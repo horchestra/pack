@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/horchestra/pack-operator/bus"
+	"github.com/horchestra/pack/operator/bus"
 )
 
 // Test runs the whole suite against the buses newBuses gives: n buses on one fresh store (a leader has a

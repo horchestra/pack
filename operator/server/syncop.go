@@ -17,7 +17,7 @@ import (
 
 	"github.com/horchestra/pack/pkg/api"
 
-	"github.com/horchestra/pack-operator/config"
+	"github.com/horchestra/pack/operator/config"
 )
 
 // packOp is a synchronous operation of К4: the checkout of the sha (the query's, HEAD's by default) in a

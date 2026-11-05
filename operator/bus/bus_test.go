@@ -6,9 +6,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/horchestra/pack-operator/bus"
-	"github.com/horchestra/pack-operator/bus/bustest"
-	"github.com/horchestra/pack-operator/db"
+	"github.com/horchestra/pack/operator/bus"
+	"github.com/horchestra/pack/operator/bus/bustest"
+	"github.com/horchestra/pack/operator/db"
 )
 
 // The SQL bus passes the suite on SQLite; on PostgreSQL it is operator/e2e.

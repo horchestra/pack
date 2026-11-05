@@ -9,8 +9,8 @@ import (
 
 	"sigs.k8s.io/yaml"
 
-	"github.com/horchestra/pack-operator/bus"
-	"github.com/horchestra/pack-operator/config"
+	"github.com/horchestra/pack/operator/bus"
+	"github.com/horchestra/pack/operator/config"
 )
 
 // jobDir is the job's temporary directory (К6): checkout/ — the tree of the request's sha, home/ — the job's

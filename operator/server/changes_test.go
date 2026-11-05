@@ -14,7 +14,7 @@ import (
 	"github.com/go-git/go-git/v6/plumbing"
 	"github.com/go-git/go-git/v6/plumbing/object"
 
-	"github.com/horchestra/pack-operator/bus"
+	"github.com/horchestra/pack/operator/bus"
 )
 
 // A change request end to end (B9): opened, a commit on its branch planned, merged into the main branch (the

@@ -1,4 +1,4 @@
-module github.com/horchestra/pack-operator
+module github.com/horchestra/pack/operator
 
 go 1.27.1
 

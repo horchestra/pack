@@ -8,7 +8,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/horchestra/pack-operator/db"
+	"github.com/horchestra/pack/operator/db"
 )
 
 // The DB store: a put reads back byte for byte, a wrong key does not open it.

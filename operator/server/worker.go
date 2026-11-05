@@ -9,12 +9,12 @@ import (
 
 	"github.com/horchestra/pack/pkg/logging"
 
-	"github.com/horchestra/pack-operator/bus"
-	"github.com/horchestra/pack-operator/config"
-	"github.com/horchestra/pack-operator/db"
-	"github.com/horchestra/pack-operator/git"
-	"github.com/horchestra/pack-operator/packbin"
-	"github.com/horchestra/pack-operator/worker"
+	"github.com/horchestra/pack/operator/bus"
+	"github.com/horchestra/pack/operator/config"
+	"github.com/horchestra/pack/operator/db"
+	"github.com/horchestra/pack/operator/git"
+	"github.com/horchestra/pack/operator/packbin"
+	"github.com/horchestra/pack/operator/worker"
 )
 
 // WorkerOptions is the worker subcommand's own settings: the runtime it answers and the runtime's settings.

@@ -21,7 +21,7 @@ import (
 
 	"github.com/horchestra/pack/sdk"
 
-	"github.com/horchestra/pack-operator/bus"
+	"github.com/horchestra/pack/operator/bus"
 )
 
 // A refresh end to end (B10): the release's pack is in a registry, the refresh job pins the tag's digest, the

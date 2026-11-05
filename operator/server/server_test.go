@@ -13,7 +13,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/horchestra/pack-operator/config"
+	"github.com/horchestra/pack/operator/config"
 )
 
 // fakePack is a pack binary of a script: version --json and nothing more.

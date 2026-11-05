@@ -11,8 +11,8 @@ import (
 
 	"github.com/horchestra/pack/pkg/api"
 
-	"github.com/horchestra/pack-operator/bus"
-	"github.com/horchestra/pack-operator/config"
+	"github.com/horchestra/pack/operator/bus"
+	"github.com/horchestra/pack/operator/config"
 )
 
 // releaseInfo is a release as the API lists it (К4).

@@ -9,7 +9,7 @@ import (
 	gooidc "github.com/coreos/go-oidc/v3/oidc"
 	"golang.org/x/oauth2"
 
-	"github.com/horchestra/pack-operator/config"
+	"github.com/horchestra/pack/operator/config"
 )
 
 // OIDC is the OpenID Connect login (auth: oidc): the provider discovered at the issuer, the code flow of

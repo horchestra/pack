@@ -22,10 +22,10 @@ import (
 
 	"github.com/horchestra/pack/pkg/logging"
 
-	"github.com/horchestra/pack-operator/bus"
-	"github.com/horchestra/pack-operator/config"
-	"github.com/horchestra/pack-operator/db"
-	"github.com/horchestra/pack-operator/git"
+	"github.com/horchestra/pack/operator/bus"
+	"github.com/horchestra/pack/operator/config"
+	"github.com/horchestra/pack/operator/db"
+	"github.com/horchestra/pack/operator/git"
 )
 
 // The trailers of К5.

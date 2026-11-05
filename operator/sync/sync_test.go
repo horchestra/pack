@@ -15,9 +15,9 @@ import (
 	"github.com/go-git/go-git/v6/plumbing"
 	"github.com/go-git/go-git/v6/plumbing/object"
 
-	"github.com/horchestra/pack-operator/bus"
-	opconfig "github.com/horchestra/pack-operator/config"
-	"github.com/horchestra/pack-operator/db"
+	"github.com/horchestra/pack/operator/bus"
+	opconfig "github.com/horchestra/pack/operator/config"
+	"github.com/horchestra/pack/operator/db"
 )
 
 // fixture is a project repository: a bare remote and a working seed to commit with, all go-git.

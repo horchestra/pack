@@ -19,7 +19,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/horchestra/pack-operator/db"
+	"github.com/horchestra/pack/operator/db"
 )
 
 // Store is where the operator keeps the git credentials of its projects (К5): OpenBao, or the operator's

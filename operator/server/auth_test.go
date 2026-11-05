@@ -23,7 +23,7 @@ import (
 	"golang.org/x/crypto/bcrypt"
 
 	git "github.com/go-git/go-git/v6"
-	"github.com/horchestra/pack-operator/config"
+	"github.com/horchestra/pack/operator/config"
 )
 
 // The rigs of C9: an operator with auth local (alice an admin, carol a viewer, bob nobody) or auth oidc

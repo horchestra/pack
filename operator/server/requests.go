@@ -7,7 +7,7 @@ import (
 
 	"github.com/horchestra/pack/pkg/api"
 
-	"github.com/horchestra/pack-operator/bus"
+	"github.com/horchestra/pack/operator/bus"
 )
 
 // askRequest answers POST /api/releases/{rel}/requests: {action, sha, params} — a request (К3), idempotent by

@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/horchestra/pack-operator/db"
+	"github.com/horchestra/pack/operator/db"
 )
 
 func newOnSQLite(t *testing.T, auth, devUser string) *Authz {

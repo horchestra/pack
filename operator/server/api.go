@@ -9,8 +9,8 @@ import (
 
 	"github.com/horchestra/pack/pkg/api"
 
-	"github.com/horchestra/pack-operator/bus"
-	"github.com/horchestra/pack-operator/config"
+	"github.com/horchestra/pack/operator/bus"
+	"github.com/horchestra/pack/operator/config"
 )
 
 // The operator's own error codes of К4 (a Failure's code).

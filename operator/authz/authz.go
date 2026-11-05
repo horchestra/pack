@@ -17,7 +17,7 @@ import (
 	"github.com/casbin/casbin/v3/model"
 	"github.com/casbin/casbin/v3/persist"
 
-	"github.com/horchestra/pack-operator/db"
+	"github.com/horchestra/pack/operator/db"
 )
 
 // Model is the casbin model of К7, fixed: RBAC with domains, the objects matched as paths.

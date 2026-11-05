@@ -12,7 +12,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/horchestra/pack-operator/db"
+	"github.com/horchestra/pack/operator/db"
 )
 
 // Store is the sessions and the tokens in the operator's database.

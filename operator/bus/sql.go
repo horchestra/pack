@@ -11,7 +11,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/horchestra/pack-operator/db"
+	"github.com/horchestra/pack/operator/db"
 )
 
 // SQLBus is the Bus on the operator's own database (migration 0002): PostgreSQL — the claims raced with the

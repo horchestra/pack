@@ -16,9 +16,9 @@ import (
 
 	"github.com/horchestra/pack/pkg/logging"
 
-	"github.com/horchestra/pack-operator/config"
-	"github.com/horchestra/pack-operator/mcpserver"
-	"github.com/horchestra/pack-operator/server"
+	"github.com/horchestra/pack/operator/config"
+	"github.com/horchestra/pack/operator/mcpserver"
+	"github.com/horchestra/pack/operator/server"
 )
 
 var configPath string

@@ -23,10 +23,10 @@ import (
 	"github.com/horchestra/pack/sdk"
 	"github.com/horchestra/pack/sdk/packschema"
 
-	"github.com/horchestra/pack-operator/config"
-	opgit "github.com/horchestra/pack-operator/git"
-	"github.com/horchestra/pack-operator/server"
-	"github.com/horchestra/pack-operator/worker"
+	"github.com/horchestra/pack/operator/config"
+	opgit "github.com/horchestra/pack/operator/git"
+	"github.com/horchestra/pack/operator/server"
+	"github.com/horchestra/pack/operator/worker"
 )
 
 // kv is the fixture pack: one setting, no hooks — the smallest pack the sdk writes.

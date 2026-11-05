@@ -8,8 +8,8 @@ import (
 
 	"github.com/horchestra/pack/pkg/api"
 
-	"github.com/horchestra/pack-operator/config"
-	"github.com/horchestra/pack-operator/git"
+	"github.com/horchestra/pack/operator/config"
+	"github.com/horchestra/pack/operator/git"
 )
 
 // projects answers GET /api/projects: the projects the user may read (К4).

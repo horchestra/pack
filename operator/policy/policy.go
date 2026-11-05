@@ -23,12 +23,12 @@ import (
 
 	"github.com/horchestra/pack/pkg/logging"
 
-	opgit "github.com/horchestra/pack-operator/git"
+	opgit "github.com/horchestra/pack/operator/git"
 
-	"github.com/horchestra/pack-operator/authz"
-	"github.com/horchestra/pack-operator/bus"
-	"github.com/horchestra/pack-operator/config"
-	"github.com/horchestra/pack-operator/db"
+	"github.com/horchestra/pack/operator/authz"
+	"github.com/horchestra/pack/operator/bus"
+	"github.com/horchestra/pack/operator/config"
+	"github.com/horchestra/pack/operator/db"
 )
 
 // The kinds of jobs the policy makes (the how of operator_jobs): plan → gate → apply is the pipeline of a plan
