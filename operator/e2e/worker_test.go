@@ -23,11 +23,11 @@ import (
 	"github.com/horchestra/pack/sdk"
 	"github.com/horchestra/pack/sdk/packschema"
 
-	"github.com/horchestra/pack-operator/bus"
-	"github.com/horchestra/pack-operator/config"
-	"github.com/horchestra/pack-operator/db"
-	opgit "github.com/horchestra/pack-operator/git"
-	"github.com/horchestra/pack-operator/worker"
+	"github.com/horchestra/pack/operator/bus"
+	"github.com/horchestra/pack/operator/config"
+	"github.com/horchestra/pack/operator/db"
+	opgit "github.com/horchestra/pack/operator/git"
+	"github.com/horchestra/pack/operator/worker"
 )
 
 type kv struct {

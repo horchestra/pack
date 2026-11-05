@@ -15,10 +15,10 @@ import (
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/wait"
 
-	"github.com/horchestra/pack-operator/authz"
-	"github.com/horchestra/pack-operator/config"
-	"github.com/horchestra/pack-operator/db"
-	"github.com/horchestra/pack-operator/server"
+	"github.com/horchestra/pack/operator/authz"
+	"github.com/horchestra/pack/operator/config"
+	"github.com/horchestra/pack/operator/db"
+	"github.com/horchestra/pack/operator/server"
 )
 
 func postgres(t *testing.T) string {

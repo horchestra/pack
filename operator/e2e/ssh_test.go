@@ -20,7 +20,7 @@ import (
 	"github.com/testcontainers/testcontainers-go/wait"
 	"golang.org/x/crypto/ssh"
 
-	pgit "github.com/horchestra/pack-operator/git"
+	pgit "github.com/horchestra/pack/operator/git"
 )
 
 // sshd is a container with an sshd and a bare repository /home/git/repo.git of one commit on master.

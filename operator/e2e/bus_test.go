@@ -11,9 +11,9 @@ import (
 
 	_ "github.com/jackc/pgx/v5/stdlib"
 
-	"github.com/horchestra/pack-operator/bus"
-	"github.com/horchestra/pack-operator/bus/bustest"
-	"github.com/horchestra/pack-operator/db"
+	"github.com/horchestra/pack/operator/bus"
+	"github.com/horchestra/pack/operator/bus/bustest"
+	"github.com/horchestra/pack/operator/db"
 )
 
 // The SQL bus passes the shared suite on PostgreSQL too; every subtest on a database of its own.
