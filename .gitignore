@@ -7,3 +7,6 @@ __pycache__/
 /sdk/java/out
 /.pack
 /internal/author/zz_scaffold_*
+
+# sdk/ts (node)
+sdk/ts/node_modules/

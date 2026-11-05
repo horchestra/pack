@@ -1,0 +1,32 @@
+/:
+  title: OpenBao
+  description: Secrets management, optionally with an embedded PostgreSQL.
+/openbao:
+  title: Server
+  description: The server's own configuration, written to config.json.
+/openbao/ui:
+  title: Web UI
+  description: Serve the web UI.
+  examples:
+    - true
+/openbao/log_level:
+  title: Log level
+  description: How much the server says.
+  examples:
+    - debug
+    - info
+/openbao/api_addr:
+  title: API address
+  description: The address clients are told to reach the API at.
+  examples:
+    - https://bao.example:8200
+/openbao/storage:
+  title: Storage
+  description: |
+    The storage backends. With the embedded postgres it is filled from it
+    and must not be set.
+/postgres:
+  title: Embedded PostgreSQL
+  description: A tembo cluster installed with OpenBao as its storage; absent — bring your own storage.
+rules:
+  storage-from-postgres: storage is filled from the embedded postgres and must not be set

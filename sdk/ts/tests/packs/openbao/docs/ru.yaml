@@ -1,0 +1,25 @@
+/:
+  title: OpenBao
+  description: Управление секретами, при желании со встроенным PostgreSQL.
+/openbao:
+  title: Сервер
+  description: Собственная конфигурация сервера, пишется в config.json.
+/openbao/ui:
+  title: Веб-интерфейс
+  description: Отдавать веб-интерфейс.
+/openbao/log_level:
+  title: Уровень журнала
+  description: Насколько подробно пишет сервер.
+/openbao/api_addr:
+  title: Адрес API
+  description: Адрес, по которому клиентам сообщают обращаться к API.
+/openbao/storage:
+  title: Хранилище
+  description: |
+    Бэкенды хранения. Со встроенным postgres заполняется из него
+    и задаваться не должно.
+/postgres:
+  title: Встроенный PostgreSQL
+  description: Кластер tembo, устанавливаемый вместе с OpenBao как его хранилище; если не задан — своё хранилище.
+rules:
+  storage-from-postgres: хранилище заполняется из встроенного postgres и задаваться не должно

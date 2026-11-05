@@ -1,0 +1,21 @@
+{
+  "name": "packsdk",
+  "version": "0.1.0",
+  "description": "The author's side of pack, in TypeScript — generate() writes the same schema.json, pack.yaml and templates/ as the Go sdk, byte for byte",
+  "type": "module",
+  "private": true,
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "test": "node --test tests/",
+    "typecheck": "tsc --noEmit"
+  },
+  "engines": {
+    "node": ">=22.6"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.6",
+    "typescript": "^7.0.2"
+  }
+}
