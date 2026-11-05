@@ -1,0 +1,49 @@
+/:
+  title: OpenBao
+  description: Управление секретами; хранилище — raft или встроенный PostgreSQL.
+/openbao:
+  title: Сервер
+  description: Собственная конфигурация сервера, JSON-форма его HCL.
+/openbao/cluster_name:
+  title: Имя кластера
+  description: Имя кластера в его метриках и API.
+/openbao/api_addr:
+  title: Адрес API
+  description: Адрес, по которому клиентам сообщают обращаться к API.
+/openbao/cluster_addr:
+  title: Адрес кластера
+  description: Адрес, по которому узлы обращаются друг к другу; raft требует его.
+/openbao/ui:
+  title: Веб-интерфейс
+  description: Отдавать веб-интерфейс.
+/openbao/log_level:
+  title: Уровень журнала
+  description: Насколько подробно пишет сервер; формат всегда JSON.
+/openbao/log_file:
+  title: Файл журнала
+  description: Куда пишется журнал помимо стандартного вывода.
+/openbao/storage:
+  title: Хранилище
+  description: |
+    Бэкенд хранения по типу: raft или встроенный postgres, который
+    заполняет его сам.
+/openbao/listener:
+  title: Слушатели
+  description: Слушатели по типу (tcp).
+/openbao/seal:
+  title: Печать
+  description: Печать по типу (static, awskms…).
+/postgres:
+  title: Встроенный PostgreSQL
+  description: PostgreSQL, устанавливаемый вместе с OpenBao как его хранилище; если не задан — raft.
+/dev:
+  title: Режим разработки
+  description: Сервер в памяти, без печати, — чтобы попробовать.
+/release_url:
+  title: URL релиза
+  description: Откуда на хосте скачивается архив релиза OpenBao.
+groups:
+  addresses: Адреса
+  logging: Журнал
+rules:
+  storage-from-postgres: хранилище заполняется из встроенного postgres и задаваться не должно

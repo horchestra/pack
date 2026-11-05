@@ -48,8 +48,8 @@ export abstract class Pack {
 type PackCtor = new () => Pack;
 
 /** The item type of an array field, or the value type of a map field: a scalar's name, "any", the Secret class, or a
- * struct class. */
-export type Spec = "string" | "integer" | "number" | "boolean" | "any" | (new () => object);
+ * struct class; "object" is a free-form map. */
+export type Spec = "string" | "integer" | "number" | "boolean" | "object" | "any" | (new () => object);
 
 export interface FieldOpts {
   json?: string;      // the property's name in the schema (the property's name by default); the application's own key
@@ -214,6 +214,7 @@ function specSchema(spec: Spec): Dict {
   if (spec === "boolean") return { type: "boolean" };
   if (spec === "integer") return { type: "integer" };
   if (spec === "number") return { type: "number" };
+  if (spec === "object") return { type: "object" };
   if (spec === "any") return {};
   if ((spec as unknown) === Secret) return { type: "string", format: "password" };
   if (isPackCtor(spec as new () => object)) {

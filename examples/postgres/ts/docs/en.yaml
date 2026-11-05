@@ -1,0 +1,69 @@
+/:
+  title: PostgreSQL
+  description: A single-instance PostgreSQL with an install hook and a major-version upgrade hook.
+/database:
+  title: Database
+  description: The database created at the first start.
+  examples:
+    - app
+/superuser:
+  title: Superuser
+  description: The role the server is bootstrapped with.
+/superuser/name:
+  title: Name
+  description: The superuser's name.
+/superuser/password:
+  title: Password
+  description: A reference to the Secret that holds the superuser's password.
+/conf:
+  title: postgresql.conf
+  description: The settings of postgresql.conf, written as they are.
+  group: server
+/conf/max_connections:
+  title: Max connections
+  description: How many client connections the server accepts at once.
+  examples:
+    - 200
+  group: server
+/conf/shared_buffers:
+  title: Shared buffers
+  description: The memory of the shared buffer cache; a quarter of the memory limit unless set.
+  examples:
+    - 1GB
+  group: server
+/conf/listen_addresses:
+  title: Listen addresses
+  description: The addresses the server listens on; * is every one.
+  group: server
+/conf/port:
+  title: Port
+  description: The port the server listens on.
+  examples:
+    - 5432
+  group: server
+/pgdg:
+  title: PGDG repository
+  description: |
+    Where the packages of PGDG come from on a host: upstream by default, a
+    mirror when the hosts do not reach it.
+  group: packages
+/pgdg_key:
+  title: PGDG key
+  description: The signing key of the PGDG repository.
+  group: packages
+/init_extensions:
+  title: Extensions
+  description: The extensions every database gets, after the first start.
+groups:
+  server: Server
+  packages: Packages
+actions:
+  backup: Dumps a database with pg_dump to a file of the instance.
+  backup/to: "The file (or the directory, of format directory) the dump goes to, in the instance: under /var/lib/postgresql/data it outlives the instance."
+  backup/user: The role the dump is made as.
+  backup/format: The format of the dump, as pg_dump says it.
+  backup/database: The database to dump.
+  restore: Restores a database from a dump with pg_restore, dropping what it holds first.
+  restore/from: The dump to restore.
+  restore/database: The database to restore into.
+  restore/user: The role the restore is made as.
