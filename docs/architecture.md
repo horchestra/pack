@@ -19,45 +19,45 @@ Three processes, each with one job:
 
 ```mermaid
 flowchart LR
-    subgraph person[the person]
-        browser[browser — the SPA]
-        model[a model<br/>MCP client]
+    subgraph person["the person"]
+        browser["browser — the SPA"]
+        model["a model<br/>(MCP client)"]
     end
 
-    subgraph ui[pack-ui — one binary]
-        spa[web/dist<br/>embedded SPA]
-        backend[backend: edit via go-git,<br/>values, author, diagnose]
-        uimcp[MCP server<br/>questions · answer · diagnose · author_*]
+    subgraph ui["pack-ui — one binary"]
+        spa["web/dist<br/>(embedded SPA)"]
+        backend["backend: edit via go-git,<br/>values, author, diagnose"]
+        uimcp["MCP server<br/>questions · answer · diagnose · author_*"]
     end
 
-    subgraph op[pack-operator]
-        api[API: REST + SSE<br/>authn · authz casbin]
-        syncer[sync: fetch + read the repos]
-        policy[policy: requests,<br/>approvals, changes]
-        bus[(Bus + DB:<br/>postgres | sqlite)]
-        secrets[(secrets:<br/>OpenBao | DB)]
-        worker[workers: native | docker | k8s]
-        opmcp[MCP server<br/>next · plan · request · job …]
+    subgraph op["pack-operator"]
+        api["API: REST + SSE<br/>authn · authz casbin"]
+        syncer["sync: fetch + read the repos"]
+        policy["policy: requests,<br/>approvals, changes"]
+        bus[("Bus + DB:<br/>postgres or sqlite")]
+        secrets[("secrets:<br/>OpenBao or the DB")]
+        worker["workers: native · docker · k8s"]
+        opmcp["MCP server<br/>next · plan · request · job …"]
     end
 
-    packbin[pack — the CLI<br/>plan · apply · saga · journal]
-    git[(git repositories:<br/>releases, packs, change requests)]
-    targets[targets: docker, ansible, k8s<br/>— what the releases install on]
-    registry[(OCI registry:<br/>public packs)]
+    packbin["pack — the CLI<br/>plan · apply · saga · journal"]
+    git[("git repositories:<br/>releases, packs, change requests")]
+    targets["targets: docker, ansible, k8s<br/>— what the releases install on"]
+    registry[("OCI registry:<br/>public packs")]
 
-    browser -->|HTTPS + session cookie,<br/>CSRF token| backend
+    browser -->|"HTTPS + session cookie,<br/>CSRF token"| backend
     backend --> spa
-    backend -->|commits as the user,<br/>go-git| git
-    backend -->|REST, service token<br/>+ X-Pack-User| api
+    backend -->|"commits as the user,<br/>go-git"| git
+    backend -->|"REST, service token<br/>+ X-Pack-User"| api
     model --> uimcp --> backend
     model --> opmcp --> api
 
-    syncer <-->|fetch, working copies| git
+    syncer <-->|"fetch, working copies"| git
     api --> policy --> bus
-    policy -->|a job per request| worker
-    worker -->|runs| packbin
+    policy -->|"a job per request"| worker
+    worker -->|"runs"| packbin
     packbin --> targets
-    packbin -->|pull packs| registry
+    packbin -->|"pull packs"| registry
     api --> secrets
     syncer --> secrets
 ```
@@ -89,11 +89,11 @@ sequenceDiagram
     participant p as pack
     participant t as a target
 
-    u->>ui: values saved / "apply"
+    u->>ui: values saved / apply
     ui->>op: POST /api/sync (the commit landed)
-    op->>op: fetch; the release's head moves
+    op->>op: fetch — the release's head moves
     u->>op: POST /api/releases/{rel}/requests {action: apply, sha}
-    op->>op: plan; the request waits (run.approve)
+    op->>op: plan — the request waits (run.approve)
     u->>op: POST /api/requests/{id}/approve {digest, sha}
     op->>bus: a job queued
     bus->>w: the job (labels match)
@@ -109,24 +109,24 @@ sequenceDiagram
 
 ```mermaid
 flowchart TD
-    subgraph login[who are you]
-        local[auth: local<br/>bcrypt password] --> session
-        oidc[auth: oidc<br/>the provider's code flow;<br/>groups → roles] --> session
-        session[an httpOnly cookie<br/>+ X-CSRF-Token on mutations]
-        token[CI: a bearer token,<br/>no cookie, no CSRF]
+    subgraph login["who are you"]
+        local["auth: local<br/>bcrypt password"] --> session
+        oidc["auth: oidc<br/>the provider's code flow;<br/>groups → roles"] --> session
+        session["an httpOnly cookie<br/>+ X-CSRF-Token on mutations"]
+        token["CI: a bearer token,<br/>no cookie, no CSRF"]
     end
 
-    subgraph uiflow[pack-ui → the operator]
-        session --> fwd[the user as X-Pack-User<br/>+ pack-ui's service token]
+    subgraph uiflow["pack-ui → the operator"]
+        session --> fwd["the user as X-Pack-User<br/>+ pack-ui's service token"]
         token --> fwd
-        fwd --> imp{the token's user<br/>an admin of the domain?}
-        imp -->|yes| act[the operator acts as the user]
-        imp -->|no| self[the operator acts as the token's user]
+        fwd --> imp{"the token's user<br/>an admin of the domain?"}
+        imp -->|"yes"| act["the operator acts as the user"]
+        imp -->|"no"| self["the operator acts as the token's user"]
     end
 
-    act --> casbin[casbin: g(user, role, domain)<br/>object + action]
+    act --> casbin["casbin: a role of the user's in the domain,<br/>object + action"]
     self --> casbin
-    casbin --> decide{allow?}
+    casbin --> decide{"allow?"}
 ```
 
 What is a person's stays a person's: neither MCP server has an approve or a merge tool; a secret's value
