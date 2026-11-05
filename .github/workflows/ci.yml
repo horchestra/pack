@@ -8,6 +8,10 @@ on:
 permissions:
   contents: read
 
+# arenadata/oci-packer is not on proxy.golang.org, fetch it from github.
+env:
+  GOPRIVATE: github.com/arenadata/*
+
 jobs:
   go:
     name: go
