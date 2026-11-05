@@ -32,6 +32,7 @@ func (s *Server) routes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/auth/oidc/login", s.oidcLogin)
 	mux.HandleFunc("GET /api/auth/oidc/callback", s.oidcCallback)
 	mux.HandleFunc("GET /api/tokens", s.tokens)
+	mux.HandleFunc("POST /api/grants", s.grant)
 	mux.HandleFunc("POST /api/tokens", s.mintToken)
 	mux.HandleFunc("DELETE /api/tokens/{id}", s.dropToken)
 	mux.HandleFunc("POST /api/sync", s.askSync)

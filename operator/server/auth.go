@@ -97,6 +97,28 @@ func (s *Server) oidcCallback(w http.ResponseWriter, r *http.Request) {
 	s.openSession(w, r, id.User)
 }
 
+// grant answers POST /api/grants {user, role, dom} (admin of the domain): the user holds the role — how
+// pack-ui's OIDC login gives the mapped roles to a user the operator itself never saw.
+func (s *Server) grant(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		User string `json:"user"`
+		Role string `json:"role"`
+		Dom  string `json:"dom"`
+	}
+	if err := decode(r, &body); err != nil || len(body.User) == 0 || len(body.Role) == 0 || len(body.Dom) == 0 {
+		fail(w, http.StatusBadRequest, codeBadRequest, "the body is {\"user\", \"role\", \"dom\"}")
+		return
+	}
+	if _, ok := s.may(w, r, body.Dom, "project", "admin"); !ok {
+		return
+	}
+	if err := s.az.Grant(body.User, body.Role, body.Dom); err != nil {
+		fail(w, http.StatusBadRequest, codeBadRequest, "%v", err)
+		return
+	}
+	reply(w, map[string]string{"granted": body.Role, "user": body.User, "dom": body.Dom})
+}
+
 // tokens answers GET /api/tokens — the caller's own, the token itself never among them.
 func (s *Server) tokens(w http.ResponseWriter, r *http.Request) {
 	user, _, ok := s.userAuth(w, r)

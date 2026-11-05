@@ -232,6 +232,41 @@ func TestImpersonation(t *testing.T) {
 	}
 }
 
+// POST /api/grants: an admin's token gives bob the viewer's role; bob's session then reads the project.
+func TestGrants(t *testing.T) {
+	base, _ := url.Parse(newAuthRig(t, localConfig(t)))
+	c := jarClient(t)
+	csrf, err := login(t, base, c, "alice", "alice-pw")
+	if err != nil {
+		t.Fatal(err)
+	}
+	req, _ := http.NewRequest("POST", base.String()+"/api/grants",
+		strings.NewReader(`{"user":"bob","role":"viewer","dom":"dev"}`))
+	req.Header.Set("X-CSRF-Token", csrf)
+	resp, err := c.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("the grant: %s", resp.Status)
+	}
+	c2 := jarClient(t)
+	if _, err := login(t, base, c2, "bob", "bob-pw"); err != nil {
+		t.Fatal(err)
+	}
+	resp, err = c2.Get(base.String() + "/api/projects")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var projects []map[string]any
+	_ = json.NewDecoder(resp.Body).Decode(&projects)
+	resp.Body.Close()
+	if len(projects) != 1 {
+		t.Fatalf("bob's projects after the grant: %v", projects)
+	}
+}
+
 // The OIDC dance against a test provider that signs its id tokens itself: login redirects to the provider
 // with the state in a cookie; the callback's code is exchanged, the id token verified, the groups mapped
 // to the roles — the session's read shows the project.
