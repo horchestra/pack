@@ -17,12 +17,12 @@ import (
 
 // releaseInfo is a release as the API lists it (К4).
 type releaseInfo struct {
-	Path         string   `json:"path"`
-	Next         string   `json:"next,omitempty"`
-	SHA          string   `json:"sha"`
-	InstalledSHA string   `json:"installed_sha,omitempty"`
-	State        string   `json:"state"`
-	Health       string   `json:"health,omitempty"`
+	Path         string    `json:"path"`
+	Next         string    `json:"next,omitempty"`
+	SHA          string    `json:"sha"`
+	InstalledSHA string    `json:"installed_sha,omitempty"`
+	State        string    `json:"state"`
+	Health       string    `json:"health,omitempty"`
 	LastJob      *jobBrief `json:"last_job,omitempty"`
 }
 

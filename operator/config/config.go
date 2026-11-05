@@ -17,14 +17,42 @@ type Config struct {
 	Listen           string    `json:"listen"`             // :8080 by default
 	DB               string    `json:"db"`                 // postgres://… or sqlite://<path>; the Bus is here too
 	StateDSN         string    `json:"state_dsn"`          // the pack state store (К2), read only
-	Auth             string    `json:"auth"`               // none; oidc is stage 3
+	Auth             string    `json:"auth"`               // none | local | oidc (C9)
 	DevUser          string    `json:"dev_user"`           // the user of auth: none, admin in every domain
+	OIDC             OIDC      `json:"oidc"`               // auth: oidc
+	Local            Local     `json:"local"`              // auth: local
 	Pack             string    `json:"pack"`               // the pack binary; PATH's by default
 	DataDir          string    `json:"data_dir"`           // working copies and checkouts; the user cache's pack-operator by default
 	Secrets          Secrets   `json:"secrets"`            // where git credentials and the projects' secrets live
 	EncryptionKeyEnv string    `json:"encryption_key_env"` // encrypts the git credentials kept in the DB
 	Git              Git       `json:"git"`
 	Projects         []Project `json:"projects"`
+}
+
+// OIDC is the OpenID Connect authentication (auth: oidc): the issuer is discovered, the id token's
+// username claim is the user, its groups claim maps to the roles of К7 (granted in every project's domain
+// at login).
+type OIDC struct {
+	Issuer        string            `json:"issuer"`
+	ClientID      string            `json:"client_id"`
+	ClientSecret  string            `json:"client_secret"`
+	RedirectURL   string            `json:"redirect_url"`   // the callback the provider answers (…/api/auth/oidc/callback)
+	UsernameClaim string            `json:"username_claim"` // preferred_username by default
+	GroupsClaim   string            `json:"groups_claim"`   // groups by default
+	Groups        map[string]string `json:"groups"`         // the provider's group → the role (viewer, operator, approver, merger, author, admin)
+}
+
+// Local is the local users (auth: local): a name and the bcrypt hash of the password, and the roles to
+// hold (domain → role; "*" is every project's).
+type Local struct {
+	Users []LocalUser `json:"users"`
+}
+
+// LocalUser is one local user.
+type LocalUser struct {
+	Name         string            `json:"name"`
+	PasswordHash string            `json:"password_hash"` // bcrypt
+	Roles        map[string]string `json:"roles"`         // domain → role
 }
 
 // Secrets is the secret store of the operator's own secrets (git credentials first).
@@ -109,10 +137,35 @@ func Load(path string) (*Config, error) {
 		return nil, fmt.Errorf("%s: db is required (postgres://… or sqlite://<path>)", path)
 	}
 	if len(c.Auth) == 0 {
-		return nil, fmt.Errorf("%s: auth is required: none — only where nothing else is possible; oidc is stage 3", path)
+		return nil, fmt.Errorf("%s: auth is required: none — only where nothing else is possible; local or oidc otherwise", path)
 	}
-	if c.Auth != "none" {
-		return nil, fmt.Errorf("%s: auth %s is not yet: none is the only mode until stage 3 (oidc)", path, c.Auth)
+	switch c.Auth {
+	case "none":
+	case "local":
+		if len(c.Local.Users) == 0 {
+			return nil, fmt.Errorf("%s: auth local needs local.users (a name and the bcrypt password_hash)", path)
+		}
+		for i, u := range c.Local.Users {
+			if len(u.Name) == 0 || len(u.PasswordHash) == 0 {
+				return nil, fmt.Errorf("%s: local.users[%d]: name and password_hash are required", path, i)
+			}
+		}
+	case "oidc":
+		for _, f := range []struct{ name, v string }{
+			{"issuer", c.OIDC.Issuer}, {"client_id", c.OIDC.ClientID}, {"client_secret", c.OIDC.ClientSecret}, {"redirect_url", c.OIDC.RedirectURL},
+		} {
+			if len(f.v) == 0 {
+				return nil, fmt.Errorf("%s: auth oidc needs oidc.%s", path, f.name)
+			}
+		}
+	default:
+		return nil, fmt.Errorf("%s: auth is none, local or oidc, not %q", path, c.Auth)
+	}
+	if len(c.OIDC.UsernameClaim) == 0 {
+		c.OIDC.UsernameClaim = "preferred_username"
+	}
+	if len(c.OIDC.GroupsClaim) == 0 {
+		c.OIDC.GroupsClaim = "groups"
 	}
 	if len(c.DevUser) == 0 {
 		c.DevUser = DefaultDevUser

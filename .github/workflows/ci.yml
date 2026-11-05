@@ -59,6 +59,18 @@ jobs:
       - run: cd sdk/python && python3 -I -m unittest discover -s tests
       - run: cd examples/postgres/python && python3 -m unittest test_postgres
 
+  typescript:
+    name: typescript sdk
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: sdk/ts/package-lock.json
+      - run: cd sdk/ts && npm ci && npm run typecheck && npm test
+
   java:
     name: java sdk
     runs-on: ubuntu-latest

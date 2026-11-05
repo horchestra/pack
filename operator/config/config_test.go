@@ -84,7 +84,8 @@ func TestDefaultsAndRefusals(t *testing.T) {
 	for body, want := range map[string]string{
 		"auth: none\n":                                            "db is required",
 		"db: sqlite://x.db\n":                                     "auth is required",
-		"db: sqlite://x.db\nauth: oidc\n":                         "not yet",
+		"db: sqlite://x.db\nauth: oidc\n":                         "oidc.issuer",
+		"db: sqlite://x.db\nauth: local\n":                        "local.users",
 		"db: sqlite://x.db\nauth: none\nwat: 1\n":                 "unknown field",
 		"db: sqlite://x.db\nauth: none\nprojects:\n  - repo: r\n": "id and repo are required",
 		"db: sqlite://x.db\nauth: none\nprojects:\n  - id: p\n    repo: r\n    flow: mr\n": "flow is direct or review",

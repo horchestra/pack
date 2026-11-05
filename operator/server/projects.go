@@ -14,9 +14,13 @@ import (
 
 // projects answers GET /api/projects: the projects the user may read (К4).
 func (s *Server) projects(w http.ResponseWriter, r *http.Request) {
+	user, viaToken, authed := s.userAuth(w, r)
+	if !authed {
+		return
+	}
 	out := []config.Project{}
 	for _, p := range s.cfg.Projects {
-		ok, err := s.az.Enforce(s.user(r), p.ID, "project", "read")
+		ok, err := s.az.Enforce(s.impersonate(r, user, viaToken, p.ID), p.ID, "project", "read")
 		if err != nil {
 			fail(w, http.StatusInternalServerError, api.CodeError, "%v", err)
 			return
@@ -31,19 +35,19 @@ func (s *Server) projects(w http.ResponseWriter, r *http.Request) {
 // mayAny enforces obj/act in any of the configured domains (the operator-wide objects — a project, a
 // secret — belong to no single one; К7).
 func (s *Server) mayAny(w http.ResponseWriter, r *http.Request, obj, act string) (string, bool) {
-	user := s.user(r)
-	if len(user) == 0 {
-		fail(w, http.StatusUnauthorized, codeUnauthorized, "who are you? (auth: %s)", s.cfg.Auth)
+	user, viaToken, authed := s.userAuth(w, r)
+	if !authed {
 		return "", false
 	}
 	for _, p := range s.cfg.Projects {
-		ok, err := s.az.Enforce(user, p.ID, obj, act)
+		u := s.impersonate(r, user, viaToken, p.ID)
+		ok, err := s.az.Enforce(u, p.ID, obj, act)
 		if err != nil {
 			fail(w, http.StatusInternalServerError, api.CodeError, "the policy: %v", err)
 			return "", false
 		}
 		if ok {
-			return user, true
+			return u, true
 		}
 	}
 	fail(w, http.StatusForbidden, codeForbidden, "%s may not %s %s in any domain", user, act, obj)

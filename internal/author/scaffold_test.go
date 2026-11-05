@@ -70,11 +70,15 @@ func roundTrip(t *testing.T, ex string) {
 	}
 }
 
-// javaSDK compiles the Java SDK, or skips when there is no javac.
+// javaSDK compiles the Java SDK, or skips when there is no javac of release 21 (the go job of CI runs no Java).
 func javaSDK(t *testing.T) string {
 	t.Helper()
-	if err := exec.Command("javac", "-version").Run(); err != nil {
-		t.Skip("no javac that runs (macOS has a stub of it without a JDK)")
+	probe := filepath.Join(t.TempDir(), "probe.java")
+	if err := os.WriteFile(probe, []byte("class probe {}\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := exec.Command("javac", "--release", "21", "-d", t.TempDir(), probe).Run(); err != nil {
+		t.Skip("no javac of release 21 (macOS has a stub of it without a JDK)")
 	}
 	var srcs []string
 	_ = filepath.WalkDir(filepath.Join("..", "..", "sdk", "java", "src", "main"), func(p string, e fs.DirEntry, _ error) error {

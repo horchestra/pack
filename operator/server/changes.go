@@ -289,11 +289,11 @@ func (s *Server) setChangeState(w http.ResponseWriter, r *http.Request, state st
 		fail(w, http.StatusInternalServerError, api.CodeError, "%v", err)
 		return
 	}
-	user := s.user(r)
-	if len(user) == 0 {
-		fail(w, http.StatusUnauthorized, codeUnauthorized, "who are you? (auth: %s)", s.cfg.Auth)
+	user, viaToken, authed := s.userAuth(w, r)
+	if !authed {
 		return
 	}
+	user = s.impersonate(r, user, viaToken, c.Project)
 	if user != c.Author {
 		if _, ok := s.may(w, r, c.Project, "change:"+c.ID, "merge"); !ok {
 			return
@@ -308,4 +308,3 @@ func (s *Server) setChangeState(w http.ResponseWriter, r *http.Request, state st
 		State string `json:"state"`
 	}{state})
 }
-

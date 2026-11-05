@@ -27,6 +27,13 @@ const (
 // routes is the whole API of К4 (the change requests' endpoints come with B9).
 func (s *Server) routes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/version", s.version)
+	mux.HandleFunc("POST /api/login", s.login)
+	mux.HandleFunc("POST /api/logout", s.logout)
+	mux.HandleFunc("GET /api/auth/oidc/login", s.oidcLogin)
+	mux.HandleFunc("GET /api/auth/oidc/callback", s.oidcCallback)
+	mux.HandleFunc("GET /api/tokens", s.tokens)
+	mux.HandleFunc("POST /api/tokens", s.mintToken)
+	mux.HandleFunc("DELETE /api/tokens/{id}", s.dropToken)
 	mux.HandleFunc("POST /api/sync", s.askSync)
 	mux.HandleFunc("GET /api/projects", s.projects)
 	mux.HandleFunc("PUT /api/projects", s.putProject)
@@ -71,25 +78,86 @@ func fail(w http.ResponseWriter, status int, code, format string, args ...any) {
 	_, _ = w.Write(append(b, '\n'))
 }
 
-// user is who the call is as (К7: until stage 3 — the dev user of auth: none, or the X-Pack-User pack-ui
-// passes over a trusted connection).
-func (s *Server) user(r *http.Request) string {
+// sessionCookie is the UI's session (C9).
+const sessionCookie = "pack_session"
+
+// identity is who the call is (C9): a bearer token of CI first (no CSRF, and an admin's may pass
+// X-Pack-User — pack-ui acting as its user), then the UI's session cookie (its mutations need
+// X-CSRF-Token); with auth none — the X-Pack-User over a trusted connection, or the dev user.
+func (s *Server) identity(r *http.Request) (user, csrf string, viaToken, viaSession bool) {
+	if v := r.Header.Get("Authorization"); strings.HasPrefix(v, "Bearer ") {
+		if u, ok := s.an.TokenUser(r.Context(), strings.TrimPrefix(v, "Bearer ")); ok {
+			return u, "", true, false
+		}
+	}
+	if c, err := r.Cookie(sessionCookie); err == nil {
+		if u, tok, ok := s.an.Session(r.Context(), c.Value); ok {
+			return u, tok, false, true
+		}
+	}
 	if s.cfg.Auth == "none" {
 		if v := r.Header.Get("X-Pack-User"); len(v) > 0 {
-			return v
+			return v, "", false, false
 		}
-		return s.cfg.DevUser
+		return s.cfg.DevUser, "", false, false
 	}
-	return "" // oidc is stage 3
+	return "", "", false, false
+}
+
+// user is who the call is, for a read (a mutation goes through userAuth's CSRF check).
+func (s *Server) user(r *http.Request) string {
+	user, _, _, _ := s.identity(r)
+	return user
+}
+
+// userAuth is who a mutating call is: the identity, with the session's CSRF token checked where the
+// identity came from a cookie. A refusal is answered (401/403) and false returned.
+func (s *Server) userAuth(w http.ResponseWriter, r *http.Request) (user string, viaToken, ok bool) {
+	user, csrf, viaToken, viaSession := s.identity(r)
+	if len(user) == 0 {
+		fail(w, http.StatusUnauthorized, codeUnauthorized, "who are you? (auth: %s)", s.cfg.Auth)
+		return "", false, false
+	}
+	if viaSession && r.Method != http.MethodGet && r.Method != http.MethodHead &&
+		r.Header.Get("X-CSRF-Token") != csrf {
+		fail(w, http.StatusForbidden, codeForbidden, "a mutation with the session's cookie needs its X-CSRF-Token")
+		return "", false, false
+	}
+	return user, viaToken, true
+}
+
+// impersonate is the user the call acts as: with a bearer token an admin of the domain may pass
+// X-Pack-User and act as them (pack-ui serving its own users — К7, stage 3; auth none passes it freely).
+func (s *Server) impersonate(r *http.Request, user string, viaToken bool, dom string) string {
+	imp := r.Header.Get("X-Pack-User")
+	if len(imp) == 0 || imp == user || s.cfg.Auth == "none" {
+		return user
+	}
+	if viaToken {
+		if admin, err := s.az.Enforce(user, dom, "project", "admin"); err == nil && admin {
+			return imp
+		}
+	}
+	return user
+}
+
+// impersonateAny is impersonate where the domain is not known yet: an admin of any project's.
+func (s *Server) impersonateAny(r *http.Request, user string, viaToken bool) string {
+	for _, p := range s.cfg.Projects {
+		if u := s.impersonate(r, user, viaToken, p.ID); u != user {
+			return u
+		}
+	}
+	return user
 }
 
 // may enforces obj/act in the domain on the call's user; a denial is answered (401/403) and false returned.
 func (s *Server) may(w http.ResponseWriter, r *http.Request, dom, obj, act string) (string, bool) {
-	user := s.user(r)
-	if len(user) == 0 {
-		fail(w, http.StatusUnauthorized, codeUnauthorized, "who are you? (auth: %s)", s.cfg.Auth)
+	user, viaToken, authed := s.userAuth(w, r)
+	if !authed {
 		return "", false
 	}
+	user = s.impersonate(r, user, viaToken, dom)
 	ok, err := s.az.Enforce(user, dom, obj, act)
 	if err != nil {
 		fail(w, http.StatusInternalServerError, api.CodeError, "the policy: %v", err)

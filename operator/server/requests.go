@@ -1,8 +1,8 @@
 package server
 
 import (
-	"strings"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/horchestra/pack/pkg/api"
@@ -76,11 +76,11 @@ func (s *Server) request(w http.ResponseWriter, r *http.Request) {
 // approve answers POST /api/requests/{id}/approve: {digest, sha} — an approval through the API (К3); the
 // policy checks the right (К7) and the digest against the plan that waits.
 func (s *Server) approve(w http.ResponseWriter, r *http.Request) {
-	user := s.user(r)
-	if len(user) == 0 {
-		fail(w, http.StatusUnauthorized, codeUnauthorized, "who are you? (auth: %s)", s.cfg.Auth)
+	user, viaToken, ok := s.userAuth(w, r)
+	if !ok {
 		return
 	}
+	user = s.impersonateAny(r, user, viaToken)
 	var body struct {
 		Digest string `json:"digest"`
 		SHA    string `json:"sha"`
@@ -122,9 +122,13 @@ func (s *Server) jobs(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// without a release: the jobs of the projects the user may read
+	user, viaToken, authed := s.userAuth(w, r)
+	if !authed {
+		return
+	}
 	out := []bus.Job{}
 	for _, p := range s.cfg.Projects {
-		ok, err := s.az.Enforce(s.user(r), p.ID, "release:/*", "read")
+		ok, err := s.az.Enforce(s.impersonate(r, user, viaToken, p.ID), p.ID, "release:/*", "read")
 		if err != nil {
 			fail(w, http.StatusInternalServerError, api.CodeError, "%v", err)
 			return

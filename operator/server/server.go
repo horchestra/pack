@@ -16,6 +16,7 @@ import (
 	"github.com/horchestra/pack/pkg/api"
 	"github.com/horchestra/pack/pkg/logging"
 
+	"github.com/horchestra/pack-operator/authn"
 	"github.com/horchestra/pack-operator/authz"
 	"github.com/horchestra/pack-operator/bus"
 	"github.com/horchestra/pack-operator/config"
@@ -34,6 +35,8 @@ type Server struct {
 	cfg     *config.Config
 	db      *db.DB
 	az      *authz.Authz
+	an      *authn.Store
+	oidc    *authn.OIDC
 	bus     *bus.SQLBus
 	syncer  *sync.Syncer
 	pol     *policy.Policy
@@ -72,12 +75,40 @@ func NewServer(ctx context.Context, cfg *config.Config) (*Server, error) {
 	if s.az, err = authz.New(s.db, cfg.Auth, cfg.DevUser); err != nil {
 		return nil, fmt.Errorf("authz: %w", err)
 	}
+	s.an = authn.NewStore(s.db)
+	if cfg.Auth == "oidc" {
+		discovery, cancel := context.WithTimeout(ctx, 30*time.Second)
+		s.oidc, err = authn.NewOIDC(discovery, cfg.OIDC)
+		cancel()
+		if err != nil {
+			return nil, fmt.Errorf("oidc: %w", err)
+		}
+	}
 	if err := s.loadProjects(ctx); err != nil {
 		return nil, fmt.Errorf("the database's projects: %w", err)
 	}
 	for _, p := range s.cfg.Projects {
 		if err := s.az.SeedProject(p.ID); err != nil {
 			return nil, fmt.Errorf("project %s: %w", p.ID, err)
+		}
+	}
+	// the local users' configured roles (domain "*" — every project's)
+	if cfg.Auth == "local" {
+		for _, u := range cfg.Local.Users {
+			for dom, role := range u.Roles {
+				doms := []string{dom}
+				if dom == "*" {
+					doms = nil
+					for _, p := range s.cfg.Projects {
+						doms = append(doms, p.ID)
+					}
+				}
+				for _, d := range doms {
+					if err := s.az.Grant(u.Name, role, d); err != nil {
+						return nil, fmt.Errorf("the grant of %s to %s in %s: %w", role, u.Name, d, err)
+					}
+				}
+			}
 		}
 	}
 	if s.pck, err = packbin.Version(ctx, cfg.Pack); err != nil {

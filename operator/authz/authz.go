@@ -2,8 +2,9 @@
 // objects its releases, packs, change requests and secrets. The policy lives in the operator's database; the
 // roles (viewer, operator, approver, merger, author, admin) are seeded for a project when it first appears.
 //
-// Until authentication is a thing (stage 3) the configuration says auth: none: its user — dev by default — is
-// admin in every domain, and serve says so in the log at start.
+// With auth: none (only where nothing else is possible, and said so in the log at start) the dev user is
+// admin in every domain; the users of auth: local and auth: oidc hold only what the policy grants (authn
+// says who they are, stage 3 — here is what they may).
 package authz
 
 import (

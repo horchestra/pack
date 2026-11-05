@@ -30,7 +30,6 @@ import (
 	"github.com/horchestra/pack-operator/worker"
 )
 
-
 // testRepos is the worker's working copies of a data dir.
 func testRepos(t *testing.T, dataDir string) *opgit.Repos {
 	t.Helper()
@@ -59,10 +58,10 @@ var packBin = sync.OnceValues(func() (string, error) {
 
 // apiRig is a running operator over a fixture repository, with a native worker doing the jobs.
 type apiRig struct {
-	t   *testing.T
-	url string
-	cfg *config.Config
-	bus *bus.SQLBus
+	t    *testing.T
+	url  string
+	cfg  *config.Config
+	bus  *bus.SQLBus
 	head string
 }
 
@@ -131,15 +130,15 @@ func newAPIRigWith(t *testing.T, releaseHead string) *apiRig {
 	}
 	dataDir := t.TempDir()
 	cfg := &config.Config{
-		DB:       "sqlite://" + filepath.Join(t.TempDir(), "operator.db"),
-		Auth:     "none",
-		DevUser:  "dev",
-		Pack:     bin,
-		DataDir:  dataDir,
-		StateDSN: "sqlite://" + filepath.Join(t.TempDir(), "state.db"),
+		DB:               "sqlite://" + filepath.Join(t.TempDir(), "operator.db"),
+		Auth:             "none",
+		DevUser:          "dev",
+		Pack:             bin,
+		DataDir:          dataDir,
+		StateDSN:         "sqlite://" + filepath.Join(t.TempDir(), "state.db"),
 		EncryptionKeyEnv: "PACK_OPERATOR_TEST_KEY",
-		Git:      config.Git{FetchInterval: config.Duration{Duration: time.Hour}}, // the tests sync by hand
-		Projects: []config.Project{{ID: "dev", Repo: "file://" + bare, Branch: "main", Runtime: "native"}},
+		Git:              config.Git{FetchInterval: config.Duration{Duration: time.Hour}}, // the tests sync by hand
+		Projects:         []config.Project{{ID: "dev", Repo: "file://" + bare, Branch: "main", Runtime: "native"}},
 	}
 	t.Setenv("PACK_OPERATOR_TEST_KEY", "test-key")
 	ln, err := net.Listen("tcp", "127.0.0.1:0")

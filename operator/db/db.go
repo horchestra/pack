@@ -31,6 +31,24 @@ func (d *DB) Driver() string { return d.driver }
 // SQLite says whether the database is SQLite.
 func (d *DB) SQLite() bool { return d.driver == "sqlite" }
 
+// Bind is the placeholder style of the driver: ? for SQLite, $n for PostgreSQL.
+func (d *DB) Bind(query string) string {
+	if d.SQLite() {
+		return query
+	}
+	var out strings.Builder
+	n := 0
+	for _, r := range query {
+		if r == '?' {
+			n++
+			fmt.Fprintf(&out, "$%d", n)
+			continue
+		}
+		out.WriteRune(r)
+	}
+	return out.String()
+}
+
 // Open connects to dsn (postgres://… or sqlite://<path>) and applies the migrations not yet applied.
 func Open(ctx context.Context, dsn string) (*DB, error) {
 	driver, name, err := parse(dsn)
