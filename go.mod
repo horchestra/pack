@@ -5,9 +5,9 @@ go 1.27.1
 require (
 	cel.dev/cel-go v0.33.2
 	github.com/Masterminds/sprig/v3 v3.3.0
-	github.com/arenadata/oci-packer v0.0.0
-	github.com/arenadata/oci-packer/types v0.0.0
-	github.com/horchestra/pack/sdk v0.0.0
+	github.com/arenadata/oci-packer v1.0.0
+	github.com/arenadata/oci-packer/types v1.0.0
+	github.com/horchestra/pack/sdk v1.0.0
 	github.com/invopop/jsonschema v0.14.0
 	github.com/jackc/pgx/v5 v5.12.0
 	github.com/ks-tool/app-config/go v0.0.0-20260921104620-65a08e500d40
@@ -137,9 +137,3 @@ require (
 	sigs.k8s.io/randfill v1.0.0 // indirect
 	sigs.k8s.io/structured-merge-diff/v6 v6.4.2 // indirect
 )
-
-replace github.com/arenadata/oci-packer v0.0.0 => github.com/arenadata/oci-packer v0.0.0-20261102154302-3f039c44a9be
-
-replace github.com/arenadata/oci-packer/types v0.0.0 => github.com/arenadata/oci-packer/types v0.0.0-20261102154302-3f039c44a9be
-
-replace github.com/horchestra/pack/sdk => ./sdk
