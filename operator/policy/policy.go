@@ -677,15 +677,19 @@ func (p *Policy) waitApproval(ctx context.Context, req bus.Request, digest strin
 	return p.setState(ctx, req, bus.RequestWaitingApproval)
 }
 
-// startNext starts the release's oldest open request, when the release is free.
+// startNext starts the release's oldest open request that waits its turn, when the release is free. A request
+// with a job is not waiting: it is in its pipeline — or it has just ended, its state on its way back to the
+// projection as an event (setState publishes it, onRequest records it), so it still reads open here.
 func (p *Policy) startNext(ctx context.Context, repo, release string) error {
 	busy, err := p.releaseBusy(ctx, repo, release)
 	if err != nil || busy {
 		return err
 	}
 	var id string
-	err = p.db.QueryRowContext(ctx, p.bind(`select id from operator_requests
-		where repo = ? and release = ? and state = 'open' order by updated_at, id limit 1`), repo, release).Scan(&id)
+	err = p.db.QueryRowContext(ctx, p.bind(`select r.id from operator_requests r
+		where r.repo = ? and r.release = ? and r.state = 'open'
+			and not exists (select 1 from operator_jobs j where j.request = r.id)
+		order by r.updated_at, r.id limit 1`), repo, release).Scan(&id)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil
 	}
