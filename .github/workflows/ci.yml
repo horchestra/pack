@@ -32,6 +32,27 @@ jobs:
       - run: go vet ./...
       - run: go test -race ./...
 
+  operator:
+    name: operator
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: operator/go.mod
+      - name: go.mod is tidy
+        run: |
+          (cd operator && go mod tidy -diff)
+          (cd operator/e2e && go mod tidy -diff)
+      - name: gofmt
+        run: |
+          out=$(gofmt -l operator)
+          test -z "$out" || { echo "gofmt:"; echo "$out"; exit 1; }
+      - run: cd operator && go build ./... && go vet ./...
+      - run: cd operator && go test -race ./...
+      # the e2e needs Docker: here it is only built and vetted, against this checkout's pack and sdk
+      - run: cd operator/e2e && go vet ./...
+
   proto:
     name: proto is up to date
     runs-on: ubuntu-latest

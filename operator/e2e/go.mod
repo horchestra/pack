@@ -1,11 +1,11 @@
-module github.com/horchestra/pack-operator/e2e
+module github.com/horchestra/pack/operator/e2e
 
 go 1.27.1
 
 require (
 	github.com/docker/docker v28.5.2+incompatible
 	github.com/go-git/go-git/v6 v6.0.0-beta.1
-	github.com/horchestra/pack/operator v0.1.1
+	github.com/horchestra/pack/operator v0.0.0
 	github.com/horchestra/pack/sdk v1.0.0
 	github.com/jackc/pgx/v5 v5.12.0
 	github.com/testcontainers/testcontainers-go v0.44.0
@@ -122,3 +122,7 @@ require (
 )
 
 replace github.com/horchestra/pack/operator => ../
+
+replace github.com/horchestra/pack => ../..
+
+replace github.com/horchestra/pack/sdk => ../../sdk
