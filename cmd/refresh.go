@@ -57,38 +57,46 @@ release; refresh brings what one names, after a clone or a change of release.yam
 		if err != nil {
 			return err
 		}
-		env, err := environment.Load(ctx, fresh.Config(), nil)
+		lock, changed, err := refreshRelease(ctx, fresh, envName, refreshUpgrade)
 		if err != nil {
 			return err
-		}
-		lock, err := release.ReadLock(fresh.Dir)
-		if err != nil {
-			return err
-		}
-		if lock == nil {
-			lock = &release.Lock{}
-		}
-		before := *lock
-		before.Targets = maps.Clone(lock.Targets)
-
-		d := workdir.New(fresh, envName)
-		if err := bringTargets(ctx, d, env, lock, refreshUpgrade); err != nil {
-			return err
-		}
-
-		if err := lockPack(ctx, d, lock, refreshUpgrade); err != nil {
-			return err
-		}
-		if !reflect.DeepEqual(before, *lock) {
-			if err := release.WriteLock(fresh.Dir, lock); err != nil {
-				return err
-			}
 		}
 		return result(struct {
 			Lock    *release.Lock `json:"lock"`
 			Changed bool          `json:"changed"`
-		}{lock, !reflect.DeepEqual(before, *lock)})
+		}{lock, changed})
 	}),
+}
+
+func refreshRelease(ctx context.Context, rel *release.Release, envName string, upgrade bool) (*release.Lock, bool, error) {
+	env, err := environment.Load(ctx, rel.Config(), nil)
+	if err != nil {
+		return nil, false, err
+	}
+	lock, err := release.ReadLock(rel.Dir)
+	if err != nil {
+		return nil, false, err
+	}
+	if lock == nil {
+		lock = &release.Lock{}
+	}
+	before := *lock
+	before.Targets = maps.Clone(lock.Targets)
+
+	d := workdir.New(rel, envName)
+	if err := bringTargets(ctx, d, env, lock, upgrade); err != nil {
+		return nil, false, err
+	}
+	if err := lockPack(ctx, d, lock, upgrade); err != nil {
+		return nil, false, err
+	}
+	changed := !reflect.DeepEqual(before, *lock)
+	if changed {
+		if err := release.WriteLock(rel.Dir, lock); err != nil {
+			return nil, false, err
+		}
+	}
+	return lock, changed, nil
 }
 
 // lockPack brings the release's pack, if it is in a registry, into .pack/packs, and says in the lock which digest

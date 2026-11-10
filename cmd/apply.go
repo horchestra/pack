@@ -31,36 +31,57 @@ type ApplyOptions struct {
 	Dir         string
 	Environment string
 	CacheDir    string
+	Refresh     bool
+	Env         map[string]string
 	Hear        func(saga.Entry)
 }
 
 var embeddedApplyMu sync.Mutex
 
 // Apply runs the same prepare, plan and saga as the apply command in the
-// current process. Embedded applies are serialized because pack's cache is an
-// environment setting shared by the process.
+// current process. Refresh brings the release's external targets first.
+// Embedded applies are serialized because cache and credential settings are
+// environment variables shared by the process.
 func Apply(ctx context.Context, options ApplyOptions) error {
 	embeddedApplyMu.Lock()
 	defer embeddedApplyMu.Unlock()
 	if options.Dir == "" {
 		options.Dir = "."
 	}
+	set := map[string]string{}
 	if options.CacheDir != "" {
-		old, existed := os.LookupEnv("PACK_CACHE")
-		if err := os.Setenv("PACK_CACHE", options.CacheDir); err != nil {
+		set["PACK_CACHE"] = options.CacheDir
+	}
+	for name, value := range options.Env {
+		set[name] = value
+	}
+	old := map[string]string{}
+	existed := map[string]bool{}
+	restore := func() {
+		for name := range set {
+			if existed[name] {
+				_ = os.Setenv(name, old[name])
+			} else {
+				_ = os.Unsetenv(name)
+			}
+		}
+	}
+	for name, value := range set {
+		old[name], existed[name] = os.LookupEnv(name)
+		if err := os.Setenv(name, value); err != nil {
+			restore()
 			return err
 		}
-		defer func() {
-			if existed {
-				_ = os.Setenv("PACK_CACHE", old)
-			} else {
-				_ = os.Unsetenv("PACK_CACHE")
-			}
-		}()
 	}
+	defer restore()
 	rel, err := release.Load(options.Dir, options.Environment)
 	if err != nil {
 		return err
+	}
+	if options.Refresh {
+		if _, _, err := refreshRelease(ctx, rel, options.Environment, false); err != nil {
+			return err
+		}
 	}
 	dir := workdir.New(rel, options.Environment)
 	dir.Path = filepath.Join(options.Dir, ".pack")
