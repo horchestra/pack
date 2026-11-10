@@ -5,14 +5,17 @@ package oci
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
 	"time"
 
 	"github.com/opencontainers/go-digest"
+	ocispecv1 "github.com/opencontainers/image-spec/specs-go/v1"
 
 	"github.com/arenadata/oci-packer/pkg/extract"
 	"github.com/arenadata/oci-packer/pkg/registry/reference"
@@ -22,10 +25,12 @@ import (
 	"github.com/horchestra/pack/sdk/format"
 )
 
-// Options of a registry.
+// Options of a registry. Platform selects a member of a multi-platform
+// artifact in PullFile, for example linux/amd64.
 type Options struct {
 	PlainHTTP      bool
 	User, Password string
+	Platform       string
 }
 
 // IsRef reports whether s names a pack in a registry.
@@ -177,23 +182,67 @@ func PullFile(ctx context.Context, ref, name string, o Options) ([]byte, error) 
 	if err != nil {
 		return nil, err
 	}
-	tmp, err := os.MkdirTemp("", "pack-file-")
+	fileRef := reference.Reference{Ref: parsed.Ref}
+	if o.Platform != "" {
+		fileRef, err = platformReference(ctx, c, fileRef, o.Platform)
+		if err != nil {
+			return nil, fmt.Errorf("%s: %w", ref, err)
+		}
+	}
+	files, err := extract.List(ctx, c, fileRef, extract.Options{})
+	if err != nil {
+		return nil, fmt.Errorf("%s: %w", ref, err)
+	}
+	var found *extract.File
+	for i := range files {
+		if filepath.Base(files[i].Path) == name {
+			found = &files[i]
+			break
+		}
+	}
+	if found == nil {
+		return nil, fmt.Errorf("%s: the artifact has no file %s", ref, name)
+	}
+	reader, err := c.Fetch(ctx, reference.Reference{Ref: found.Desc.Digest.String()}.WithDescriptor(found.Desc))
 	if err != nil {
 		return nil, err
 	}
-	defer func() { _ = os.RemoveAll(tmp) }()
-	if _, err := extract.Extract(ctx, c, reference.Reference{Ref: parsed.Ref}, tmp, extract.Options{Repo: parsed.Path}); err != nil {
-		return nil, fmt.Errorf("%s: %w", ref, err)
+	defer func() { _ = reader.Close() }()
+	data, err := io.ReadAll(reader)
+	if err != nil {
+		return nil, err
 	}
-	var found string
-	_ = filepath.WalkDir(tmp, func(p string, d os.DirEntry, err error) error {
-		if err == nil && d.Type().IsRegular() && d.Name() == name && len(found) == 0 {
-			found = p
+	if int64(len(data)) != found.Desc.Size || digest.FromBytes(data) != found.Desc.Digest {
+		return nil, fmt.Errorf("%s: %s failed digest verification", ref, name)
+	}
+	return data, nil
+}
+
+func platformReference(ctx context.Context, c *remote.Client, ref reference.Reference, platform string) (reference.Reference, error) {
+	desc, err := c.Resolve(ctx, ref)
+	if err != nil {
+		return reference.Reference{}, err
+	}
+	if desc.MediaType != ocispecv1.MediaTypeImageIndex {
+		return ref, nil
+	}
+	reader, err := c.Fetch(ctx, reference.Reference{Ref: desc.Digest.String()}.WithDescriptor(desc))
+	if err != nil {
+		return reference.Reference{}, err
+	}
+	defer func() { _ = reader.Close() }()
+	var index ocispecv1.Index
+	if err := json.NewDecoder(reader).Decode(&index); err != nil {
+		return reference.Reference{}, err
+	}
+	osName, architecture, ok := strings.Cut(platform, "/")
+	if !ok {
+		return reference.Reference{}, fmt.Errorf("invalid platform %q", platform)
+	}
+	for _, manifest := range index.Manifests {
+		if manifest.Platform != nil && manifest.Platform.OS == osName && manifest.Platform.Architecture == architecture {
+			return reference.Reference{Ref: manifest.Digest.String()}, nil
 		}
-		return nil
-	})
-	if len(found) == 0 {
-		return nil, fmt.Errorf("%s: the artifact has no file %s", ref, name)
 	}
-	return os.ReadFile(found)
+	return reference.Reference{}, fmt.Errorf("platform %s is not available", platform)
 }

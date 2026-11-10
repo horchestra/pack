@@ -1,13 +1,21 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
+	"sync"
 
 	"github.com/spf13/cobra"
 
 	"github.com/horchestra/pack/internal/interrupt"
+	"github.com/horchestra/pack/internal/release"
+	"github.com/horchestra/pack/internal/session"
+	"github.com/horchestra/pack/internal/workdir"
 	"github.com/horchestra/pack/pkg/api"
+	"github.com/horchestra/pack/pkg/saga"
 )
 
 func init() {
@@ -16,6 +24,59 @@ func init() {
 }
 
 var applyApprove string
+
+// ApplyOptions is an embedded apply of one release directory. The caller has
+// already approved the change; unlike the CLI, Apply does not prompt.
+type ApplyOptions struct {
+	Dir         string
+	Environment string
+	CacheDir    string
+	Hear        func(saga.Entry)
+}
+
+var embeddedApplyMu sync.Mutex
+
+// Apply runs the same prepare, plan and saga as the apply command in the
+// current process. Embedded applies are serialized because pack's cache is an
+// environment setting shared by the process.
+func Apply(ctx context.Context, options ApplyOptions) error {
+	embeddedApplyMu.Lock()
+	defer embeddedApplyMu.Unlock()
+	if options.Dir == "" {
+		options.Dir = "."
+	}
+	if options.CacheDir != "" {
+		old, existed := os.LookupEnv("PACK_CACHE")
+		if err := os.Setenv("PACK_CACHE", options.CacheDir); err != nil {
+			return err
+		}
+		defer func() {
+			if existed {
+				_ = os.Setenv("PACK_CACHE", old)
+			} else {
+				_ = os.Unsetenv("PACK_CACHE")
+			}
+		}()
+	}
+	rel, err := release.Load(options.Dir, options.Environment)
+	if err != nil {
+		return err
+	}
+	dir := workdir.New(rel, options.Environment)
+	dir.Path = filepath.Join(options.Dir, ".pack")
+	dir.Ensure()
+	s, err := session.Open(ctx, dir, false)
+	if err != nil {
+		return err
+	}
+	defer s.Close()
+	s.Hear = options.Hear
+	change, err := s.Prepare(true)
+	if err != nil {
+		return err
+	}
+	return s.Apply(ctx, change)
+}
 
 var applyCmd = &cobra.Command{
 	Use:   "apply",
