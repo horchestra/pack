@@ -7,7 +7,7 @@ require (
 	github.com/Masterminds/sprig/v3 v3.3.0
 	github.com/arenadata/oci-packer v1.0.0
 	github.com/arenadata/oci-packer/types v1.0.0
-	github.com/horchestra/pack/sdk v1.0.0
+	github.com/horchestra/pack/sdk v1.1.0
 	github.com/invopop/jsonschema v0.14.0
 	github.com/jackc/pgx/v5 v5.12.0
 	github.com/ks-tool/app-config/go v0.0.0-20260921104620-65a08e500d40
