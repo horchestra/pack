@@ -118,16 +118,20 @@ public final class Root {
         }
     }
 
-    /** The installation on one OS, in this order: prepare installed, repo delivered, names installed, commands run,
-     *  content delivered, services started. A name or the url of a file is a template too; the target resolves
-     *  ${os:codename}, ${os:version} and ${os:arch}. */
+    /** The installation on one OS, in this order: prepare installed, sysctls set and modules loaded, repo
+     *  delivered, names installed, commands run, content delivered, services started. A name or the url of a file
+     *  is a template too; the target resolves ${os:codename}, ${os:version} and ${os:arch}. */
     public static final class OSPackages {
         public final List<String> prepare = new ArrayList<>(), names = new ArrayList<>(), services = new ArrayList<>();
+        public final List<String> modules = new ArrayList<>();
+        public final Map<String, String> sysctls = new TreeMap<>();
         public final List<File> repo = new ArrayList<>(), content = new ArrayList<>();
         public final List<List<String>> commands = new ArrayList<>();
 
         public OSPackages names(String... v) { names.addAll(List.of(v)); return this; }
         public OSPackages prepare(String... v) { prepare.addAll(List.of(v)); return this; }
+        public OSPackages sysctl(String name, String value) { sysctls.put(name, value); return this; }
+        public OSPackages module(String name) { modules.add(name); return this; }
         public OSPackages repo(File f) { repo.add(f); return this; }
         public OSPackages command(String... argv) { commands.add(List.of(argv)); return this; }
         public OSPackages content(File f) { content.add(f); return this; }
@@ -142,6 +146,8 @@ public final class Root {
         Map<String, Object> toJson() {
             Map<String, Object> out = new LinkedHashMap<>();
             if (!prepare.isEmpty()) out.put("prepare", new ArrayList<>(prepare));
+            if (!sysctls.isEmpty()) out.put("sysctls", new TreeMap<>(sysctls));
+            if (!modules.isEmpty()) out.put("modules", new ArrayList<>(modules));
             if (!repo.isEmpty()) out.put("repo", json(repo));
             out.put("names", new ArrayList<>(names));
             if (!commands.isEmpty()) out.put("commands", new ArrayList<>(commands));

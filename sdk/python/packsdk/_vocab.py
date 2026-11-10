@@ -119,11 +119,13 @@ class File:
 
 @dataclass
 class OSPackages:
-    """The installation on one OS, in this order: prepare installed, repo delivered, names installed, commands run,
-    content delivered, services started. A name or the url of a file is a template too; the target resolves
-    ${os:codename}, ${os:version} and ${os:arch}."""
+    """The installation on one OS, in this order: prepare installed, sysctls set and modules loaded, repo
+    delivered, names installed, commands run, content delivered, services started. A name or the url of a file is
+    a template too; the target resolves ${os:codename}, ${os:version} and ${os:arch}."""
     names: list[str]
     prepare: list[str] = _field(default_factory=list)
+    sysctls: dict[str, str] = _field(default_factory=dict)
+    modules: list[str] = _field(default_factory=list)
     repo: list[File] = _field(default_factory=list)
     commands: list[list[str]] = _field(default_factory=list)
     content: list[File] = _field(default_factory=list)
@@ -133,6 +135,10 @@ class OSPackages:
         out: dict = {}
         if self.prepare:
             out["prepare"] = list(self.prepare)
+        if self.sysctls:
+            out["sysctls"] = dict(sorted(self.sysctls.items()))
+        if self.modules:
+            out["modules"] = list(self.modules)
         if self.repo:
             out["repo"] = [f.to_json() for f in self.repo]
         out["names"] = list(self.names)

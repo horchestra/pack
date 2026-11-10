@@ -121,12 +121,15 @@ export function fileJson(f: PackFile): Dict {
   });
 }
 
-/** The installation on one OS, in this order: prepare installed, repo delivered, names installed, commands run,
- * content delivered, services started. A name or the url of a file is a template too; the target resolves
+/** The installation on one OS, in this order: prepare installed, sysctls set and modules loaded, repo delivered,
+ * names installed, commands run, content delivered, services started. A name or the url of a file is a template
+ * too; the target resolves
  * ${os:codename}, ${os:version} and ${os:arch}. */
 export interface OSPackages {
   names: string[];
   prepare?: string[];
+  sysctls?: Record<string, string>;
+  modules?: string[];
   repo?: PackFile[];
   commands?: string[][];
   content?: PackFile[];
@@ -136,6 +139,9 @@ export interface OSPackages {
 export function osPackagesJson(p: OSPackages): Dict {
   const out: Dict = {};
   if (p.prepare?.length) out.prepare = [...p.prepare];
+  if (p.sysctls && Object.keys(p.sysctls).length)
+    out.sysctls = Object.fromEntries(Object.keys(p.sysctls).sort().map((k) => [k, p.sysctls![k]]));
+  if (p.modules?.length) out.modules = [...p.modules];
   if (p.repo?.length) out.repo = p.repo.map(fileJson);
   out.names = [...p.names];
   if (p.commands?.length) out.commands = p.commands.map((c) => [...c]);
