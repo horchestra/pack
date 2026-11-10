@@ -1,4 +1,4 @@
-name: openbao in dev mode installs on the release's docker
+name: openbao in dev mode installs on the release's host
 values:
   dev: true
 expect:

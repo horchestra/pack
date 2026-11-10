@@ -42,7 +42,7 @@ flowchart LR
 
     packbin["pack — the CLI<br/>plan · apply · saga · journal"]
     git[("git repositories:<br/>releases, packs, change requests")]
-    targets["targets: docker, ansible, k8s<br/>— what the releases install on"]
+    targets["targets: host, k8s<br/>— what the releases install on"]
     registry[("OCI registry:<br/>public packs")]
 
     browser -->|"HTTPS + session cookie,<br/>CSRF token"| backend

@@ -5,16 +5,20 @@ addresses and instances of the keys end up inside config files), plans the saga 
 A target says what the environment's placement of a key means on its system and performs the steps in it.
 
 The targets are in their own
-repository, [github.com/horchestra/targets](https://github.com/horchestra/targets/tree/main): three modules, each with
-its own `go.mod`
-and `main.go`, built into a program that pack starts and speaks to over gRPC:
+repository, [github.com/horchestra/targets](https://github.com/horchestra/targets/tree/main): modules of their own, each
+with its own `go.mod` and `main.go`, built into a program that pack starts and speaks to over gRPC:
 
-| `target:` | program               |                                                                                                                                       |
-|-----------|-----------------------|---------------------------------------------------------------------------------------------------------------------------------------|
-| `docker`  | `pack-target-docker`  | [Docker engines](https://github.com/horchestra/targets/tree/main/docker#readme): one, or several hosts, over the CLI or an SSH tunnel |
-| `ansible` | `pack-target-ansible` | [classic hosts](https://github.com/horchestra/targets/tree/main/ansible#readme): packages, files and systemd services over SSH        |
-| `k8s`     | `pack-target-k8s`     | [Kubernetes](https://github.com/horchestra/targets/tree/main/k8s#readme): StatefulSets, Jobs, Services, Secrets, with client-go       |
-| `memory`  | (in pack)             | runs nothing; keeps what it was told in the process — for plans, templates and tests                                                  |
+| `target:` | program            |                                                                                                                                        |
+|-----------|--------------------|----------------------------------------------------------------------------------------------------------------------------------------|
+| `host`    | `pack-target-host` | [hosts SSH reaches](https://github.com/horchestra/targets/tree/main/host#readme): containers on the host's engine, or OS packages, files and systemd services — no ansible, no python on the hosts |
+| `k8s`     | `pack-target-k8s`  | [Kubernetes](https://github.com/horchestra/targets/tree/main/k8s#readme): StatefulSets, Jobs, Services, Secrets, with client-go        |
+| `memory`  | (in pack)          | runs nothing; keeps what it was told in the process — for plans, templates and tests                                                    |
+
+The host target carries a small **agent** to each host: it is checked by sha256, uploaded over the SSH session's stdin
+when it differs, listens on the host's loopback and lives exactly as long as the session — the driver speaks to it
+through the SSH connection (gRPC, `pack.agent.v1`). The agent does the doing: the package manager, files, systemctl,
+sysctl, modprobe, the docker CLI, and serving the files of an OCI artifact over the loopback. A connection that dies is
+dialed again and the agent started anew; every step is safe to repeat.
 
 ## Using one
 
@@ -23,13 +27,13 @@ which makes the release):
 
 ```yaml
 # env.yaml
-target: docker
+target: host
 ```
 
 ```yaml
 # release.yaml
 targets:
-  docker: https://github.com/horchestra/targets/releases/download/docker/v0.1.0/pack-target-docker_{os}_{arch}.tar.gz
+  host: https://github.com/horchestra/targets/releases/download/host/v0.1.0/pack-target-host_{os}_{arch}.tar.gz
   k8s: oci://ghcr.io/horchestra/targets/k8s:0.1.0-{os}-{arch}
 ```
 
@@ -40,8 +44,8 @@ each from its source into `.pack/bin/pack-target-<name>`, and writes the SHA-256
 ```json
 {
   "targets": {
-    "docker": {
-      "source": "https://…/pack-target-docker_{os}_{arch}.tar.gz",
+    "host": {
+      "source": "https://…/pack-target-host_{os}_{arch}.tar.gz",
       "sha256": "20fb7888…"
     }
   }
@@ -52,7 +56,7 @@ A source is:
 
 |                                            |                                                                                                                                                  |
 |--------------------------------------------|--------------------------------------------------------------------------------------------------------------------------------------------------|
-| `https://…/pack-target-docker_{os}_{arch}` | the program itself                                                                                                                               |
+| `https://…/pack-target-host_{os}_{arch}`   | the program itself                                                                                                                               |
 | `https://…/….tar.gz`, `….tgz`, `….zip`     | an archive that holds `pack-target-<name>`, wherever in it                                                                                       |
 | `oci://host/repo:tag`                      | an OCI artifact with the file `pack-target-<name>` ([registry.md](registry.md#publishing-a-target)); its options are beside the `url`, see below |
 | `http://…`                                 | the same, in the clear — a mirror inside                                                                                                         |
@@ -62,14 +66,13 @@ A source is the URL alone, or the URL with its options, each target's for itself
 ```yaml
 # release.yaml
 targets:
-  docker:
-    url: oci://localhost:5001/targets/docker:0.1.0-{os}-{arch}
+  host:
+    url: oci://localhost:5001/targets/host:0.1.0-{os}-{arch}
     plain_http: true                 # the registry speaks http, not https
   k8s:
     url: oci://private.example/targets/k8s:0.1.0-{os}-{arch}
     username_env: PRIVATE_USER       # the variables that hold the credentials, never the credentials
     password_env: PRIVATE_TOKEN
-  ansible: oci://registry.example/targets/ansible:0.1.0-{os}-{arch}
 ```
 
 A source that names no variables is read anonymously: the credentials of one never reach another's registry.
@@ -86,28 +89,30 @@ runs in** — nowhere else (not beside itself, not on `PATH`). The target is sto
 ## Where a target runs: the runtime
 
 A target's program runs on the machine pack runs on (`native`, the default), or from the target's **image in a
-container** (`docker`): the image carries the program and all it needs — ansible with its collections, the docker
-CLI — so the machine needs pack and podman or docker, nothing else.
+container** (`docker`): the image carries the program and all it needs — so the machine needs pack and podman or
+docker, nothing else. The host target's image carries the agents it brings to the hosts; the SSH key is a mount
+(`~/.ssh/id:/home/pack/.ssh/id:ro`) or the agent passed in (`ssh_agent: true`).
 
 ```yaml
 # release.yaml
 targets:
-  ansible:
-    image: oci://registry.example/targets/ansible:0.2.0   # beside url:, or instead of it
+  host:
+    image: oci://registry.example/targets/host:0.1.0   # beside url:, or instead of it
 ```
 
 ```yaml
 # env.yaml
-target: ansible
+target: host
 runtime:
   type: docker                       # native | docker | k8s (below)
   network: host                      # the container's network; host — the machine's (none: a port on 127.0.0.1);
   # under Docker Desktop (Mac, Windows) host is its VM's network, not the machine's
   mounts: # source:destination[:ro|:rw], ~/ the home, both absolute
     - ~/.ssh/known_hosts:/home/pack/.ssh/known_hosts:ro
+    - ~/.ssh/id_ed25519:/home/pack/.ssh/id_ed25519:ro
   ssh_agent: true                    # the machine's agent in the container (Docker Desktop's own on a Mac)
   env: # variables passed in by name; their values never in a file or a command line
-    - ANSIBLE_VAULT_PASSWORD
+    - PACK_SSH_PASSPHRASE
   user: host                         # host — pack's uid:gid and the groups of the sockets mounted (Linux's default);
   # image — the image's user (the default under Docker Desktop)
 ```
@@ -120,7 +125,7 @@ runtime:
   `pack-target-<name>`, listening where `PACK_TARGET_ADDRESS` says (port 7353), asking for `PACK_TARGET_TOKEN`; its
   `HOME` is `/home/pack`.
 - The container's home is the release's: pack mounts `.pack/home/<name>` at `/home/pack`, so what a target keeps in
-  `~` — the ansible target's state, the credentials it provisioned — outlives the container. A mount into the home
+  `~` — its state file, the credentials it provisioned — outlives the container. A mount into the home
   (`~/.ssh/id:/home/pack/.ssh/id:ro`) lies over it.
 - On Linux a mount is the files as they are on the machine: the program runs as pack's user (`user: host`), with the
   group of every socket mounted (the engine's, the agent's), so the home, a key of `0600` and the socket are its. A
@@ -129,8 +134,8 @@ runtime:
   image's user runs it (`user: image`, the default off Linux; Docker Desktop for Linux wants it said). On Linux with
   `user: image` the program cannot write the home pack made for it.
 - The images of the targets of github.com/horchestra/targets are `ghcr.io/horchestra/targets/<name>:<version>`
-  (`make images` builds them): docker (the docker CLI; mount the engine's socket), ansible (ansible-core, the ssh
-  client; mount the key or pass the agent), k8s (the program alone; mount the kubeconfig).
+  (`make images` builds them): host (the agents built in; mount the key or pass the agent), k8s (the program alone;
+  mount the kubeconfig).
 - The container is labelled with the installation, the target and the pack that runs it; a container a pack of this
   machine left behind (killed, its process gone) is removed when the next one starts — on Linux and macOS, where pack
   can tell its process is gone; elsewhere it stays for `docker rm`. `PACK_CONTAINER_RUNTIME` names
@@ -166,10 +171,9 @@ runtime:
   dashes, a letter first, at most 40.
 - The runtime is pack's, not the target's: the target is configured without it. A target in pack itself (`memory`)
   runs in pack's process and has none. An entry of `targets:` in `env.yaml`
-  has a runtime of its own (`targets: {edge: {target: docker, runtime: {type: docker}}}`).
+  has a runtime of its own (`targets: {edge: {target: host, runtime: {type: docker}}}`).
 
-A target is a module of its own so that what it pulls in (client-go, the docker CLI's helpers, an SSH library) is not
-the
+A target is a module of its own so that what it pulls in (client-go, an SSH library) is not the
 core's. It is tested on its own, in its repository: `cd <name> && go test ./...`.
 
 ## Writing one

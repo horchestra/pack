@@ -12,12 +12,13 @@ import (
 	"testing"
 )
 
-// The docker target from its image (runtime: docker): built from the targets checkout, pushed to the registry the
+// The host target from its image (runtime: docker): built from the targets checkout, pushed to the registry the
 // release names it in, locked by pack refresh and run in a container that reaches the engine through its socket —
-// openbao comes up as it does from the program of .pack/bin.
+// openbao comes up as it does from the program of .pack/bin. With no hosts the target works on its own container:
+// the agent a process of it, the containers on the engine of the socket.
 func TestTargetInAContainer(t *testing.T) {
 	s := setup(t)
-	image := strings.TrimPrefix(s.targetImage(t, "docker"), "oci://")
+	image := strings.TrimPrefix(s.targetImage(t, "host"), "oci://")
 
 	dir := t.TempDir()
 	api := freePort(t)
@@ -39,12 +40,12 @@ func TestTargetInAContainer(t *testing.T) {
 	if err := json.Unmarshal(raw, &lock); err != nil {
 		t.Fatal(err)
 	}
-	if tl := lock.Targets["docker"]; !strings.HasPrefix(tl.Digest, "sha256:") || len(tl.SHA256) > 0 {
+	if tl := lock.Targets["host"]; !strings.HasPrefix(tl.Digest, "sha256:") || len(tl.SHA256) > 0 {
 		t.Fatalf("lock = %s\n%s", raw, out)
 	}
 	r.apply(t)
 	r.wantServing(t, "inmem")
-	if _, err := os.Stat(filepath.Join(dir, ".pack", "home", "docker")); err != nil {
+	if _, err := os.Stat(filepath.Join(dir, ".pack", "home", "host")); err != nil {
 		t.Errorf("the container had no home of the release's: %v", err)
 	}
 	// the facts of the engine, and the port openbao publishes on it among them
@@ -100,7 +101,7 @@ const (
 registry:
   plain_http: true
 targets:
-  docker:
+  host:
     image: ${IMAGE}
     plain_http: true
 `
@@ -108,7 +109,7 @@ targets:
 target: main
 targets:
   main:
-    target: docker
+    target: host
     runtime:
       type: docker
       mounts:
@@ -145,16 +146,16 @@ func hostFromAContainer() (address, network string) {
 	return "host.docker.internal", ""
 }
 
-// ansibleInAContainerEnv is the ansible target from its image: the key a mount in its home, the host key check
-// passed by name, the hosts as a container reaches them.
-func ansibleInAContainerEnv(key, address, network string, ports map[string]string) string {
+// hostInAContainerEnv is the host target from its image: the key a mount in its home, the hosts as a container
+// reaches them.
+func hostInAContainerEnv(key, address, network string, ports map[string]string) string {
 	var b strings.Builder
-	b.WriteString("---\ntarget: main\ntargets:\n  main:\n    target: ansible\n    ssh_private_key: /home/pack/.ssh/id\n    runtime:\n      type: docker\n")
+	b.WriteString("---\ntarget: main\ntargets:\n  main:\n    target: host\n    runtime:\n      type: docker\n")
 	if len(network) > 0 {
 		b.WriteString("      network: " + network + "\n")
 	}
-	b.WriteString("      mounts:\n        - " + key + ":/home/pack/.ssh/id:ro\n      env:\n        - ANSIBLE_HOST_KEY_CHECKING\n")
-	b.WriteString(strings.ReplaceAll(hostsBlock(ports), "host: 127.0.0.1", "host: "+address))
+	b.WriteString("      mounts:\n        - " + key + ":/home/pack/.ssh/id:ro\n")
+	b.WriteString(strings.ReplaceAll(hostsBlock("/home/pack/.ssh/id", ports), "host: 127.0.0.1", "host: "+address))
 	return b.String()
 }
 

@@ -1,12 +1,12 @@
 // Package e2e installs a pack the way an operator does, against a real Docker engine: the packs are generated and
 // pushed to a registry (distribution, in a testcontainer), `pack refresh` brings, for a release naming `oci://…`, the
-// pack and the docker target from that registry, `pack apply` runs openbao, and openbao itself is asked what it runs.
+// pack and the host target from that registry, `pack apply` runs openbao, and openbao itself is asked what it runs.
 //
-//	make test-e2e        the docker target (fast)
-//	make test-e2e-hosts  the ansible one: real Debian and Fedora hosts (slow, needs the internet)
+//	make test-e2e        the host target, local mode (fast)
+//	make test-e2e-hosts  the host target over SSH: real Debian and Fedora hosts (slow, needs the internet)
 //
-// It needs a Docker engine, python3 for a venv of ansible (TestFromOSPackages), the internet for the hosts' packages, and the targets checkout (PACK_E2E_TARGETS, by default targets/ of this repository); the
-// images come from the engine, pulled if it does not have them.
+// It needs a Docker engine, the internet for the hosts' packages, and the targets checkout (PACK_E2E_TARGETS, by
+// default targets/ of this repository); the images come from the engine, pulled if it does not have them.
 package e2e
 
 import (
@@ -49,8 +49,8 @@ const (
 registry:
   plain_http: true
 targets:
-  docker:
-    url: oci://${REGISTRY}/targets/docker:${TARGET_TAG}-{os}-{arch}
+  host:
+    url: oci://${REGISTRY}/targets/host:${TARGET_TAG}-{os}-{arch}
     plain_http: true
 `
 
@@ -58,7 +58,7 @@ targets:
 target: main
 targets:
   main:
-    target: docker
+    target: host
 keys:
   openbao:
     publish:
@@ -75,7 +75,7 @@ dev: true
 target: main
 targets:
   main:
-    target: docker
+    target: host
 keys:
   openbao:
     publish:
@@ -115,7 +115,7 @@ openbao:
 target: main
 targets:
   main:
-    target: docker
+    target: host
 secrets:
   provider: generate
   provision:
@@ -158,7 +158,7 @@ openbao:
 `
 )
 
-// suite is what every scenario shares: the registry, with the packs and the docker target pushed. It is built once
+// suite is what every scenario shares: the registry, with the packs and the host target pushed. It is built once
 // for the whole run — the builds, the registry and the pushes are the slow part — and torn down by TestMain.
 type suite struct {
 	pack       string
@@ -167,11 +167,9 @@ type suite struct {
 	registry   string
 	registryIP string // how a host reaches the registry, on the engine's network
 
-	reg         testcontainers.Container
-	tagged      []string // the images pushed into the registry, removed at the end
-	tmp         []string // the directories of the builds
-	ansibleOnce sync.Once
-	ansibleE    error
+	reg    testcontainers.Container
+	tagged []string // the images pushed into the registry, removed at the end
+	tmp    []string // the directories of the builds
 }
 
 var (
@@ -250,13 +248,13 @@ func TestOpenBao(t *testing.T) {
 	})
 }
 
-// The pack's scenarios run on a release's target, docker, for real: what a scenario installed is taken away after it,
+// The pack's scenarios run on a release's target, host, for real: what a scenario installed is taken away after it,
 // what only the memory target can do (a failure injected) is skipped.
 func TestScenariosOnARelease(t *testing.T) {
 	s := setup(t)
 	r := s.release(t, devEnv, devValues)
 	out := run(t, r.dir, nil, s.pack, "test", "--release", r.dir, filepath.Join(must(os.Getwd()), "testdata", "scenarios"))
-	for _, want := range []string{"ok    openbao in dev mode installs on the release's docker", "ok    a storage written by hand",
+	for _, want := range []string{"ok    openbao in dev mode installs on the release's host", "ok    a storage written by hand",
 		"ok    a failure injected is the memory target's", "skipped: fail_at and logs are the memory target's", "3 scenario(s) ok"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("pack test --release says no %q:\n%s", want, out)
@@ -268,8 +266,8 @@ func TestScenariosOnARelease(t *testing.T) {
 }
 
 // newSuite starts the registry and publishes into it what the release will ask for: the images, the packs (the held
-// one first: an item of a pack file is mounted from the registry being pushed to) and the docker target. The ansible
-// target is built and pushed by withAnsible, when a test that needs it runs.
+// one first: an item of a pack file is mounted from the registry being pushed to) and the host target. The agents the
+// target carries to the hosts are built first: the driver embeds them.
 func newSuite(t *testing.T) *suite {
 	ctx := context.Background()
 
@@ -329,7 +327,9 @@ func newSuite(t *testing.T) *suite {
 		run(t, filepath.Join(generated, name), nil, packer, "oci://"+reg, "-f", "pack.yaml", "--plain-http")
 	}
 
-	s.pushTarget(t, "docker")
+	// the agents the host target embeds (linux for the hosts, this machine's platform for the local mode)
+	run(t, targets, nil, "make", "agent", "agent-local")
+	s.pushTarget(t, "host")
 	ip, err := c.ContainerIP(ctx)
 	if err != nil {
 		t.Fatal(err)
@@ -363,21 +363,6 @@ func (s *suite) pushTargetE(name string) error {
 		return fmt.Errorf("push the %s target: %v\n%s", name, err, out)
 	}
 	return nil
-}
-
-// withAnsible builds and pushes the ansible target, once: the ansible target carries oci-proxy to the hosts.
-func (s *suite) withAnsible(t *testing.T) {
-	t.Helper()
-	s.ansibleOnce.Do(func() {
-		if out, err := runCmd(s.targets, "make", "oci-proxy"); err != nil {
-			s.ansibleE = fmt.Errorf("make oci-proxy: %v\n%s", err, out)
-			return
-		}
-		s.ansibleE = s.pushTargetE("ansible")
-	})
-	if s.ansibleE != nil {
-		t.Fatal(s.ansibleE)
-	}
 }
 
 // release is one deployment: its directory, and where the api of its openbao is published.
@@ -423,16 +408,16 @@ func (s *suite) release(t *testing.T, env, values string) *release {
 	if err := json.Unmarshal(raw, &lock); err != nil {
 		t.Fatal(err)
 	}
-	if lock.Pack != ref || len(lock.Digest) == 0 || len(lock.Targets["docker"].SHA256) == 0 {
+	if lock.Pack != ref || len(lock.Digest) == 0 || len(lock.Targets["host"].SHA256) == 0 {
 		t.Errorf("lock = %s", raw)
 	}
-	if _, err := os.Stat(filepath.Join(dir, ".pack", "bin", "pack-target-docker")); err != nil {
+	if _, err := os.Stat(filepath.Join(dir, ".pack", "bin", "pack-target-host")); err != nil {
 		t.Errorf("init did not bring the target: %v", err)
 	}
 	return r
 }
 
-var installed = regexp.MustCompile(`installed openbao 2\.6\.5 on docker \(([0-9a-f-]{36})\)`)
+var installed = regexp.MustCompile(`installed openbao 2\.6\.5 on host \(([0-9a-f-]{36})\)`)
 
 func (r *release) apply(t *testing.T) {
 	t.Helper()

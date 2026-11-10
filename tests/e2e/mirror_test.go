@@ -20,9 +20,7 @@ const (
 target: main
 targets:
   main:
-    target: ansible
-    ansible: ${ANSIBLE}
-    ssh_private_key: ${SSH_KEY}
+    target: host
     state: ${STATE}
     mirror_registry: ${MIRROR_REGISTRY}
     mirror_plain_http: true
@@ -114,11 +112,11 @@ iptables -A OUTPUT -j REJECT`)
 	}
 }
 
-// startProxy runs oci-proxy on the host the way the target does.
+// startProxy runs oci-proxy on the host the way the target's agent does.
 func (s *suite) startProxy(t *testing.T, c testcontainers.Container) {
 	t.Helper()
 	ctx := context.Background()
-	if err := c.CopyFileToContainer(ctx, filepath.Join(s.targets, "ansible", "internal", "ansible", "ociproxy", "oci-proxy-linux-"+runtime.GOARCH), "/usr/local/bin/oci-proxy", 0o755); err != nil {
+	if err := c.CopyFileToContainer(ctx, filepath.Join(s.targets, "bin", "oci-proxy-linux-"+runtime.GOARCH), "/usr/local/bin/oci-proxy", 0o755); err != nil {
 		t.Fatal(err)
 	}
 	hostExec(t, c, "systemd-run", "--unit=probe-proxy", "--collect", "--setenv=OCI_PROXY_REGISTRY="+s.registryIP+":5000", "--setenv=OCI_PROXY_PLAIN_HTTP=true", "/usr/local/bin/oci-proxy")
@@ -132,14 +130,11 @@ func (s *suite) startProxy(t *testing.T, c testcontainers.Container) {
 }
 
 // A package repository kept in the registry: apt and dnf, with no way to the internet, read its indexes and take its
-// packages through oci-proxy; the pack's own installation goes the same way, the target bringing oci-proxy and taking it away.
+// packages through oci-proxy; the pack's own installation goes the same way, the agent running oci-proxy for the
+// install and stopping it after.
 func TestFromARegistryMirror(t *testing.T) {
 	s := setup(t)
-	s.withAnsible(t)
-	t.Setenv("ANSIBLE_HOST_KEY_CHECKING", "False")
-	t.Setenv("LC_ALL", "en_US.UTF-8")
-	t.Setenv("OBJC_DISABLE_INITIALIZE_FORK_SAFETY", "YES")
-	bin := ansibleBin(t)
+	run(t, s.targets, nil, "make", "oci-proxy")
 	key := filepath.Join(t.TempDir(), "id")
 	run(t, "", nil, "ssh-keygen", "-q", "-t", "ed25519", "-N", "", "-f", key)
 	pub, err := os.ReadFile(key + ".pub")
@@ -206,12 +201,12 @@ func TestFromARegistryMirror(t *testing.T) {
 		s.publishTree(t, tree, "mirrors/openbao:2.6.5")
 
 		c, port := startHost(t, "debian", strings.TrimSpace(string(pub)))
-		// what the OS's own repository gives, which is not this pack's mirror: Prepare's packages, and what ansible's apt needs
-		hostExec(t, c, "sh", "-c", "apt-get update -qq && apt-get install -y -qq --no-install-recommends ca-certificates openssl python3-apt >/dev/null")
+		// what the OS's own repository gives, which is not this pack's mirror: Prepare's packages
+		hostExec(t, c, "sh", "-c", "apt-get update -qq && apt-get install -y -qq --no-install-recommends ca-certificates openssl >/dev/null")
 		cutOff(t, c)
-		env := strings.NewReplacer("${ANSIBLE}", bin, "${SSH_KEY}", key, "${STATE}", filepath.Join(t.TempDir(), "state.json"),
-			"${MIRROR_REGISTRY}", s.registryIP+":5000", "${HOSTS}", hostsBlock(map[string]string{"host": port})).Replace(mirrorEnv)
-		r := s.packRelease(t, "openbao:2.6.5", "ansible", env, mirrorValues)
+		env := strings.NewReplacer("${STATE}", filepath.Join(t.TempDir(), "state.json"),
+			"${MIRROR_REGISTRY}", s.registryIP+":5000", "${HOSTS}", hostsBlock(key, map[string]string{"host": port})).Replace(mirrorEnv)
+		r := s.packRelease(t, "openbao:2.6.5", "host", env, mirrorValues)
 		run(t, r.dir, journal(c), s.pack, "apply")
 		mapped, err := c.MappedPort(context.Background(), "8200/tcp")
 		if err != nil {
@@ -230,12 +225,9 @@ func TestFromARegistryMirror(t *testing.T) {
 		if !strings.Contains(string(body), `"version":"2.6.5"`) {
 			t.Errorf("seal-status = %s", body)
 		}
-		// nothing of oci-proxy stays on the host
-		if code, _, err := c.Exec(context.Background(), []string{"systemctl", "is-active", "pack-oci-proxy"}); err != nil || code == 0 {
-			t.Errorf("oci-proxy still runs: %d %v", code, err)
-		}
-		if code, _, err := c.Exec(context.Background(), []string{"test", "-e", "/opt/pack/oci-proxy"}); err != nil || code == 0 {
-			t.Errorf("oci-proxy is still on the host: %d %v", code, err)
+		// nothing of oci-proxy stays on the host: the agent stopped its proxy when the install was done
+		if got := hostExec(t, c, "ss", "-tln"); strings.Contains(got, ":8081") {
+			t.Errorf("oci-proxy still listens:\n%s", got)
 		}
 	})
 }

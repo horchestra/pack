@@ -172,7 +172,7 @@ all of `content/` goes into the artifact as `templates/`.
 
 ## Installing from OS packages
 
-A target that runs no image (`ansible`) installs what `Packages` of `PackRoot` says instead of `Image` and `Content`:
+A target that runs no image (`host`, on hosts SSH reaches) installs what `Packages` of `PackRoot` says instead of `Image` and `Content`:
 
 ```go
 Packages: map[string]packschema.OSPackages{
@@ -198,7 +198,7 @@ Services: []string{"docker"},
 - **The version is the OS's.** `Meta.Version` says nothing of a package; a name says its own in the OS's words
   (`postgresql-16=16.4-1.pgdg13+1`), or the name is a URL of a package file.
 - **Where packages come from is a value.** A name and a file's `URL` are templates too: a field of the pack, upstream by
-  default, lets the operator point at a mirror (`oci-proxy` of the ansible target serves a repository kept in the
+  default, lets the operator point at a mirror (`oci-proxy` of the host target serves a repository kept in the
   registry). `${os:codename}`, `${os:version}`, `${os:arch}`, `${os:id}` are the target's
   to resolve, on each host.
 - **The hooks are `Hooks` of the root,** so a script a hook runs is at one path, with its own content per OS.

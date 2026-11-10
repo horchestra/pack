@@ -57,7 +57,7 @@ test-sdk: ## the Python and Java SDKs and examples against the golden files
 test-e2e: ## openbao from a registry on a real Docker engine (dev, raft, postgres): needs Docker and targets/
 	cd tests/e2e && $(GO) test -count=1 -timeout 20m -run 'TestOpenBao|TestTargetInAContainer|TestScenariosOnARelease' ./...
 
-test-e2e-hosts: ## the packs from OS packages on real Debian and Fedora hosts and from a registry mirror (ansible): slow, needs the internet
+test-e2e-hosts: ## the packs from OS packages on real Debian and Fedora hosts and from a registry mirror: slow, needs the internet
 	cd tests/e2e && $(GO) test -count=1 -timeout 20m -run 'TestFromOSPackages|TestFromARegistryMirror' ./...
 
 test-e2e-image: ## the image of pack (the Dockerfile): pack version and an apply inside it, and the state on PostgreSQL

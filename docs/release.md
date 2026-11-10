@@ -61,7 +61,7 @@ vault: # a Vault KV read over the file, the last path winning
   addr: https://vault.example:8200   # VAULT_ADDR when the file has none
   paths: [ secret/data/pack/prod ]     # needs VAULT_TOKEN; the token is never in the file
 targets: # more targets, by the name a key's `target` gives (no underscore in a name)
-  edge: { target: docker, network: edge }
+  edge: { target: host, network: edge }
 keys: # how the environment runs each key of the pack
   postgres:
     replicas: 3
@@ -75,14 +75,14 @@ keys: # how the environment runs each key of the pack
 - `target:` names a target; the core knows none by name. `memory` is in pack (it keeps what it is told in the
   process: what the tests and `plan`/`template` use; `observe: "true"` makes it report what it holds, so drift can be
   seen; `fail_at: <key>/<kind>` fails a step, `hold_at: <key>/<kind>` keeps one running until it is cut short — stands
-  of a failure and of an interrupt). `docker`, `ansible` and `k8s` are programs of their own that `pack refresh` (and
+  of a failure and of an interrupt). `host` and `k8s` are programs of their own that `pack refresh` (and
   `pack init`) downloads and
   pack starts,
   `pack-target-<name>`, see [targets.md](targets.md); each one's settings and the entries of `keys:` it reads are in its
   README.
 - The default target is the one the top-level keys describe; each entry of `targets` is a target of its own, none
   inherited from the default one. `target:` may name an entry instead (`target: main`,
-  `targets: {main: {target: docker}}`):
+  `targets: {main: {target: host}}`):
   that entry is the default target, and its settings are written there, not at the top.
 - `keys` is where placement lives: **values configure the application, the environment runs it.** `replicas` is how many
   instances run; `resources` are cgroup requests and limits (a pack's `Minimum` is their lower bound); `env` is added to

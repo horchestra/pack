@@ -51,19 +51,19 @@ A target's program is published the same way, as an artifact with one file, `pac
 # pack.yaml
 type: application/vnd.pack.target.v1
 items:
-- from: file://pack-target-docker
+- from: file://pack-target-host
 ```
 
 ```
-oci-pack oci://registry.example/targets/docker:0.1.0-linux-amd64 -f pack.yaml
+oci-pack oci://registry.example/targets/host:0.1.0-linux-amd64 -f pack.yaml
 ```
 
-and `release.yaml` names it: `targets: {docker: oci://registry.example/targets/docker:0.1.0-{os}-{arch}}`.
+and `release.yaml` names it: `targets: {host: oci://registry.example/targets/host:0.1.0-{os}-{arch}}`.
 
 ## pack init and pack refresh
 
 ```
-pack init oci://registry.example/packs/openbao:2.6.5 prod --target docker
+pack init oci://registry.example/packs/openbao:2.6.5 prod --target host
 ```
 
 makes the release (see [commands.md](commands.md)), resolves the tag to a **digest** and extracts the pack, with the
@@ -81,7 +81,7 @@ becomes**: commit the lock. `pack refresh` brings what the release names — aft
 `release.yaml` — reading the locked digest; `--upgrade` takes what the tag means now and rewrites the lock. A plain-HTTP
 registry (`localhost:5001`) needs `registry: {plain_http: true}` in
 `release.yaml`; a target from a plain-HTTP registry says so in its own source
-(`targets: {docker: {url: oci://…, plain_http: true}}`).
+(`targets: {host: {url: oci://…, plain_http: true}}`).
 
 The units of a release carry the images as full references — a mounted member is named by where it pulls from,
 `<host>/packs/openbao@sha256:…` — so the engine of any target takes them as they are.
