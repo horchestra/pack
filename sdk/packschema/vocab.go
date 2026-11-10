@@ -28,7 +28,7 @@ type Root struct {
 	Content []File `json:"content,omitempty"`
 	// Packages is how a target that installs OS packages runs the component instead of the image, by OS: the key is the
 	// target's to match, "debian-13", "debian", a family, any OS at all — none of them is known here.
-	Packages map[string]OSPackages `json:"packages,omitempty"`
+	Packages map[string]OSInstall `json:"packages,omitempty"`
 	// Minimum is the least the component can run on: a lower bound for the resource requests the environment
 	// gives it (cpu, memory).
 	Minimum   map[string]string `json:"minimum,omitempty"`
@@ -95,14 +95,14 @@ type Rollout struct {
 	MaxUnavailable int `json:"maxUnavailable,omitempty"`
 }
 
-// OSPackages is the installation on one OS, in this order: Prepare installed, Sysctls set and Modules loaded (the
+// OSInstall is the installation on one OS, in this order: Prepare installed, Sysctls set and Modules loaded (the
 // kernel the application needs), Repo delivered, Names installed, Commands run, Content delivered, Services
 // started. Each OS has its own files and units: the same application reads another
 // path there, and versions differ between OSes and from the image's, so a name says its version in the OS's own words
 // ("postgresql-16=16.4-1.pgdg12+1"), Meta.Version says nothing of it. A name, a command or the URL of a file is a template too, so
 // that where the packages come from can be a value of the pack: upstream by default, a mirror (oci-packer proxy) when
 // the operator says. The target resolves ${os:codename}, ${os:version} and ${os:arch} in what it delivers and installs.
-type OSPackages struct {
+type OSInstall struct {
 	Prepare  []string          `json:"prepare,omitempty"`
 	Sysctls  map[string]string `json:"sysctls,omitempty"`
 	Modules  []string          `json:"modules,omitempty"`

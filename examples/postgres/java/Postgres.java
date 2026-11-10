@@ -93,7 +93,7 @@ public class Postgres extends Pack {
     public Root packRoot() {
         return new Root()
                 // On a host the same application lives elsewhere, by OS; the version is the OS's, not Meta's
-                .packages("debian", new Root.OSPackages()
+                .packages("debian", new Root.OSInstall()
                         .prepare("ca-certificates")
                         .repo(new Root.File("/etc/apt/keyrings/pgdg.asc").url("{{ .pgdg_key }}").mode("0644"))
                         .repo(new Root.File("/etc/apt/sources.list.d/pgdg.sources").template("host-pgdg.sources").mode("0644"))
@@ -102,7 +102,7 @@ public class Postgres extends Pack {
                         .content(new Root.File("/etc/postgresql/16/main/pg_hba.conf").source("host-pg_hba.conf").mode("0640"))
                         .content(new Root.File("/opt/pack/init-extensions.sh").template("host-init.sh").mode("0700"))
                         .services("postgresql@16-main"))
-                .packages("fedora", new Root.OSPackages()
+                .packages("fedora", new Root.OSInstall()
                         .names("postgresql-server", "postgresql-contrib")
                         .command("sh", "-c", "test -f /var/lib/pgsql/data/PG_VERSION || postgresql-setup --initdb")
                         .content(new Root.File("/var/lib/pgsql/data/postgresql.auto.conf").template("host-postgresql.conf").mode("0644"))

@@ -118,7 +118,7 @@ class File:
 
 
 @dataclass
-class OSPackages:
+class OSInstall:
     """The installation on one OS, in this order: prepare installed, sysctls set and modules loaded, repo
     delivered, names installed, commands run, content delivered, services started. A name or the url of a file is
     a template too; the target resolves ${os:codename}, ${os:version} and ${os:arch}."""
@@ -157,7 +157,7 @@ class Root:
     ports: dict[str, int] = _field(default_factory=dict)
     data: dict[str, Volume] = _field(default_factory=dict)
     content: list[File] = _field(default_factory=list)
-    packages: dict[str, OSPackages] = _field(default_factory=dict)  # by OS: the key is the target's to match
+    packages: dict[str, OSInstall] = _field(default_factory=dict)  # by OS: the key is the target's to match
     minimum: dict[str, str] = _field(default_factory=dict)
     readiness: Readiness | None = None
     upgrade: Upgrade | None = None

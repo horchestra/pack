@@ -133,7 +133,7 @@ public final class PackSdk {
         Set<String> missing = new TreeSet<>();
         Root root = p.packRoot();
         List<Root.File> files = new ArrayList<>(root.content);
-        for (Root.OSPackages os : root.packages.values()) {
+        for (Root.OSInstall os : root.packages.values()) {
             files.addAll(os.repo);
             files.addAll(os.content);
         }

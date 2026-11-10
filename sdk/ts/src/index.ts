@@ -23,6 +23,6 @@ export {
 export { dumpYaml } from "./yaml.ts";
 export { Secret } from "./vocab.ts";
 export type {
-  Action, Diagnosis, Fix, Hook, Meta, OSPackages, PackFile, Param, Readiness, Rollout, Root, Rule, Step, Suggest,
+  Action, Diagnosis, Fix, Hook, Meta, OSInstall, PackFile, Param, Readiness, Rollout, Root, Rule, Step, Suggest,
   Upgrade, Volume, When,
 } from "./vocab.ts";

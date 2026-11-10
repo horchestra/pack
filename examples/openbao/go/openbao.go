@@ -45,7 +45,7 @@ func (o *OpenBao) PackRoot() packschema.Root {
 		Content: []packschema.File{{Path: "/openbao/config/config.json", Values: "openbao"}},
 		// The package of each OS reads the config at its own path and is of its own version: Fedora's own, the release's
 		// file on Debian, which has no repository; ReleaseURL says where that comes from.
-		Packages: map[string]packschema.OSPackages{
+		Packages: map[string]packschema.OSInstall{
 			"debian": {
 				Prepare:  []string{"ca-certificates", "openssl"},
 				Names:    []string{"{{ .release_url }}/v2.6.5/openbao_2.6.5_linux_${os:arch}.deb"},

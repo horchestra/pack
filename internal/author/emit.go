@@ -498,7 +498,7 @@ func (s *Spec) PythonSource() []byte {
 	w := func(format string, a ...any) { fmt.Fprintf(&b, format, a...) }
 	w("\"\"\"The %s pack, scaffolded by pack author scaffold: from now on this code is the pack.\"\"\"\n\n", s.Name)
 	w("import sys\nfrom dataclasses import dataclass\nfrom typing import Any\n\n")
-	w("from packsdk import (Action, Diagnosis, File, Fix, Hook, Meta, OSPackages, Pack, Param, Readiness, Root, Rollout, Rule, Secret, Step,\n")
+	w("from packsdk import (Action, Diagnosis, File, Fix, Hook, Meta, OSInstall, Pack, Param, Readiness, Root, Rollout, Rule, Secret, Step,\n")
 	w("                     Suggest, Upgrade, Volume, When, field, main, pointer)\n\n")
 	ptrOf := map[string]string{}
 	for p, n := range names {
@@ -1051,7 +1051,7 @@ func javaRoot(r packschema.Root) string {
 	for _, os := range slices.Sorted(maps.Keys(r.Packages)) {
 		p := r.Packages[os]
 		var x strings.Builder
-		x.WriteString("new Root.OSPackages()")
+		x.WriteString("new Root.OSInstall()")
 		if len(p.Prepare) > 0 {
 			x.WriteString(".prepare(" + javaStrings(p.Prepare) + ")")
 		}

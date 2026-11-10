@@ -74,7 +74,7 @@ func (*Postgres) PackRoot() packschema.Root {
 		Upgrade:   &packschema.Upgrade{From: ">=15"},
 		// On a host the same application lives elsewhere, by OS; the version is the OS's, not Meta's: PGDG's 16 on Debian,
 		// what Fedora ships there.
-		Packages: map[string]packschema.OSPackages{
+		Packages: map[string]packschema.OSInstall{
 			"debian": {
 				Prepare: []string{"ca-certificates"},
 				Repo: []packschema.File{

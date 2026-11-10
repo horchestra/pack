@@ -125,7 +125,7 @@ export function fileJson(f: PackFile): Dict {
  * names installed, commands run, content delivered, services started. A name or the url of a file is a template
  * too; the target resolves
  * ${os:codename}, ${os:version} and ${os:arch}. */
-export interface OSPackages {
+export interface OSInstall {
   names: string[];
   prepare?: string[];
   sysctls?: Record<string, string>;
@@ -136,7 +136,7 @@ export interface OSPackages {
   services?: string[];
 }
 
-export function osPackagesJson(p: OSPackages): Dict {
+export function osInstallJson(p: OSInstall): Dict {
   const out: Dict = {};
   if (p.prepare?.length) out.prepare = [...p.prepare];
   if (p.sysctls && Object.keys(p.sysctls).length)
@@ -155,7 +155,7 @@ export interface Root {
   ports?: Record<string, number>;
   data?: Record<string, Volume>;
   content?: PackFile[];
-  packages?: Record<string, OSPackages>; // by OS: the key is the target's to match
+  packages?: Record<string, OSInstall>; // by OS: the key is the target's to match
   minimum?: Record<string, string>;
   readiness?: Readiness;
   upgrade?: Upgrade;
@@ -175,7 +175,7 @@ export function rootJson(r: Root): Dict {
   if (r.content?.length) out.content = r.content.map(fileJson);
   if (r.packages && Object.keys(r.packages).length) {
     out.packages = Object.fromEntries(
-      Object.keys(r.packages).sort().map((k) => [k, osPackagesJson(r.packages![k])]));
+      Object.keys(r.packages).sort().map((k) => [k, osInstallJson(r.packages![k])]));
   }
   if (r.minimum && Object.keys(r.minimum).length) out.minimum = { ...r.minimum };
   if (r.readiness) out.readiness = readinessJson(r.readiness);

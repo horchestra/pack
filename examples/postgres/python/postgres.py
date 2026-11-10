@@ -12,7 +12,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "sdk" / "python"))
 
-from packsdk import (Action, OSPackages, Param, File, Hook, Meta, Pack, Readiness, Root, Secret, Step, Upgrade, Volume, When, field, main,
+from packsdk import (Action, OSInstall, Param, File, Hook, Meta, Pack, Readiness, Root, Secret, Step, Upgrade, Volume, When, field, main,
                      pointer)
 
 
@@ -60,7 +60,7 @@ class Postgres(Pack):
         return Root(
             packages={
                 # On a host the same application lives elsewhere, by OS; the version is the OS's, not Meta's
-                "debian": OSPackages(
+                "debian": OSInstall(
                     prepare=["ca-certificates"],
                     repo=[File(path="/etc/apt/keyrings/pgdg.asc", url="{{ .pgdg_key }}", mode="0644"),
                           File(path="/etc/apt/sources.list.d/pgdg.sources", template="host-pgdg.sources", mode="0644")],
@@ -69,7 +69,7 @@ class Postgres(Pack):
                              File(path="/etc/postgresql/16/main/pg_hba.conf", source="host-pg_hba.conf", mode="0640"),
                              File(path="/opt/pack/init-extensions.sh", template="host-init.sh", mode="0700")],
                     services=["postgresql@16-main"]),
-                "fedora": OSPackages(
+                "fedora": OSInstall(
                     names=["postgresql-server", "postgresql-contrib"],
                     commands=[["sh", "-c", "test -f /var/lib/pgsql/data/PG_VERSION || postgresql-setup --initdb"]],
                     content=[File(path="/var/lib/pgsql/data/postgresql.auto.conf", template="host-postgresql.conf", mode="0644"),

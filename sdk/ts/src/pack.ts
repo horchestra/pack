@@ -143,8 +143,8 @@ export function content(p: Pack): Map<string, Buffer> {
 function checkNamed(tp: new () => Pack, have: Map<string, Buffer>): void {
   const root = new tp().packRoot();
   const files = [...(root.content ?? [])];
-  for (const osPackages of Object.values(root.packages ?? {})) {
-    files.push(...(osPackages.repo ?? []), ...(osPackages.content ?? []));
+  for (const osInstall of Object.values(root.packages ?? {})) {
+    files.push(...(osInstall.repo ?? []), ...(osInstall.content ?? []));
   }
   const missing: string[] = [];
   for (const f of files) {

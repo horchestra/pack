@@ -11,7 +11,7 @@ public final class Root {
     public final Map<String, Integer> ports = new TreeMap<>();
     public final Map<String, Volume> data = new TreeMap<>();
     public final List<File> content = new ArrayList<>();
-    public final Map<String, OSPackages> packages = new TreeMap<>(); // by OS: the key is the target's to match
+    public final Map<String, OSInstall> packages = new TreeMap<>(); // by OS: the key is the target's to match
     public final Map<String, String> minimum = new TreeMap<>();
     public Readiness readiness;
     public Upgrade upgrade;
@@ -24,7 +24,7 @@ public final class Root {
     public Root port(String name, int port) { ports.put(name, port); return this; }
     public Root data(String name, Volume v) { data.put(name, v); return this; }
     public Root content(File f) { content.add(f); return this; }
-    public Root packages(String os, OSPackages p) { packages.put(os, p); return this; }
+    public Root packages(String os, OSInstall p) { packages.put(os, p); return this; }
     public Root minimum(String resource, String quantity) { minimum.put(resource, quantity); return this; }
     public Root readiness(Readiness r) { readiness = r; return this; }
     public Root upgrade(Upgrade u) { upgrade = u; return this; }
@@ -121,21 +121,21 @@ public final class Root {
     /** The installation on one OS, in this order: prepare installed, sysctls set and modules loaded, repo
      *  delivered, names installed, commands run, content delivered, services started. A name or the url of a file
      *  is a template too; the target resolves ${os:codename}, ${os:version} and ${os:arch}. */
-    public static final class OSPackages {
+    public static final class OSInstall {
         public final List<String> prepare = new ArrayList<>(), names = new ArrayList<>(), services = new ArrayList<>();
         public final List<String> modules = new ArrayList<>();
         public final Map<String, String> sysctls = new TreeMap<>();
         public final List<File> repo = new ArrayList<>(), content = new ArrayList<>();
         public final List<List<String>> commands = new ArrayList<>();
 
-        public OSPackages names(String... v) { names.addAll(List.of(v)); return this; }
-        public OSPackages prepare(String... v) { prepare.addAll(List.of(v)); return this; }
-        public OSPackages sysctl(String name, String value) { sysctls.put(name, value); return this; }
-        public OSPackages module(String name) { modules.add(name); return this; }
-        public OSPackages repo(File f) { repo.add(f); return this; }
-        public OSPackages command(String... argv) { commands.add(List.of(argv)); return this; }
-        public OSPackages content(File f) { content.add(f); return this; }
-        public OSPackages services(String... v) { services.addAll(List.of(v)); return this; }
+        public OSInstall names(String... v) { names.addAll(List.of(v)); return this; }
+        public OSInstall prepare(String... v) { prepare.addAll(List.of(v)); return this; }
+        public OSInstall sysctl(String name, String value) { sysctls.put(name, value); return this; }
+        public OSInstall module(String name) { modules.add(name); return this; }
+        public OSInstall repo(File f) { repo.add(f); return this; }
+        public OSInstall command(String... argv) { commands.add(List.of(argv)); return this; }
+        public OSInstall content(File f) { content.add(f); return this; }
+        public OSInstall services(String... v) { services.addAll(List.of(v)); return this; }
 
         private static List<Object> json(List<File> fs) {
             List<Object> out = new ArrayList<>();

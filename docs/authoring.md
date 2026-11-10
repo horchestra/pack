@@ -175,7 +175,7 @@ all of `content/` goes into the artifact as `templates/`.
 A target that runs no image (`host`, on hosts SSH reaches) installs what `Packages` of `PackRoot` says instead of `Image` and `Content`:
 
 ```go
-Packages: map[string]packschema.OSPackages{
+Packages: map[string]packschema.OSInstall{
 "debian": {
 Prepare:  []string{"ca-certificates"},
 Repo:     []packschema.File{

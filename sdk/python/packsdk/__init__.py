@@ -17,8 +17,8 @@ from ._fields import field
 from ._pack import Pack, content, generate, main, pack_file, pack_file_yaml, packs, schema
 from ._path import dotted, pointer
 from ._reflect import SchemaError
-from ._vocab import (Action, Diagnosis, File, Fix, Hook, Meta, OSPackages, Param, Readiness, Rollout, Root, Rule, Secret, Suggest, Step, Upgrade, Volume, When)
+from ._vocab import (Action, Diagnosis, File, Fix, Hook, Meta, OSInstall, Param, Readiness, Rollout, Root, Rule, Secret, Suggest, Step, Upgrade, Volume, When)
 
-__all__ = ["Pack", "Meta", "Root", "File", "OSPackages", "Readiness", "Upgrade", "Hook", "Step", "When", "Rollout", "Rule", "Suggest", "Diagnosis", "Fix", "Action", "Param", "Volume",
+__all__ = ["Pack", "Meta", "Root", "File", "OSInstall", "Readiness", "Upgrade", "Hook", "Step", "When", "Rollout", "Rule", "Suggest", "Diagnosis", "Fix", "Action", "Param", "Volume",
            "Secret", "SchemaError", "field", "pointer", "dotted", "generate", "schema", "pack_file", "pack_file_yaml",
            "packs", "content", "main"]

@@ -14,7 +14,7 @@ from typing import Any, Optional
 sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "sdk" / "python"))
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "postgres" / "python"))
 
-from packsdk import OSPackages, File, OSPackages, Meta, Pack, Readiness, Root, Rule, Volume, dotted, field, main, pointer
+from packsdk import OSInstall, File, OSInstall, Meta, Pack, Readiness, Root, Rule, Volume, dotted, field, main, pointer
 from postgres import Postgres
 
 
@@ -117,12 +117,12 @@ class OpenBao(Pack):
         return Root(content=[File(path="/openbao/config/config.json", values="openbao")],
                     # the package of each OS reads the config at its own path and is of its own version
                     packages={
-                        "debian": OSPackages(
+                        "debian": OSInstall(
                             prepare=["ca-certificates", "openssl"],
                             names=["{{ .release_url }}/v2.6.5/openbao_2.6.5_linux_${os:arch}.deb"],
                             content=[File(path="/etc/openbao/openbao.hcl", values="openbao", format="json", mode="0644")],
                             services=["openbao"]),
-                        "fedora": OSPackages(
+                        "fedora": OSInstall(
                             names=["openbao"],
                             content=[File(path="/etc/openbao.d/openbao.hcl", values="openbao", format="json", mode="0644")],
                             services=["openbao"]),

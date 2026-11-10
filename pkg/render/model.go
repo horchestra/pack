@@ -66,7 +66,7 @@ type Unit struct {
 	Packages map[string]Packages `json:",omitempty"`
 }
 
-// Packages is a pack's installation on one OS, rendered; packschema.OSPackages says the order.
+// Packages is a pack's installation on one OS, rendered; packschema.OSInstall says the order.
 type Packages struct {
 	Prepare  []string
 	Sysctls  map[string]string

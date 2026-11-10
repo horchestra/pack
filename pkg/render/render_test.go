@@ -441,7 +441,7 @@ type HostCmd struct {
 
 func (*HostCmd) SetDefaults() {}
 func (*HostCmd) PackRoot() packschema.Root {
-	return packschema.Root{Packages: map[string]packschema.OSPackages{
+	return packschema.Root{Packages: map[string]packschema.OSInstall{
 		"debian": {Names: []string{"app"}, Commands: [][]string{{"app-init", "{{ .dir }}"}}},
 	}}
 }

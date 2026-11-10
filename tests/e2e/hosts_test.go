@@ -139,7 +139,7 @@ func hostExec(t *testing.T, c testcontainers.Container, cmd ...string) string {
 }
 
 // The packs from OS packages: the same packs as in TestOpenBao, on the OSes they name.
-func TestFromOSPackages(t *testing.T) {
+func TestFromOSInstall(t *testing.T) {
 	s := setup(t)
 	keyDir := t.TempDir()
 	key := filepath.Join(keyDir, "id")

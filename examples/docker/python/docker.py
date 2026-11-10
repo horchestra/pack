@@ -12,7 +12,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "sdk" / "python"))
 
-from packsdk import File, Meta, OSPackages, Pack, Root, field, main
+from packsdk import File, Meta, OSInstall, Pack, Root, field, main
 
 
 @dataclass
@@ -47,12 +47,12 @@ class Docker(Pack):
         engine = ["docker-ce", "docker-ce-cli", "containerd.io", "docker-buildx-plugin", "docker-compose-plugin"]
         daemon = File(path="/etc/docker/daemon.json", values="daemon", format="json", mode="0644")
         return Root(packages={
-            "debian": OSPackages(
+            "debian": OSInstall(
                 prepare=["ca-certificates"],
                 repo=[File(path="/etc/apt/keyrings/docker.asc", url="{{ .mirror }}/debian/gpg", mode="0644"),
                       File(path="/etc/apt/sources.list.d/docker.sources", template="docker.sources", mode="0644")],
                 names=engine, content=[daemon], services=["docker"]),
-            "fedora": OSPackages(
+            "fedora": OSInstall(
                 repo=[File(path="/etc/yum.repos.d/docker-ce.repo", template="docker-ce.repo", mode="0644")],
                 names=engine, content=[daemon], services=["docker"]),
         })

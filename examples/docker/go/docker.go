@@ -42,7 +42,7 @@ func (*Docker) PackRoot() packschema.Root {
 	engine := []string{"docker-ce", "docker-ce-cli", "containerd.io", "docker-buildx-plugin", "docker-compose-plugin"}
 	daemon := packschema.File{Path: "/etc/docker/daemon.json", Values: "daemon", Format: "json", Mode: "0644"}
 
-	return packschema.Root{Packages: map[string]packschema.OSPackages{
+	return packschema.Root{Packages: map[string]packschema.OSInstall{
 		"debian": {
 			Prepare: []string{"ca-certificates"},
 			Repo: []packschema.File{

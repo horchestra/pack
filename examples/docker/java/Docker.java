@@ -52,12 +52,12 @@ public class Docker extends Pack {
     @Override
     public Root packRoot() {
         return new Root()
-                .packages("debian", new Root.OSPackages()
+                .packages("debian", new Root.OSInstall()
                         .prepare("ca-certificates")
                         .repo(new Root.File("/etc/apt/keyrings/docker.asc").url("{{ .mirror }}/debian/gpg").mode("0644"))
                         .repo(new Root.File("/etc/apt/sources.list.d/docker.sources").template("docker.sources").mode("0644"))
                         .names(ENGINE).content(daemonJson()).services("docker"))
-                .packages("fedora", new Root.OSPackages()
+                .packages("fedora", new Root.OSInstall()
                         .repo(new Root.File("/etc/yum.repos.d/docker-ce.repo").template("docker-ce.repo").mode("0644"))
                         .names(ENGINE).content(daemonJson()).services("docker"));
     }
