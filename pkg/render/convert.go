@@ -293,6 +293,17 @@ func (r *render) packages(key string, comp *bundle.Pack, km map[string]any) (map
 		if u.Prepare, err = texts("prepare", p.Prepare); err != nil {
 			return nil, err
 		}
+		if len(p.Sysctls) > 0 {
+			u.Sysctls = map[string]string{}
+			for k, v := range p.Sysctls {
+				if u.Sysctls[k], err = text("sysctls", v); err != nil {
+					return nil, err
+				}
+			}
+		}
+		if u.Modules, err = texts("modules", p.Modules); err != nil {
+			return nil, err
+		}
 		if u.Repo, err = fileList(p.Repo); err != nil {
 			return nil, err
 		}

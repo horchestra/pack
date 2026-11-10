@@ -69,6 +69,8 @@ type Unit struct {
 // Packages is a pack's installation on one OS, rendered; packschema.OSPackages says the order.
 type Packages struct {
 	Prepare  []string
+	Sysctls  map[string]string
+	Modules  []string
 	Repo     []File
 	Names    []string
 	Commands [][]string

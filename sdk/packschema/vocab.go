@@ -95,19 +95,22 @@ type Rollout struct {
 	MaxUnavailable int `json:"maxUnavailable,omitempty"`
 }
 
-// OSPackages is the installation on one OS, in this order: Prepare installed, Repo delivered, Names installed, Commands
-// run, Content delivered, Services started. Each OS has its own files and units: the same application reads another
+// OSPackages is the installation on one OS, in this order: Prepare installed, Sysctls set and Modules loaded (the
+// kernel the application needs), Repo delivered, Names installed, Commands run, Content delivered, Services
+// started. Each OS has its own files and units: the same application reads another
 // path there, and versions differ between OSes and from the image's, so a name says its version in the OS's own words
 // ("postgresql-16=16.4-1.pgdg12+1"), Meta.Version says nothing of it. A name, a command or the URL of a file is a template too, so
 // that where the packages come from can be a value of the pack: upstream by default, a mirror (oci-packer proxy) when
 // the operator says. The target resolves ${os:codename}, ${os:version} and ${os:arch} in what it delivers and installs.
 type OSPackages struct {
-	Prepare  []string   `json:"prepare,omitempty"`
-	Repo     []File     `json:"repo,omitempty"`
-	Names    []string   `json:"names" jsonschema:"required,minItems=1"`
-	Commands [][]string `json:"commands,omitempty"`
-	Content  []File     `json:"content,omitempty"`
-	Services []string   `json:"services,omitempty"`
+	Prepare  []string          `json:"prepare,omitempty"`
+	Sysctls  map[string]string `json:"sysctls,omitempty"`
+	Modules  []string          `json:"modules,omitempty"`
+	Repo     []File            `json:"repo,omitempty"`
+	Names    []string          `json:"names" jsonschema:"required,minItems=1"`
+	Commands [][]string        `json:"commands,omitempty"`
+	Content  []File            `json:"content,omitempty"`
+	Services []string          `json:"services,omitempty"`
 }
 
 // File is one file in the component's containers, at Path. It comes from exactly one of:

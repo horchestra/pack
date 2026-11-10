@@ -194,7 +194,8 @@ Services: []string{"docker"},
   exact one a host goes by (`debian-13`, `debian`, the family). The operator adds an OS the pack does not know, or other
   names, in `keys.<key>.packages` of `env.yaml`, without touching the pack.
 - **Each OS has its own everything.** The same application reads another path and runs another unit there: the order is
-  `Prepare` installed, `Repo` delivered, `Names` installed, `Commands` run, `Content` delivered, `Services` started.
+  `Prepare` installed, `Sysctls` set and `Modules` loaded (kept in `/etc/sysctl.d` and `/etc/modules-load.d`, so a
+  boot brings them back), `Repo` delivered, `Names` installed, `Commands` run, `Content` delivered, `Services` started.
 - **The version is the OS's.** `Meta.Version` says nothing of a package; a name says its own in the OS's words
   (`postgresql-16=16.4-1.pgdg13+1`), or the name is a URL of a package file.
 - **Where packages come from is a value.** A name and a file's `URL` are templates too: a field of the pack, upstream by
