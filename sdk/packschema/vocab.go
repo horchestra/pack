@@ -101,7 +101,8 @@ type Rollout struct {
 // path there, and versions differ between OSes and from the image's, so a name says its version in the OS's own words
 // ("postgresql-16=16.4-1.pgdg12+1"), Meta.Version says nothing of it. A name, a command or the URL of a file is a template too, so
 // that where the packages come from can be a value of the pack: upstream by default, a mirror (oci-packer proxy) when
-// the operator says. The target resolves ${os:codename}, ${os:version} and ${os:arch} in what it delivers and installs.
+// the operator says. The target resolves ${os:codename}, ${os:version}, ${os:arch}, ${os:id} and ${os:kernel} in what
+// it delivers and installs.
 type OSInstall struct {
 	Prepare  []string          `json:"prepare,omitempty"`
 	Sysctls  map[string]string `json:"sysctls,omitempty"`

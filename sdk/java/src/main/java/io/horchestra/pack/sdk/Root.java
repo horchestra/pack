@@ -120,7 +120,7 @@ public final class Root {
 
     /** The installation on one OS, in this order: prepare installed, sysctls set and modules loaded, repo
      *  delivered, names installed, commands run, content delivered, services started. A name or the url of a file
-     *  is a template too; the target resolves ${os:codename}, ${os:version} and ${os:arch}. */
+     *  is a template too; the target resolves ${os:codename}, ${os:version}, ${os:arch}, ${os:id} and ${os:kernel}. */
     public static final class OSInstall {
         public final List<String> prepare = new ArrayList<>(), names = new ArrayList<>(), services = new ArrayList<>();
         public final List<String> modules = new ArrayList<>();

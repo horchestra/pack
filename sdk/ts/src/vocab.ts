@@ -124,7 +124,7 @@ export function fileJson(f: PackFile): Dict {
 /** The installation on one OS, in this order: prepare installed, sysctls set and modules loaded, repo delivered,
  * names installed, commands run, content delivered, services started. A name or the url of a file is a template
  * too; the target resolves
- * ${os:codename}, ${os:version} and ${os:arch}. */
+ * ${os:codename}, ${os:version}, ${os:arch}, ${os:id} and ${os:kernel}. */
 export interface OSInstall {
   names: string[];
   prepare?: string[];

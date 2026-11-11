@@ -434,7 +434,7 @@ func TestARuleThatNamesNoKeyOfThePackIsReported(t *testing.T) {
 	}
 }
 
-// HostCmd installs from OS packages, what its commands run being a value of the pack.
+// HostCmd installs from OS packages, what it prepares and what its commands run being values of the pack.
 type HostCmd struct {
 	Dir string `json:"dir,omitempty"`
 }
@@ -442,21 +442,28 @@ type HostCmd struct {
 func (*HostCmd) SetDefaults() {}
 func (*HostCmd) PackRoot() packschema.Root {
 	return packschema.Root{Packages: map[string]packschema.OSInstall{
-		"debian": {Names: []string{"app"}, Commands: [][]string{{"app-init", "{{ .dir }}"}}},
+		"debian": {
+			Prepare:  []string{"{{ .dir }}", "linux-headers-${os:kernel}"},
+			Names:    []string{"app"},
+			Commands: [][]string{{"app-init", "{{ .dir }}"}},
+		},
 	}}
 }
 func (*HostCmd) Meta() sdk.Meta {
 	return sdk.Meta{Name: "hostcmd", Version: "1", Dir: "/nonexistent"}
 }
 
-func TestACommandOfPackagesIsATemplate(t *testing.T) {
+func TestPackagesAreTemplates(t *testing.T) {
 	rel, err := renderPack(loadPack(t, &HostCmd{}), map[string]any{"dir": "/data"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	got := rel.Units[0].Packages["debian"].Commands
-	if len(got) != 1 || got[0][1] != "/data" {
+	packages := rel.Units[0].Packages["debian"]
+	if got := packages.Commands; len(got) != 1 || got[0][1] != "/data" {
 		t.Errorf("commands: %v", got)
+	}
+	if got := packages.Prepare; len(got) != 2 || got[0] != "/data" || got[1] != "linux-headers-${os:kernel}" {
+		t.Errorf("prepare: %v", got)
 	}
 }
 

@@ -223,8 +223,9 @@ Services: []string{"docker"},
   (`postgresql-16=16.4-1.pgdg13+1`), or the name is a URL of a package file.
 - **Where packages come from is a value.** A name and a file's `URL` are templates too: a field of the pack, upstream by
   default, lets the operator point at a mirror (`oci-proxy` of the host target serves a repository kept in the
-  registry). `${os:codename}`, `${os:version}`, `${os:arch}`, `${os:id}` are the target's
-  to resolve, on each host.
+  registry). `${os:codename}`, `${os:version}`, `${os:arch}`, `${os:id}`, `${os:kernel}` are the target's
+  to resolve, on each host. `${os:kernel}` is the running kernel's release (`uname -r`), so a Debian pack can prepare
+  `linux-headers-${os:kernel}`.
 - **The hooks are `Hooks` of the root,** so a script a hook runs is at one path, with its own content per OS.
 - **The host is taken to be empty:** nothing conflicting is looked for or removed.
 

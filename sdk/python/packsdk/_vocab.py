@@ -121,7 +121,7 @@ class File:
 class OSInstall:
     """The installation on one OS, in this order: prepare installed, sysctls set and modules loaded, repo
     delivered, names installed, commands run, content delivered, services started. A name or the url of a file is
-    a template too; the target resolves ${os:codename}, ${os:version} and ${os:arch}."""
+    a template too; the target resolves ${os:codename}, ${os:version}, ${os:arch}, ${os:id} and ${os:kernel}."""
     names: list[str]
     prepare: list[str] = _field(default_factory=list)
     sysctls: dict[str, str] = _field(default_factory=dict)
