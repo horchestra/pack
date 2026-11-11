@@ -38,6 +38,29 @@ name), **a field without `omitempty` is required**. Other tags:
 Replicas, resources and placement are **not** in the pack: they are the environment's (`keys:` of `env.yaml`, see
 [release.md](release.md)). The values configure the application; the environment runs it.
 
+## The application gives the schema, the orchestrator gives the values
+
+A pack runs the other way from a chart: **the application is not the owner of its configuration, it is the source of
+its schema**. The configuration type is the application's own — the struct it already reads at startup — so the same
+type is the application's configuration and the pack's values, and the two cannot drift apart: a renamed field
+renames the schema key, a dropped one fails the compilation of whatever still sets it. What each side gives:
+
+- **The application gives the JSON Schema** — `generate` derives it from the type, with `env` tags saying which
+  fields are environment variables. An application that accepts its configuration from outside (values, env) already
+  satisfies the only requirement; pack adds no configuration mechanism of its own.
+- **The orchestrator gives the values** — the concrete document for this one application, typed when the orchestrator
+  is written against the pack's package (`postgres.Postgres{Database: "app"}` is checked by the compiler, not at
+  deploy time), and validated against the schema when it is not.
+- **The environment is shared, the values are per application.** Env says where the system lives — the registry, the
+  network, the credentials of the infrastructure — and is the same for every pack of the release; values say what this
+  one application is, and the orchestrator assembles each pack's own, filling the fields a component needs from the
+  components it holds (a formula's `pack.values.<key>` is exactly this read).
+
+An application embedded in a larger system is then self-deploying: it carries its schema and its `PackRoot`, the
+orchestrating pack runs the same apply on it (`cmd.Apply`) with the values it built for it, and the saga orders the
+components by the holds-relation — a held pack before the pack that holds it. Secrets stay off this channel: a
+`sdk.Secret` leaf is a reference the operator names, never a value the orchestrator passes through.
+
 ## PackRoot
 
 |                 |                                                                                                                                                                                                                                                                                                  |
