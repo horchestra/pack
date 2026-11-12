@@ -7,7 +7,7 @@ require (
 	github.com/casbin/casbin/v3 v3.11.0
 	github.com/coreos/go-oidc/v3 v3.21.0
 	github.com/go-git/go-git/v6 v6.0.0-beta.1
-	github.com/horchestra/pack v0.4.1
+	github.com/horchestra/pack v0.5.0
 	github.com/horchestra/pack/sdk v1.1.0
 	github.com/jackc/pgx/v5 v5.12.0
 	github.com/modelcontextprotocol/go-sdk v1.8.0
