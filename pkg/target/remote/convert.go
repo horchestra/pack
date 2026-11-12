@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"maps"
 	"slices"
-	"strings"
 
 	"github.com/horchestra/pack/pkg/render"
 	"github.com/horchestra/pack/pkg/target"
@@ -101,8 +100,8 @@ func numbers(v any) any {
 	return v
 }
 
-// stripFetched is the unit with the bytes of the files a CapFileURL target downloads by their oci:// URL left out:
-// the registry serves them, they are not to cross to the target and back. The unit itself is not touched.
+// stripFetched is the unit with the bytes of the files a CapFileURL target fetches by their URL left out: the
+// registry or the disk serves them, they are not to cross to the target and back. The unit itself is not touched.
 func stripFetched(u *render.Unit) *render.Unit {
 	if u == nil {
 		return nil
@@ -110,7 +109,7 @@ func stripFetched(u *render.Unit) *render.Unit {
 	strip := func(fs []render.File) []render.File {
 		var res []render.File
 		for i, f := range fs {
-			if !strings.HasPrefix(f.URL, "oci://") || (len(f.Content) == 0 && len(f.Instances) == 0) {
+			if len(f.URL) == 0 || (len(f.Content) == 0 && len(f.Instances) == 0) {
 				continue
 			}
 			if res == nil {

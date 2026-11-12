@@ -1,6 +1,7 @@
 package render_test
 
 import (
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -47,13 +48,21 @@ func TestASourceFileOfARegistryPackIsADownload(t *testing.T) {
 	}
 }
 
-func TestASourceFileOfADirectoryPackIsNoDownload(t *testing.T) {
+func TestASourceFileOfADirectoryPackIsALocalFile(t *testing.T) {
 	b := loadPack(t, &Refd{})
 	rel, err := renderPack(b, map[string]any{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if f := rel.Units[0].Files[0]; len(f.URL) > 0 || len(f.Content) == 0 {
-		t.Errorf("url %q, content %d", f.URL, len(f.Content))
+	f := rel.Units[0].Files[0]
+	want := "file://" + filepath.Join(b.Root.Dir, "templates", "dump.sql")
+	if f.URL != want {
+		t.Errorf("url %q, want %q", f.URL, want)
+	}
+	if len(f.Content) == 0 { // the bytes stay: a target that fetches no files writes them as before
+		t.Error("no content")
+	}
+	if _, err := os.Stat(strings.TrimPrefix(f.URL, "file://")); err != nil {
+		t.Errorf("the file the URL names: %v", err)
 	}
 }

@@ -6,6 +6,7 @@ import (
 	"io/fs"
 	"maps"
 	"path"
+	"path/filepath"
 	"slices"
 	"sort"
 	"strconv"
@@ -358,8 +359,11 @@ func (r *render) contentFile(key string, comp *bundle.Pack, km map[string]any, f
 	}
 	if len(f.Source) > 0 { // shipped as it is: nothing in the values asks for it
 		rf.Content = body
-		if len(comp.Ref) > 0 { // pulled from a registry: a target that fetches files takes it from there instead
+		switch {
+		case len(comp.Ref) > 0: // pulled from a registry: a target that fetches files takes it from there instead
 			rf.URL = comp.Ref + "/templates/" + name
+		case len(comp.Dir) > 0: // a directory: the file is on this machine's disk, the target reads it there
+			rf.URL = "file://" + filepath.Join(comp.Dir, "templates", name)
 		}
 		return rf, true, nil
 	}

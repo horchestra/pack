@@ -12,6 +12,7 @@ func TestStripFetched(t *testing.T) {
 		{Path: "/a", URL: "oci://registry.example/packs/p@sha256:d/templates/a", Content: []byte("a")},
 		{Path: "/b", Content: []byte("b")},
 		{Path: "/c", URL: "http://upstream/c"}, // the author's own URL never had content
+		{Path: "/e", URL: "file:///tmp/pack/templates/e", Content: []byte("e")},
 	}, Packages: map[string]render.Packages{
 		"debian": {Files: []render.File{{Path: "/d", URL: "oci://packs/p:1/templates/d", Content: []byte("d")}}},
 	}}
@@ -24,6 +25,9 @@ func TestStripFetched(t *testing.T) {
 	}
 	if got := out.Packages["debian"].Files[0].Content; len(got) > 0 {
 		t.Error("d: content went with the URL")
+	}
+	if len(out.Files[3].Content) > 0 {
+		t.Error("e: content went with the file:// URL")
 	}
 	// the unit itself is untouched
 	if len(u.Files[0].Content) == 0 || len(u.Packages["debian"].Files[0].Content) == 0 {
