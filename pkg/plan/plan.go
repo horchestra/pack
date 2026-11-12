@@ -15,6 +15,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"maps"
 	"reflect"
 	"slices"
 	"strings"
@@ -433,7 +434,27 @@ func sameFiles(a, b *render.Release, key string) bool {
 	}
 	af, as := files(a)
 	bf, bs := files(b)
-	return reflect.DeepEqual(af, bf) && reflect.DeepEqual(as, bs)
+	return reflect.DeepEqual(localURLs(af), localURLs(bf)) && reflect.DeepEqual(as, bs)
+}
+
+// localURLs is the files with the directory part of a file:// URL cut off: it names the machine's directory the
+// pack was loaded from — the live one for the wanted release, the cache copy for the recorded one — so the same
+// pack would forever differ from itself. The file it names is identified by what follows (templates/<name>), the
+// content says the rest.
+func localURLs(fs []render.File) []render.File {
+	var out []render.File
+	for i, f := range fs {
+		if j := strings.LastIndex(f.URL, "/templates/"); strings.HasPrefix(f.URL, "file://") && j >= 0 {
+			if out == nil {
+				out = slices.Clone(fs)
+			}
+			out[i].URL = "file://" + f.URL[j:]
+		}
+	}
+	if out == nil {
+		return fs
+	}
+	return out
 }
 
 // sameUnit compares the rest of what a key runs as — its placement (replicas,
@@ -444,6 +465,11 @@ func sameUnit(a, b *render.Release, key string) bool {
 		for _, u := range rel.Units {
 			if u.Key == key {
 				u.Files, u.SecretFiles = nil, nil
+				u.Packages = maps.Clone(u.Packages)
+				for osName, p := range u.Packages {
+					p.Repo, p.Files = localURLs(p.Repo), localURLs(p.Files)
+					u.Packages[osName] = p
+				}
 				j, _ := json.Marshal(u)
 				return j
 			}

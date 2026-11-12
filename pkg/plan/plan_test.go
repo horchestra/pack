@@ -203,6 +203,29 @@ func TestNoChange(t *testing.T) {
 	}
 }
 
+// A directory pack's Source files are named file://<dir>/templates/<name>, and the recorded release renders from
+// the cache copy while the wanted one renders from the live directory: the directory part says nothing, the same
+// pack is no change.
+func TestLocalFileURLDirectoriesAreNoChange(t *testing.T) {
+	from := bundleOf("1.0.0", nil, mkPack("db", "1.0.0", nil))
+	to := bundleOf("1.0.0", nil, mkPack("db", "1.0.0", nil))
+	cached := unitOf("db", from.Packs["db"].ImageRef)
+	cached.Files = []render.File{{Path: "/etc/db.conf", URL: "file:///cache/packs/dir-aaa/db/templates/db.conf", Content: []byte("c")}}
+	cached.Packages = map[string]render.Packages{"debian": {Files: []render.File{
+		{Path: "/etc/db2.conf", URL: "file:///cache/packs/dir-aaa/db/templates/db2.conf", Content: []byte("c2")}}}}
+	live := unitOf("db", to.Packs["db"].ImageRef)
+	live.Files = []render.File{{Path: "/etc/db.conf", URL: "file:///home/user/packs/db/templates/db.conf", Content: []byte("c")}}
+	live.Packages = map[string]render.Packages{"debian": {Files: []render.File{
+		{Path: "/etc/db2.conf", URL: "file:///home/user/packs/db/templates/db2.conf", Content: []byte("c2")}}}}
+	p, err := Build(Input{From: from, To: to, FromOut: releaseOf(from, cached), ToOut: releaseOf(to, live)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(p.Steps) != 0 || p.Changes[0].Kind != "none" {
+		t.Fatalf("plan = %+v", p)
+	}
+}
+
 func TestUninstall(t *testing.T) {
 	from := bundleOf("1.0.0", nil, mkPack("db", "1.0.0", nil), mkPack("app", "1.0.0", nil))
 	fromRel := releaseOf(from, unitOf("db", from.Packs["db"].ImageRef), unitOf("app", from.Packs["app"].ImageRef))
