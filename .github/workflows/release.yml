@@ -33,6 +33,7 @@ jobs:
 
   image:
     # the image of pack, published with the release; its digest is what an operator pins
+    needs: build # no image of a tree the tests refused
     runs-on: ubuntu-latest
     permissions:
       contents: read
