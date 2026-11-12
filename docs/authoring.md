@@ -227,6 +227,11 @@ Services: []string{"docker"},
   to resolve, on each host. `${os:kernel}` is the running kernel's release (`uname -r`), so a Debian pack can prepare
   `linux-headers-${os:kernel}`.
 - **The hooks are `Hooks` of the root,** so a script a hook runs is at one path, with its own content per OS.
+- **A repository's key is a keyring file,** delivered by `Repo` beside the entry that names it (`Signed-By:` of a
+  deb822 `.sources`, `signed-by=` of a `.list`): `apt-key` is gone past Debian 12. An armored key lands as `.asc`,
+  whatever its URL's bytes. A changed `Repo` file is what runs `apt-get update`; an unchanged one runs nothing.
+- **A package that is there is not installed again.** A present name — at the version a `name=version` pin says —
+  is skipped, so a repeat apply neither upgrades what it never meant to touch nor spends an `apt-get install` on it.
 - **The host is taken to be empty:** nothing conflicting is looked for or removed.
 
 ## Documentation
