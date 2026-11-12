@@ -3,6 +3,7 @@ package bundle_test
 import (
 	"path/filepath"
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/horchestra/pack/internal/testpacks"
@@ -157,5 +158,25 @@ func TestInternalAndExternal(t *testing.T) {
 		if got := b.External(flat); got != op {
 			t.Errorf("External(%s) = %s, want %s", flat, got, op)
 		}
+	}
+}
+
+// A pack pulled from a registry is named by its reference, and the packs it holds by the items of its pack file.
+func TestLoadRef(t *testing.T) {
+	dir := testpacks.Generated(t, t.TempDir())
+	ref := "oci://registry.example/packs/openbao@sha256:" + strings.Repeat("0", 64)
+	b, err := bundle.LoadRef(dir, ref)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if b.Root.Ref != ref {
+		t.Errorf("root ref %q", b.Root.Ref)
+	}
+	if got := b.Packs["tembo"].Ref; got != "oci://packs/tembo:0.2.0" {
+		t.Errorf("tembo ref %q", got)
+	}
+	// a directory names nothing
+	if d := loadDir(t, dir); len(d.Root.Ref) > 0 || len(d.Packs["tembo"].Ref) > 0 {
+		t.Errorf("refs %q, %q", d.Root.Ref, d.Packs["tembo"].Ref)
 	}
 }

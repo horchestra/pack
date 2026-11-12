@@ -358,6 +358,9 @@ func (r *render) contentFile(key string, comp *bundle.Pack, km map[string]any, f
 	}
 	if len(f.Source) > 0 { // shipped as it is: nothing in the values asks for it
 		rf.Content = body
+		if len(comp.Ref) > 0 { // pulled from a registry: a target that fetches files takes it from there instead
+			rf.URL = comp.Ref + "/templates/" + name
+		}
 		return rf, true, nil
 	}
 	if len(f.Values) > 0 { // written only when that value is there

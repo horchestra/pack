@@ -35,6 +35,9 @@ type Pack struct {
 	Templates map[string][]byte
 	Image     *ocispec.Image // nil when image.json is absent
 	ImageRef  string         // registry reference of the image, from pack.yaml or image.ref
+	// Ref is the registry reference the pack was pulled from, empty for a directory: oci://<host>/<repo>@<digest>
+	// for the pack pulled itself, the item of the holder's pack file for a held one.
+	Ref string
 	// Holds are the packs in its fields, in the schema's order.
 	Holds []Hold
 }
@@ -67,11 +70,20 @@ type Bundle struct {
 	Keys        []string             // the instances, held packs before the pack that holds them
 	KeyPack     map[string]string    // key → pack name
 	Instances   map[string]*Instance // by key
+	// refs: the bundle was pulled from a registry, so the items of a pack file name where the held packs' files
+	// come from; a directory's items say nothing of its sibling directories.
+	refs bool
 }
 
 // Load reads dir as a pack.
 func Load(dir string) (*Bundle, error) {
-	b, err := LoadFrom(Dir(dir))
+	return LoadRef(dir, "")
+}
+
+// LoadRef reads dir as a pack brought from a registry: ref is the reference it was pulled by, and names the root
+// pack's files where they came from.
+func LoadRef(dir, ref string) (*Bundle, error) {
+	b, err := loadFrom(Dir(dir), ref)
 	if err != nil {
 		return nil, err
 	}
@@ -81,43 +93,52 @@ func Load(dir string) (*Bundle, error) {
 
 // LoadFrom builds a bundle from a source.
 func LoadFrom(src Source) (*Bundle, error) {
+	return loadFrom(src, "")
+}
+
+func loadFrom(src Source, ref string) (*Bundle, error) {
 	root, err := src.Root()
 	if err != nil {
 		return nil, err
 	}
-	b := &Bundle{Name: root.Name, Version: root.Version, Packs: map[string]*Pack{}, KeyPack: map[string]string{}, Instances: map[string]*Instance{}}
-	if b.Root, err = b.load(src, root); err != nil {
+	b := &Bundle{Name: root.Name, Version: root.Version, Packs: map[string]*Pack{}, KeyPack: map[string]string{}, Instances: map[string]*Instance{}, refs: len(ref) > 0}
+	if b.Root, err = b.load(src, root, ref); err != nil {
 		return nil, err
 	}
-	if err := b.instances(b.Root, &Instance{Key: b.Root.Name, Pack: b.Root.Name}, nil); err != nil {
+	if err = b.instances(b.Root, &Instance{Key: b.Root.Name, Pack: b.Root.Name}, nil); err != nil {
 		return nil, err
 	}
-	if err := b.compose(); err != nil {
+	if err = b.compose(); err != nil {
 		return nil, err
 	}
 	return b, nil
 }
 
-// load reads a pack once, and the packs it holds.
-func (b *Bundle) load(src Source, f *Files) (*Pack, error) {
+// load reads a pack once, and the packs it holds. ref is the registry reference the pack itself was pulled by,
+// empty for a directory.
+func (b *Bundle) load(src Source, f *Files, ref string) (*Pack, error) {
 	if p, ok := b.Packs[f.Name]; ok {
 		return p, nil
 	}
+
 	full, err := schema.Parse(f.Schema)
 	if err != nil {
 		return nil, fmt.Errorf("pack %q: %w", f.Name, err)
 	}
+
 	root, err := full.Root.RootAnnotation()
 	if err != nil {
 		return nil, fmt.Errorf("pack %q: %w", f.Name, err)
 	}
-	p := &Pack{Name: f.Name, Version: f.Version, Dir: f.Origin, SchemaRaw: f.Schema, Root: root, Templates: f.Templates}
+
+	p := &Pack{Name: f.Name, Version: f.Version, Dir: f.Origin, SchemaRaw: f.Schema, Root: root, Templates: f.Templates, Ref: ref}
 	if p.Templates == nil {
 		p.Templates = map[string][]byte{}
 	}
+
 	if f.ImageConfig != nil {
 		var img ocispec.Image
-		if err := json.Unmarshal(f.ImageConfig, &img); err != nil {
+		if err = json.Unmarshal(f.ImageConfig, &img); err != nil {
 			return nil, fmt.Errorf("pack %q: image config: %w", f.Name, err)
 		}
 		p.Image = &img
@@ -131,11 +152,13 @@ func (b *Bundle) load(src Source, f *Files) (*Pack, error) {
 		if !n.IsForeign() || !strings.HasPrefix(n.Ref, packschema.PackScheme) {
 			continue
 		}
+
 		url, _ := schema.SplitRef(n.Ref)
 		h := Hold{Field: field, Pack: strings.TrimPrefix(url, packschema.PackScheme), Required: slices.Contains(full.Root.Required, field)}
 		if n.HasDefault {
 			h.Default = n.Default
 		}
+
 		mf, err := src.Member(h.Pack)
 		if err != nil {
 			return nil, fmt.Errorf("pack %q holds %q: %w", p.Name, h.Pack, err)
@@ -143,18 +166,34 @@ func (b *Bundle) load(src Source, f *Files) (*Pack, error) {
 		if mf.Name != h.Pack {
 			mf.Name = h.Pack // a directory is named after the pack it holds
 		}
-		if _, err := b.load(src, mf); err != nil {
+
+		held, err := b.load(src, mf, "")
+		if err != nil {
 			return nil, err
 		}
+
 		p.Holds = append(p.Holds, h)
 		drop[field] = true
+		_ = held
 	}
+
+	if b.refs {
+		for i, ref := range holdRefs(f.Images, len(p.Holds)) {
+			if len(ref) > 0 {
+				if held := b.Packs[p.Holds[i].Pack]; len(held.Ref) == 0 {
+					held.Ref = ref
+				}
+			}
+		}
+	}
+
 	own := f.Schema
 	if len(drop) > 0 {
 		if own, err = dropProperties(f.Schema, drop); err != nil {
 			return nil, fmt.Errorf("pack %q: %w", p.Name, err)
 		}
 	}
+
 	if p.Schema, err = schema.Parse(own); err != nil {
 		return nil, fmt.Errorf("pack %q: %w", p.Name, err)
 	}
@@ -166,6 +205,7 @@ func (b *Bundle) instances(p *Pack, in *Instance, path []string) error {
 	if slices.Contains(path, p.Name) {
 		return fmt.Errorf("pack %q holds itself: %s", p.Name, strings.Join(append(path, p.Name), " → "))
 	}
+
 	path = append(slices.Clone(path), p.Name)
 	for _, h := range p.Holds {
 		key := h.Field
@@ -177,6 +217,7 @@ func (b *Bundle) instances(p *Pack, in *Instance, path []string) error {
 			return err
 		}
 	}
+
 	if _, dup := b.Instances[in.Key]; dup {
 		return fmt.Errorf("two instances are keyed %q", in.Key)
 	}
@@ -201,15 +242,18 @@ func (b *Bundle) compose() error {
 		}
 		props = append(props, prop+"}")
 	}
+
 	doc := fmt.Sprintf(`{"$schema":"https://json-schema.org/draft/2020-12/schema","type":"object","additionalProperties":false,"properties":{%s}}`, strings.Join(props, ","))
 	comp, err := schema.Parse([]byte(doc))
 	if err != nil {
 		return err
 	}
+
 	for name, p := range b.Packs {
 		p.Schema.Foreign = comp.Foreign // one table for the whole bundle
 		comp.Attach(packschema.PackScheme+name, p.Schema)
 	}
+
 	b.Composition = comp
 	if len(b.Keys) == 0 {
 		return errors.New("a pack with no instances")
@@ -413,6 +457,24 @@ func imageOf(items []ImageItem, holds int) string {
 		return items[0].Ref
 	}
 	return ""
+}
+
+// holdRefs are the registry references of the packs a file's items hold, in the holds' order: every oci:// item
+// but the image. nil when the items do not number the holds — then where the held packs came from is not said.
+func holdRefs(items []ImageItem, holds int) []string {
+	if holds == 0 {
+		return nil
+	}
+	var refs []string
+	for _, it := range items {
+		if !it.Marked {
+			refs = append(refs, ociScheme+it.Ref)
+		}
+	}
+	if len(refs) != holds {
+		return nil
+	}
+	return refs
 }
 
 const ociScheme = "oci://"

@@ -4,6 +4,9 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"maps"
+	"slices"
+	"strings"
 
 	"github.com/horchestra/pack/pkg/render"
 	"github.com/horchestra/pack/pkg/target"
@@ -96,4 +99,39 @@ func numbers(v any) any {
 		return f
 	}
 	return v
+}
+
+// stripFetched is the unit with the bytes of the files a CapFileURL target downloads by their oci:// URL left out:
+// the registry serves them, they are not to cross to the target and back. The unit itself is not touched.
+func stripFetched(u *render.Unit) *render.Unit {
+	if u == nil {
+		return nil
+	}
+	strip := func(fs []render.File) []render.File {
+		var res []render.File
+		for i, f := range fs {
+			if !strings.HasPrefix(f.URL, "oci://") || (len(f.Content) == 0 && len(f.Instances) == 0) {
+				continue
+			}
+			if res == nil {
+				res = slices.Clone(fs)
+			}
+			res[i].Content, res[i].Instances = nil, nil
+		}
+		if res == nil {
+			return fs
+		}
+		return res
+	}
+	out := *u
+	out.Files = strip(out.Files)
+	if len(out.Packages) > 0 {
+		pk := maps.Clone(out.Packages)
+		for os, p := range pk {
+			p.Repo, p.Files = strip(p.Repo), strip(p.Files)
+			pk[os] = p
+		}
+		out.Packages = pk
+	}
+	return &out
 }

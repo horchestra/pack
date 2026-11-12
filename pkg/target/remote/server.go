@@ -56,6 +56,9 @@ const (
 	CapLogs = "logs"
 	// CapHealth: the target says how the keys are (target.Checker).
 	CapHealth = "health"
+	// CapFileURL: the target downloads a file its URL names (oci://<host>/<repo>@<digest>/templates/<name>) where
+	// it lands, so pack does not send the file's bytes in the unit.
+	CapFileURL = "file-url"
 )
 
 // MaxMessage bounds one message between pack and a target: a unit carries the files of the pack — an archive of

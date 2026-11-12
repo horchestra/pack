@@ -29,7 +29,7 @@ func OpenPack(ctx context.Context, d *workdir.Dir, ref string) (*bundle.Bundle, 
 	if err != nil {
 		return nil, err
 	}
-	return bundle.Load(p.Dir)
+	return bundle.LoadRef(p.Dir, p.Ref)
 }
 
 // ReleasePack opens the release's pack without a session: no target is started — for what only reads the pack and
@@ -46,14 +46,15 @@ func ReleasePack(ctx context.Context, d *workdir.Dir) (*bundle.Bundle, error) {
 // of the release (pack init, pack refresh) or the digest in the reference says exactly.
 func (s *Session) Pack(ref string) (*bundle.Bundle, error) {
 	dir := ref
+	pulled := ""
 	if oci.IsRef(ref) {
 		p, err := s.pull(s.ctx, ref)
 		if err != nil {
 			return nil, err
 		}
-		dir = p.Dir
+		dir, pulled = p.Dir, p.Ref
 	}
-	return bundle.Load(dir)
+	return bundle.LoadRef(dir, pulled)
 }
 
 // Pinned is the reference that names this very pack for good: a directory as it is, a pack in a registry by its

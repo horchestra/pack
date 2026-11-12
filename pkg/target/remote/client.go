@@ -345,6 +345,9 @@ func (r *remote) Resolve(key string, pl render.Placement) (*render.Resolved, err
 }
 
 func (r *remote) Execute(ctx context.Context, step target.Step, events func(string)) error {
+	if slices.Contains(r.p.caps, CapFileURL) {
+		step.Unit, step.Previous = stripFetched(step.Unit), stripFetched(step.Previous)
+	}
 	req, err := stepTo(step)
 	if err != nil {
 		return err
