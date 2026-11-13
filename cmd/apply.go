@@ -15,6 +15,7 @@ import (
 	"github.com/horchestra/pack/internal/session"
 	"github.com/horchestra/pack/internal/workdir"
 	"github.com/horchestra/pack/pkg/api"
+	"github.com/horchestra/pack/pkg/plan"
 	"github.com/horchestra/pack/pkg/saga"
 )
 
@@ -34,6 +35,9 @@ type ApplyOptions struct {
 	Refresh     bool
 	Env         map[string]string
 	Hear        func(saga.Entry)
+	// Planned, when set, is called with the approved plan before the saga runs: it says why every key is
+	// applied at all ("added", "config only", "drift") — what a repeat apply was expected to skip.
+	Planned func(*plan.Plan)
 }
 
 var embeddedApplyMu sync.Mutex
@@ -95,6 +99,9 @@ func Apply(ctx context.Context, options ApplyOptions) error {
 	change, err := s.Prepare(true)
 	if err != nil {
 		return err
+	}
+	if options.Planned != nil {
+		options.Planned(change.Plan)
 	}
 	return s.Apply(ctx, change)
 }
