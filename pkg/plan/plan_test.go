@@ -336,7 +336,7 @@ func TestRollbackEstimate(t *testing.T) {
 }
 
 // An installation that keeps no record (state: observe) classifies a first apply from what the target holds: a
-// key that matches is no change, one that differs is a config change without hooks, one that is absent is added.
+// key that matches is no change, one that differs is applied with notify hooks, one that is absent is added.
 func TestInstallHeld(t *testing.T) {
 	hooks := []packschema.Hook{{Name: "seed", Phase: packschema.PostInstall, Command: []string{"seed"}, Idempotent: true}}
 	db := mkPack("db", "1.0.0", &packschema.Root{Hooks: hooks})
@@ -356,9 +356,9 @@ func TestInstallHeld(t *testing.T) {
 			t.Errorf("%s: kind = %q", c.Key, c.Kind)
 		}
 	}
-	// the key that matches has no steps; the one that differs is applied, without hooks; the absent one is
-	// installed with its hooks
-	wantSteps := []string{"apply:db", "apply:web", "hook:web"}
+	// the key that matches has no steps; the one that differs is applied with its notify hooks; the absent one
+	// is installed with its hooks
+	wantSteps := []string{"apply:db", "hook:db", "apply:web", "hook:web"}
 	if !slices.Equal(kinds(p), wantSteps) {
 		t.Fatalf("steps = %v", kinds(p))
 	}

@@ -15,8 +15,11 @@ import (
 	"github.com/horchestra/pack/internal/session"
 	"github.com/horchestra/pack/internal/workdir"
 	"github.com/horchestra/pack/pkg/api"
+	"github.com/horchestra/pack/pkg/bundle"
 	"github.com/horchestra/pack/pkg/plan"
+	"github.com/horchestra/pack/pkg/render"
 	"github.com/horchestra/pack/pkg/saga"
+	"github.com/horchestra/pack/sdk"
 )
 
 func init() {
@@ -35,9 +38,15 @@ type ApplyOptions struct {
 	Refresh     bool
 	Env         map[string]string
 	Hear        func(saga.Entry)
+	// Force lists keys that must run their apply and notify hooks even when state: observe finds them unchanged.
+	Force []string
 	// Planned, when set, is called with the approved plan before the saga runs: it says why every key is
 	// applied at all ("added", "config only", "drift") — what a repeat apply was expected to skip.
 	Planned func(*plan.Plan)
+	// Pack is the release's pack as Go (self-deploy: the process deploys the very pack it is built of). Set, it
+	// is the pack applied — nothing is generated or written to read back; Values are the release's values then.
+	Pack   sdk.Pack
+	Values map[string]any
 }
 
 var embeddedApplyMu sync.Mutex
@@ -82,6 +91,13 @@ func Apply(ctx context.Context, options ApplyOptions) error {
 	if err != nil {
 		return err
 	}
+	var b *bundle.Bundle
+	if options.Pack != nil {
+		if b, err = bundle.FromPack(options.Pack); err != nil {
+			return err
+		}
+		rel.Pack = b.Dir // the pack is this process's: refresh has nothing to lock, Prepare nothing to read
+	}
 	if options.Refresh {
 		if _, _, err := refreshRelease(ctx, rel, options.Environment, false); err != nil {
 			return err
@@ -95,7 +111,14 @@ func Apply(ctx context.Context, options ApplyOptions) error {
 		return err
 	}
 	defer s.Close()
+	if options.Pack != nil {
+		s.Bundle = b
+		if options.Values != nil {
+			s.Values = &render.Values{Values: options.Values}
+		}
+	}
 	s.Hear = options.Hear
+	s.Force = options.Force
 	change, err := s.Prepare(true)
 	if err != nil {
 		return err

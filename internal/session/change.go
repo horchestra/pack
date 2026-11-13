@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strings"
 
 	"github.com/horchestra/pack/internal/adapter"
 	"github.com/horchestra/pack/internal/graph"
@@ -41,24 +42,33 @@ type Change struct {
 // Prepare reads what is installed and renders what the release wants. provision: the passwords the pack asks
 // for are created (apply); without it they are only looked for (plan).
 func (s *Session) Prepare(provision bool) (*Change, error) {
-	ref, err := s.Dir.Release.PackRef()
-	if err != nil {
-		return nil, err
-	}
-	if ref, err = s.Pinned(ref); err != nil { // a pack in a registry is the digest the lock says
-		return nil, err
-	}
 	rec, fromB, fromRel, err := s.Installed()
 	if err != nil {
 		return nil, err
 	}
-	v, err := values.Load(s.Dir.Release.ValuesFiles())
-	if err != nil {
-		return nil, err
-	}
-	toB, err := s.Pack(ref)
-	if err != nil {
-		return nil, err
+	var ref string
+	var v render.Values
+	var toB *bundle.Bundle
+	if s.Bundle != nil {
+		// the pack is in memory already: nothing is generated, written or read back
+		toB = s.Bundle
+		ref = toB.Dir
+		if s.Values != nil {
+			v = *s.Values
+		}
+	} else {
+		if ref, err = s.Dir.Release.PackRef(); err != nil {
+			return nil, err
+		}
+		if ref, err = s.Pinned(ref); err != nil { // a pack in a registry is the digest the lock says
+			return nil, err
+		}
+		if v, err = values.Load(s.Dir.Release.ValuesFiles()); err != nil {
+			return nil, err
+		}
+		if toB, err = s.Pack(ref); err != nil {
+			return nil, err
+		}
 	}
 	c := &Change{Ref: ref, Record: rec, FromRel: fromRel, ToB: toB}
 	if provision {
@@ -82,6 +92,11 @@ func (s *Session) Prepare(provision bool) (*Change, error) {
 	if s.Dir.Release.State == workdir.StateObserve {
 		if held, err = s.holdOf(c.ToRel, c.Credentials); err != nil {
 			return nil, err
+		}
+		for _, key := range s.Force {
+			if _, ok := held[key]; ok {
+				held[key] = target.HoldDiffers
+			}
 		}
 	}
 	if c.Drifts, err = s.Drifts(s.ctx, rec, fromRel); err != nil {
@@ -142,6 +157,14 @@ func (s *Session) holdOf(rel *render.Release, creds []render.Credential) (map[st
 // Render is the release's pack rendered with the release's values and nothing else: no installed version is read,
 // no password is made (a password the store does not hold yet is left unfilled). What template and graph show.
 func (s *Session) Render() (*bundle.Bundle, *render.Release, error) {
+	if s.Bundle != nil {
+		var v render.Values
+		if s.Values != nil {
+			v = *s.Values
+		}
+		rel, err := render.Render(s.Bundle, v, s.Ctx)
+		return s.Bundle, rel, err
+	}
 	ref, err := s.Dir.Release.PackRef()
 	if err != nil {
 		return nil, nil, err
@@ -267,7 +290,7 @@ func (s *Session) Version(in saga.Installation) (*bundle.Bundle, *render.Release
 // RecordRef is how the installed version is found again: a pack in a registry by its digest, a directory as an
 // absolute path.
 func RecordRef(ref string) string {
-	if oci.IsRef(ref) {
+	if oci.IsRef(ref) || strings.HasPrefix(ref, "sdk://") {
 		return ref
 	}
 	if abs, err := filepath.Abs(ref); err == nil {
@@ -280,7 +303,7 @@ func RecordRef(ref string) string {
 // the packs it holds beside it, the path named by the digest of the files — a checkout the run was of does not
 // outlive it, the cache does; a later run, on whatever checkout, reads the installed version there.
 func recordRef(ref string, b *bundle.Bundle) string {
-	if oci.IsRef(ref) || b == nil {
+	if oci.IsRef(ref) || b == nil || strings.HasPrefix(ref, "sdk://") {
 		return RecordRef(ref)
 	}
 	cached, err := cachePack(b)

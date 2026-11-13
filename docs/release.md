@@ -110,8 +110,9 @@ and the journal between the file and the database, the history whole.
 `state: observe` keeps no record at all — the self-deploy of an application on its own host, where everything the
 install created is on that host and a written copy of it only drifts away from the truth. The plan is derived from
 what the target says it holds (a target that cannot tell — no `inspect` capability — is refused): a key already
-there exactly as rendered is no change and runs nothing, one that differs is a config change (an apply, no hooks),
-one that is absent is installed with its hooks. A saga cut short is replanned from the same observation. The
+there exactly as rendered is no change and runs nothing, one that differs is applied with its notify hooks,
+one that is absent is installed with its hooks. An embedded apply can explicitly force selected keys: then even a
+matching key is applied with its notify hooks, for an operator's explicit redeploy or reconfiguration request. A saga cut short is replanned from the same observation. The
 installation's `id` is the release's (`pack refresh` writes it), and `history_count` (env.yaml) is the only memory
 a rollback has: a managed file's snapshots `<path>.bak.1…N`, rotated before an overwrite that changes it; with
 `history_count: 0` a failed saga stops where it is and compensates nothing. `pack delete` renders what the release

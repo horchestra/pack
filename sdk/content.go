@@ -16,6 +16,10 @@ import (
 // ContentDir is the directory of a pack's files.
 const ContentDir = "content"
 
+// Templates are the pack's files: everything under its content/ directory, by the name relative to it. The apply
+// of a pack held as Go reads them here — nothing is written first.
+func Templates(p Pack) (map[string][]byte, error) { return content(p) }
+
 // annotations are the artifact's annotations: the pack's own words and the OCI image spec's, from Meta.
 func (m Meta) annotations() (map[string]string, error) {
 	out := map[string]string{"pack.name": m.Name, "pack.version": m.Version, "org.opencontainers.image.title": m.Name, "org.opencontainers.image.version": m.Version}

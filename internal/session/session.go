@@ -40,6 +40,12 @@ type Session struct {
 	Execs  map[string]target.Executor // the environment's other targets by name
 	Ctx    render.Context
 	Store  saga.Store
+	// Force lists keys that must run their apply and notify hooks even when observation finds them unchanged.
+	Force []string
+	// Bundle is the release's pack already in memory — an embedded apply of a pack the process holds as Go
+	// (bundle.FromPack): no pack directory is generated, written or read. Values then replaces the values files.
+	Bundle *bundle.Bundle
+	Values *render.Values
 	// Hear hears the entries of a saga the session runs, after the line a person reads of each is printed: the
 	// events of --stream. Nil — none.
 	Hear func(saga.Entry)

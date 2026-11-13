@@ -14,6 +14,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"uuid"
 
 	"sigs.k8s.io/yaml"
 
@@ -89,6 +90,47 @@ func TestRepeatedApplyIsANoOp(t *testing.T) {
 	}
 	if rec := installed(t, d); rec.State != saga.Installed {
 		t.Fatalf("record = %+v", rec)
+	}
+}
+
+type matchingInstallation struct{ target.Installation }
+
+func (matchingInstallation) Inspect(context.Context, render.Unit, []render.Credential) (target.Hold, error) {
+	return target.HoldMatches, nil
+}
+
+func TestForceAppliesObservedUnchangedKey(t *testing.T) {
+	d := stand(t, both)
+	d.Release.State = workdir.StateObserve
+	d.Release.ID = uuid.New().String()
+	s, err := Open(context.Background(), d, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	s.Inst = matchingInstallation{s.Inst}
+
+	unchanged, err := s.Prepare(false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(unchanged.Plan.Steps) != 0 {
+		t.Fatalf("unforced steps = %+v", unchanged.Plan.Steps)
+	}
+
+	s.Force = []string{"openbao"}
+	forced, err := s.Prepare(false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var applied []string
+	for _, step := range forced.Plan.Steps {
+		if step.Kind == plan.Apply {
+			applied = append(applied, step.Key)
+		}
+	}
+	if !slices.Equal(applied, []string{"openbao"}) {
+		t.Fatalf("forced applies = %v", applied)
 	}
 }
 

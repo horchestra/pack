@@ -45,6 +45,12 @@ func ReleasePack(ctx context.Context, d *workdir.Dir) (*bundle.Bundle, error) {
 // Pack opens the pack of the release, or one named by ref: a directory, or a pack in a registry — which the lock
 // of the release (pack init, pack refresh) or the digest in the reference says exactly.
 func (s *Session) Pack(ref string) (*bundle.Bundle, error) {
+	if strings.HasPrefix(ref, "sdk://") {
+		if s.Bundle != nil && s.Bundle.Dir == ref {
+			return s.Bundle, nil
+		}
+		return nil, fmt.Errorf("%s: the pack is this process's own; a run that recorded it must hold it again (Bundle)", ref)
+	}
 	dir := ref
 	pulled := ""
 	if oci.IsRef(ref) {

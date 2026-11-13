@@ -233,7 +233,8 @@ func Build(in Input) (*Plan, error) {
 			}
 		}
 		pre, post := selectHooks(comp, c, dir, p)
-		if c.Kind == "config" || c.Kind == "schema" || c.Kind == "drift" {
+		observedChange := in.From == nil && in.Held[key] == target.HoldDiffers
+		if (c.Kind == "config" || c.Kind == "schema" || c.Kind == "drift") && !observedChange {
 			pre, post = nil, nil // no version transition, no hooks
 		}
 		exclusive := false

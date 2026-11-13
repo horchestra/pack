@@ -11,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"runtime"
 	"slices"
 	"strings"
 	"sync"
@@ -233,7 +234,8 @@ func TestRefreshBringsTheTargets(t *testing.T) {
 	if err != nil || lock.Targets["fake"].SHA256 != hex.EncodeToString(sum[:]) || !strings.Contains(lock.Targets["fake"].Source, "{os}") {
 		t.Fatalf("lock = %+v, %v", lock, err)
 	}
-	if !strings.Contains(out, "downloaded") {
+	resolved := srv.URL + "/pack-target-fake_" + runtime.GOOS + "_" + runtime.GOARCH
+	if !strings.Contains(out, "downloaded from "+resolved) || strings.Contains(out, "{os}") || strings.Contains(out, "{arch}") {
 		t.Errorf("init: %s", out)
 	}
 

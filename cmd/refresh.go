@@ -107,6 +107,9 @@ func lockPack(ctx context.Context, d *workdir.Dir, lock *release.Lock, upgrade b
 	if err != nil {
 		return err
 	}
+	if strings.HasPrefix(ref, "sdk://") {
+		return nil // the pack is this process's own, held as Go: nothing to bring or lock
+	}
 	if !oci.IsRef(ref) {
 		fmt.Printf("%s is a directory: nothing to bring\n", ref)
 		return nil
@@ -224,7 +227,7 @@ func bringTargets(ctx context.Context, d *workdir.Dir, env *environment.Environm
 		tl := lock.Targets[name]
 		tl.Source, tl.SHA256 = source, sum
 		lock.Targets[name] = tl
-		fmt.Printf("target %s: downloaded from %s (sha256 %s)\n", name, source, sum)
+		fmt.Printf("target %s: downloaded from %s (sha256 %s)\n", name, targets.Expand(source), sum)
 	}
 	return nil
 }
