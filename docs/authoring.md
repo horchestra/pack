@@ -61,6 +61,13 @@ orchestrating pack runs the same apply on it (`cmd.Apply`) with the values it bu
 components by the holds-relation — a held pack before the pack that holds it. Secrets stay off this channel: a
 `sdk.Secret` leaf is a reference the operator names, never a value the orchestrator passes through.
 
+The apply needs no files for the pack itself: `cmd.ApplyOptions{Pack: p, Values: v}` takes the pack as the Go value
+it already is and the values as the document the caller assembled — nothing is generated to a `packs/` directory,
+no `release.yaml` names it, no values file is read (`bundle.FromPack` builds the bundle in memory: the schema the
+type reflects, the templates its `content/` holds). The release directory is still the environment's: `env.yaml`,
+the secrets and the state live there; with `state: observe` even the state is the target's own truth, and such an
+apply leaves no file of the pack's at all.
+
 ## PackRoot
 
 |                 |                                                                                                                                                                                                                                                                                                  |
