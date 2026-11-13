@@ -6,7 +6,7 @@ the same bare command gives the same result on a console and in CI. **The comman
 
 | file                                      |                                                                                                                                                                                                        |
 |-------------------------------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| `release.yaml`                            | `pack:` a directory or `oci://host/repo:tag`; `values:` more files or directories; `state: file` (default), `target` or `db`; `state_dsn_env:` the variable with the state DSN (`PACK_STATE_DSN`); `id:` the installation's UUID (`state: target` and `state: db`; `pack refresh` writes it) |
+| `release.yaml`                            | `pack:` a directory or `oci://host/repo:tag`; `values:` more files or directories; `state: file` (default), `target`, `db` or `observe`; `state_dsn_env:` the variable with the state DSN (`PACK_STATE_DSN`); `id:` the installation's UUID (`state: target`, `db` and `observe`; `pack refresh` writes it) |
 | `values.yaml`, `*.values.yaml`, `values/` | what the operator wants, in the pack's own words, see [values.md](values.md)                                                                                                                           |
 | `env.yaml`                                | the environment; `--env x` (or `PACK_ENV`) reads `env.x.yaml` instead                                                                                                                                  |
 | `release.lock.json`                       | the digest a registry tag meant when `pack init` or `pack refresh` ran; commit it                                                                                                                      |
@@ -46,6 +46,8 @@ run: # how a saga runs
   keep: [ postgres ]                   # keys a rollback after a failure leaves as they are
   journal_keep: 20                   # sagas the journal keeps; below 0 — all (default 20)
   approve: auto-safe                 # what apply does unasked: auto-safe (default) | plan | auto, see saga.md
+history_count: 3                     # snapshots of a managed file a target keeps (<path>.bak.N); 0 — none, and a
+                                     # failed saga stops where it is (nothing to restore a file from)
 secrets: # where the passwords pack creates come from
   provider: generate                 # generate | env | file:<dir>
   provision: [ /postgres/pg_password ]
@@ -104,6 +106,16 @@ whose DSN is read from the environment variable `state_dsn_env` names (`PACK_STA
 connection. With the state in a database pack is stateless: a second process, on another checkout of the same
 release, sees what the first installed and waits on its lock. `pack state migrate [--to db|file]` moves the record
 and the journal between the file and the database, the history whole.
+
+`state: observe` keeps no record at all — the self-deploy of an application on its own host, where everything the
+install created is on that host and a written copy of it only drifts away from the truth. The plan is derived from
+what the target says it holds (a target that cannot tell — no `inspect` capability — is refused): a key already
+there exactly as rendered is no change and runs nothing, one that differs is a config change (an apply, no hooks),
+one that is absent is installed with its hooks. A saga cut short is replanned from the same observation. The
+installation's `id` is the release's (`pack refresh` writes it), and `history_count` (env.yaml) is the only memory
+a rollback has: a managed file's snapshots `<path>.bak.1…N`, rotated before an overwrite that changes it; with
+`history_count: 0` a failed saga stops where it is and compensates nothing. `pack delete` renders what the release
+wants and takes that away; `--destroy` takes the OS packages too.
 
 The packs brought from a registry and the targets' programs are the cache's, not the release's: `PACK_CACHE`
 (`~/.cache/pack` by default), shared by every release on the machine.

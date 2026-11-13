@@ -95,6 +95,8 @@ type Exec struct {
 	Credentials []render.Credential
 	X           target.Executor
 	Execs       map[string]target.Executor // other targets by name; a step runs on the one its plan step names
+	// Destroy: the removal takes the keys' OS packages away too (pack delete --destroy).
+	Destroy bool
 
 	mu        sync.Mutex
 	performed map[string]map[int]bool // key → plan steps begun in this process
@@ -147,6 +149,7 @@ func (e *Exec) Undo(ctx context.Context, n *graph.Node) error {
 			st.Kind, st.Unit = string(plan.Apply), prev
 		} else {
 			st.Kind, st.Unit, st.Previous = string(plan.Remove), nil, cmpOr(to, prev)
+			st.Destroy = e.Destroy // an uninstall with --destroy takes the packages too; a rollback never does
 		}
 		return e.undoStep(ctx, "", st)
 	}

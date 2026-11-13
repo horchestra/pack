@@ -39,6 +39,8 @@ service Target {
   rpc DeleteInstalled(DeleteInstalledRequest) returns (DeleteInstalledResponse);
   // Observe says what the target holds of the installation, by key. Requires the "observe" capability.
   rpc Observe(ObserveRequest) returns (ObserveResponse);
+  // Inspect says whether the target already holds exactly what a unit says. Requires the "inspect" capability.
+  rpc Inspect(InspectRequest) returns (InspectResponse);
   // Discover tells the facts of where the target installs — its hosts as they are — and changes nothing. Requires
   // the "discover" capability.
   rpc Discover(DiscoverRequest) returns (DiscoverResponse);
@@ -155,6 +157,18 @@ message Observed {
   int64 replicas = 2;
 }
 
+message InspectRequest {
+  // unit_json is render.Unit of the key as the wanted version renders it; credentials_json is
+  // []render.Credential of the key.
+  bytes unit_json = 1;
+  bytes credentials_json = 2;
+}
+
+message InspectResponse {
+  // hold: absent | differs | matches (target.Hold).
+  string hold = 1;
+}
+
 // ExecuteRequest is one step of the saga, with everything the target needs to perform it.
 message ExecuteRequest {
   Step step = 1;
@@ -179,6 +193,8 @@ message Step {
   // rollback: this step undoes an earlier one — an apply of the previous unit, a remove of a key that was added,
   // a hook's compensation.
   bool rollback = 10;
+  // destroy: a remove takes the key's OS packages away too (pack delete --destroy); without it they stay.
+  bool destroy = 11;
 }
 
 message ExecuteEvent {

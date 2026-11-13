@@ -45,6 +45,25 @@ type Observed struct {
 // ErrNotObserved is what Observe says when the target cannot tell what it holds just now (it was not set up to).
 var ErrNotObserved = errors.New("the target does not tell what it holds")
 
+// Hold is how a target holds a key against what a unit says.
+type Hold string
+
+const (
+	// HoldAbsent: nothing of the key is there.
+	HoldAbsent Hold = "absent"
+	// HoldDiffers: the key is there, not as the unit says.
+	HoldDiffers Hold = "differs"
+	// HoldMatches: the key is there exactly as the unit says.
+	HoldMatches Hold = "matches"
+)
+
+// Inspector is a target that can say whether it already holds exactly what a unit says — the files' bytes and
+// modes, the packages, the services — so that an installation that keeps no record (release.yaml: state: observe)
+// plans from what is there, not from what was written down. A target that cannot is not asked.
+type Inspector interface {
+	Inspect(ctx context.Context, u render.Unit, creds []render.Credential) (Hold, error)
+}
+
 // Observer is a target that can say what it holds of the installation — the keys, by what they run — so that a
 // change made behind pack's back is seen (drift). A target that cannot is not asked.
 type Observer interface {
@@ -78,7 +97,9 @@ type Step struct {
 	Command   []string // a hook's command
 	// Rollback: the step undoes an earlier one — an apply of Previous, a remove of a key that was added, a
 	// hook's compensation.
-	Rollback    bool
+	Rollback bool
+	// Destroy: a remove takes the key's OS packages away too (pack delete --destroy); without it they stay.
+	Destroy     bool
 	Unit        *render.Unit
 	Previous    *render.Unit
 	Credentials []render.Credential
@@ -146,7 +167,7 @@ func Names() []string {
 type Settings map[string]string
 
 // Own are the keys of the set that are pack's own, not a target's.
-var Own = []string{"target", "vault_addr", "vault_paths", SettingPackState}
+var Own = []string{"target", "vault_addr", "vault_paths", SettingPackState, "history_count"}
 
 // SettingPackState is how pack keeps the installation's record: file, target or db (release.yaml's `state:`).
 // pack says it to every target: with `db` a target's own state file would not outlive the run — the target

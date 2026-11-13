@@ -16,10 +16,12 @@ import (
 	"github.com/horchestra/pack/internal/oci"
 	"github.com/horchestra/pack/internal/release"
 	"github.com/horchestra/pack/internal/values"
+	"github.com/horchestra/pack/internal/workdir"
 	"github.com/horchestra/pack/pkg/bundle"
 	"github.com/horchestra/pack/pkg/plan"
 	"github.com/horchestra/pack/pkg/render"
 	"github.com/horchestra/pack/pkg/saga"
+	"github.com/horchestra/pack/pkg/target"
 	"github.com/horchestra/pack/pkg/target/remote"
 )
 
@@ -75,6 +77,13 @@ func (s *Session) Prepare(provision bool) (*Change, error) {
 		}
 	}
 	c.Values = v
+	// state: observe — the plan is derived from what the targets say they hold, not from a record
+	var held map[string]target.Hold
+	if s.Dir.Release.State == workdir.StateObserve {
+		if held, err = s.holdOf(c.ToRel, c.Credentials); err != nil {
+			return nil, err
+		}
+	}
 	if c.Drifts, err = s.Drifts(s.ctx, rec, fromRel); err != nil {
 		return nil, err
 	}
@@ -86,7 +95,8 @@ func (s *Session) Prepare(provision bool) (*Change, error) {
 		}
 	}
 	c.Plan, err = plan.Build(plan.Input{From: fromB, To: toB, FromOut: fromRel, ToOut: c.ToRel, Drifted: drifted,
-		Policy: plan.Policy{Strict: s.Env.Run.Strict}})
+		Held:   held,
+		Policy: plan.Policy{Strict: s.Env.Run.Strict, NoRollbackAll: s.Env.Run.NoRollback}})
 	if err == nil {
 		for _, d := range c.Drifts {
 			c.Plan.Warnings = append(c.Plan.Warnings, "drift: "+d.String())
@@ -95,6 +105,38 @@ func (s *Session) Prepare(provision bool) (*Change, error) {
 		plan.Seal(c.Plan, fromRel, c.ToRel)
 	}
 	return c, err
+}
+
+// holdOf asks the target of each key whether it already holds what the key's unit says (state: observe). Every
+// target a key runs on must be able to tell (target.Inspector); one that cannot leaves the release to a recorded
+// state (state: file, target or db).
+func (s *Session) holdOf(rel *render.Release, creds []render.Credential) (map[string]target.Hold, error) {
+	held := map[string]target.Hold{}
+	for _, u := range rel.Units {
+		x := any(s.Inst)
+		if name := rel.Report.Targets[u.Key]; len(name) > 0 {
+			var ok bool
+			if x, ok = s.Execs[name]; !ok {
+				return nil, fmt.Errorf("%s: runs on target %q, which is not open", u.Key, name)
+			}
+		}
+		insp, ok := x.(target.Inspector)
+		if !ok {
+			return nil, fmt.Errorf("state: observe: the %s target cannot tell whether it holds %s: it needs the inspect capability (or keep a record: state: file, target or db)", s.Target, u.Key)
+		}
+		var keyCreds []render.Credential
+		for _, c := range creds {
+			if c.Key == u.Key {
+				keyCreds = append(keyCreds, c)
+			}
+		}
+		h, err := insp.Inspect(s.ctx, u, keyCreds)
+		if err != nil {
+			return nil, fmt.Errorf("%s: %w", u.Key, err)
+		}
+		held[u.Key] = h
+	}
+	return held, nil
 }
 
 // Render is the release's pack rendered with the release's values and nothing else: no installed version is read,
@@ -177,8 +219,10 @@ func (s *Session) RemoveDropped(ctx context.Context, from, to *render.Release) e
 }
 
 // Remove takes the whole installation away, dependents first; data and credentials stay. The record goes.
-func (s *Session) Remove(ctx context.Context, g *graph.Graph, rel *render.Release) error {
-	return s.Run(g, &adapter.Exec{From: rel, X: s.Inst, Execs: s.Execs}).Remove(ctx)
+// destroy: the keys' OS packages go too (pack delete --destroy) — a host the installation shares keeps them
+// without it.
+func (s *Session) Remove(ctx context.Context, g *graph.Graph, rel *render.Release, destroy ...bool) error {
+	return s.Run(g, &adapter.Exec{From: rel, X: s.Inst, Execs: s.Execs, Destroy: len(destroy) > 0 && destroy[0]}).Remove(ctx)
 }
 
 // Undo takes an unfinished saga back, whole.

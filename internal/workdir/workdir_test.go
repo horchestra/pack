@@ -93,3 +93,35 @@ func TestInstallationIDIsAUUIDKeptInTheState(t *testing.T) {
 		t.Fatalf("id = %q, %v", id, err)
 	}
 }
+
+// state: observe keeps the record in the run's memory alone and takes the installation's id from the release.
+func TestObserveState(t *testing.T) {
+	d := newDir(t)
+	d.Release.State = StateObserve
+	st, err := d.Store(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if rec, _ := st.Load(); rec != nil {
+		t.Fatal("a fresh observe store holds a record")
+	}
+	if err := st.Save(&saga.Record{ID: "id-1"}); err != nil {
+		t.Fatal(err)
+	}
+	if rec, _ := st.Load(); rec == nil || rec.ID != "id-1" {
+		t.Fatal("the record did not live for the run")
+	}
+	if err := st.Delete(); err != nil {
+		t.Fatal(err)
+	}
+	if rec, _ := st.Load(); rec != nil {
+		t.Fatal("deleted, and still there")
+	}
+	if _, err := d.InstallationID(); err == nil {
+		t.Fatal("observe without id: the run's memory has nothing to take the id from")
+	}
+	d.Release.ID = NewID()
+	if id, err := d.InstallationID(); err != nil || id != d.Release.ID {
+		t.Fatalf("id = %q, %v", id, err)
+	}
+}

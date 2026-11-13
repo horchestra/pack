@@ -470,6 +470,32 @@ func (r *remote) Observe(ctx context.Context) (map[string]target.Observed, error
 	return out, nil
 }
 
+// Inspect asks the target whether it already holds what the unit says; a target that did not declare CapInspect
+// cannot tell.
+func (r *remote) Inspect(ctx context.Context, u render.Unit, creds []render.Credential) (target.Hold, error) {
+	if !slices.Contains(r.p.caps, CapInspect) {
+		return "", target.ErrNotObserved
+	}
+	uj, err := json.Marshal(u)
+	if err != nil {
+		return "", fmt.Errorf("the unit of %s: %w", u.Key, err)
+	}
+	var cj []byte
+	if len(creds) > 0 {
+		if cj, err = json.Marshal(creds); err != nil {
+			return "", fmt.Errorf("the credentials of %s: %w", u.Key, err)
+		}
+	}
+	resp, err := r.p.client.Inspect(ctx, &remotepb.InspectRequest{UnitJson: uj, CredentialsJson: cj})
+	if err != nil {
+		if s, ok := status.FromError(err); ok && s.Code() == codes.Unimplemented {
+			return "", target.ErrNotObserved
+		}
+		return "", unwrap(err)
+	}
+	return target.Hold(resp.Hold), nil
+}
+
 // unwrap turns a gRPC status into the target's own message.
 func unwrap(err error) error {
 	if err == nil {
@@ -509,6 +535,7 @@ var (
 	_ target.Installation = (*remote)(nil)
 	_ target.Recorder     = (*remote)(nil)
 	_ target.Observer     = (*remote)(nil)
+	_ target.Inspector    = (*remote)(nil)
 	_ target.Discoverer   = (*remote)(nil)
 	_ target.Logger       = (*remote)(nil)
 	_ target.Checker      = (*remote)(nil)

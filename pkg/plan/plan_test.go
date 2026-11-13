@@ -8,6 +8,8 @@ import (
 	"github.com/horchestra/pack/pkg/bundle"
 	"github.com/horchestra/pack/pkg/render"
 	"github.com/horchestra/pack/sdk/packschema"
+
+	"github.com/horchestra/pack/pkg/target"
 )
 
 // mkPack is a pack that runs an image of its name and version, with the root
@@ -330,5 +332,34 @@ func TestRollbackEstimate(t *testing.T) {
 	Seal(p, nil, nil)
 	if len(p.RollbackTimeout) > 0 {
 		t.Fatalf("no timeouts, no estimate: %q", p.RollbackTimeout)
+	}
+}
+
+// An installation that keeps no record (state: observe) classifies a first apply from what the target holds: a
+// key that matches is no change, one that differs is a config change without hooks, one that is absent is added.
+func TestInstallHeld(t *testing.T) {
+	hooks := []packschema.Hook{{Name: "seed", Phase: packschema.PostInstall, Command: []string{"seed"}, Idempotent: true}}
+	db := mkPack("db", "1.0.0", &packschema.Root{Hooks: hooks})
+	app := mkPack("app", "1.0.0", nil)
+	web := mkPack("web", "1.0.0", &packschema.Root{Hooks: hooks})
+	b := bundleOf("1.0.0", nil, db, app, web)
+	rel := releaseOf(b, unitOf("db", db.ImageRef), unitOf("app", app.ImageRef), unitOf("web", web.ImageRef))
+
+	p, err := Build(Input{To: b, ToOut: rel, Held: map[string]target.Hold{
+		"db": target.HoldDiffers, "app": target.HoldMatches, "web": target.HoldAbsent}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := map[string]string{"db": "config", "app": "none", "web": "added"}
+	for _, c := range p.Changes {
+		if c.Kind != want[c.Key] {
+			t.Errorf("%s: kind = %q", c.Key, c.Kind)
+		}
+	}
+	// the key that matches has no steps; the one that differs is applied, without hooks; the absent one is
+	// installed with its hooks
+	wantSteps := []string{"apply:db", "apply:web", "hook:web"}
+	if !slices.Equal(kinds(p), wantSteps) {
+		t.Fatalf("steps = %v", kinds(p))
 	}
 }

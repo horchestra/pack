@@ -23,6 +23,7 @@ import (
 
 	"github.com/horchestra/pack/pkg/bundle"
 	"github.com/horchestra/pack/pkg/render"
+	"github.com/horchestra/pack/pkg/target"
 	"github.com/horchestra/pack/sdk/packschema"
 	"github.com/horchestra/pack/sdk/semver"
 )
@@ -162,6 +163,10 @@ type Input struct {
 	// Drifted are the keys the target does not hold as the record says (key → how); a key that is otherwise
 	// unchanged is applied again.
 	Drifted map[string]string
+	// Held is what the target says it already holds of a key, when the installation keeps no record
+	// (state: observe): a key that matches is no change, one that differs is a config change, one that is absent
+	// is added. Consulted only when From is nil.
+	Held map[string]target.Hold
 }
 
 func Build(in Input) (*Plan, error) {
@@ -386,11 +391,21 @@ func fromKeys(in Input) []string {
 
 // change classifies one key of the new version against the old. A key the old
 // version did not have — or every key of a first installation — is added: it
-// is installed, whatever the direction of the rest of the plan.
+// is installed, whatever the direction of the rest of the plan. A first
+// installation that keeps no record (Held) classifies from what the target
+// holds: what is already there exactly is no change, what differs is a config
+// change.
 func change(in Input, key string) (Change, error) {
 	toComp := in.To.Packs[in.To.KeyPack[key]]
 	c := Change{Key: key, Component: toComp.Name, To: toComp.Version, Kind: "none"}
 	if in.From == nil {
+		switch in.Held[key] {
+		case target.HoldMatches:
+			return c, nil
+		case target.HoldDiffers:
+			c.Kind = "config"
+			return c, nil
+		}
 		c.Kind, c.Direction = "added", "install"
 		return c, nil
 	}

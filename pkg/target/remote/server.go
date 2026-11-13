@@ -59,6 +59,8 @@ const (
 	// CapFileURL: the target downloads a file its URL names (oci://<host>/<repo>@<digest>/templates/<name>) where
 	// it lands, so pack does not send the file's bytes in the unit.
 	CapFileURL = "file-url"
+	// CapInspect: the target says whether it already holds exactly what a unit says (target.Inspector).
+	CapInspect = "inspect"
 )
 
 // MaxMessage bounds one message between pack and a target: a unit carries the files of the pack — an archive of
@@ -370,6 +372,35 @@ func (s *server) Observe(ctx context.Context, _ *remotepb.ObserveRequest) (*remo
 		out.Held[k] = &remotepb.Observed{Image: v.Image, Replicas: int64(v.Replicas)}
 	}
 	return out, nil
+}
+
+func (s *server) Inspect(ctx context.Context, req *remotepb.InspectRequest) (*remotepb.InspectResponse, error) {
+	inst, err := s.installation()
+	if err != nil {
+		return nil, err
+	}
+	i, ok := inst.(target.Inspector)
+	if !ok {
+		return nil, status.Errorf(codes.Unimplemented, "target %s does not tell whether it holds a unit", s.name)
+	}
+	u := new(render.Unit)
+	if err := json.Unmarshal(req.UnitJson, u); err != nil {
+		return nil, status.Error(codes.InvalidArgument, err.Error())
+	}
+	var creds []render.Credential
+	if len(req.CredentialsJson) > 0 {
+		if err := json.Unmarshal(req.CredentialsJson, &creds); err != nil {
+			return nil, status.Error(codes.InvalidArgument, err.Error())
+		}
+	}
+	hold, err := i.Inspect(ctx, *u, creds)
+	if errors.Is(err, target.ErrNotObserved) {
+		return nil, status.Error(codes.Unimplemented, err.Error())
+	}
+	if err != nil {
+		return nil, status.Error(codes.Unavailable, err.Error())
+	}
+	return &remotepb.InspectResponse{Hold: string(hold)}, nil
 }
 
 func (s *server) Execute(req *remotepb.ExecuteRequest, stream remotepb.Target_ExecuteServer) error {

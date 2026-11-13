@@ -36,7 +36,19 @@ const (
 	StateFile   = "file"
 	StateTarget = "target"
 	StateDB     = "db"
+	// StateObserve keeps no record at all: the plan is derived from what the target says it holds
+	// (target.Inspector), and a saga cut short is replanned from the same observation. For self-deploy on the
+	// application's own host.
+	StateObserve = "observe"
 )
+
+// memStore is the record of an installation that keeps none (state: observe): it lives for the run, so the saga
+// of the run has its savepoints, and is gone with the process — the next run replans from the target.
+type memStore struct{ rec *saga.Record }
+
+func (s *memStore) Load() (*saga.Record, error) { return s.rec, nil }
+func (s *memStore) Save(r *saga.Record) error   { s.rec = r; return nil }
+func (s *memStore) Delete() error               { s.rec = nil; return nil }
 
 // Dir is the pack directory of one run.
 type Dir struct {
@@ -206,12 +218,15 @@ func (d *Dir) FileState() storage.FileStore {
 }
 
 // Store is where the record of the installation is kept: the file (the default), the target's own system
-// (`state: target` in release.yaml, which needs a target that is a Recorder), or the state database
-// (`state: db`, the DSN in the environment). x may be nil for a file and a database.
+// (`state: target` in release.yaml, which needs a target that is a Recorder), the state database (`state: db`,
+// the DSN in the environment), or the run's memory alone (`state: observe` — no record outlives the run).
+// x may be nil for a file, a database and observe.
 func (d *Dir) Store(x target.Recorder) (saga.Store, error) {
 	switch kind := d.Release.State; kind {
 	case "", StateFile:
 		return d.FileState(), nil
+	case StateObserve:
+		return &memStore{}, nil
 	case StateTarget:
 		if x == nil {
 			return nil, ErrNoExecutor
@@ -233,7 +248,7 @@ func (d *Dir) Store(x target.Recorder) (saga.Store, error) {
 		}
 		return &DBStore{Store: st, db: db}, nil
 	default:
-		return nil, fmt.Errorf("release.yaml: state %q: file, target or db", kind)
+		return nil, fmt.Errorf("release.yaml: state %q: file, target, db or observe", kind)
 	}
 }
 
@@ -250,8 +265,8 @@ func (s *DBStore) Close() error { return s.db.Close() }
 var ErrNoExecutor = errors.New("state: target needs a target that keeps records")
 
 // InstallationID is the id of the installation: the one in the record, else a new UUID v4. It is kept in the
-// record by the first apply. A state in the target or in a database has no file to look in: the release says the
-// id (pack refresh writes it, once).
+// record by the first apply. A state in the target, in a database, or none (observe — the run's memory has
+// nothing to look in) has no file to look in: the release says the id (pack refresh writes it, once).
 func (d *Dir) InstallationID() (string, error) {
 	switch d.Release.State {
 	case "", StateFile:
@@ -263,13 +278,13 @@ func (d *Dir) InstallationID() (string, error) {
 			return rec.ID, nil
 		}
 		return NewID(), nil
-	case StateTarget, StateDB:
+	case StateTarget, StateDB, StateObserve:
 		if _, err := uuid.Parse(d.Release.ID); err != nil {
 			return "", fmt.Errorf("state: %s needs `id:` in release.yaml, a UUID (pack refresh makes one): %w", d.Release.State, err)
 		}
 		return d.Release.ID, nil
 	}
-	return "", fmt.Errorf("release.yaml: state %q: file, target or db", d.Release.State)
+	return "", fmt.Errorf("release.yaml: state %q: file, target, db or observe", d.Release.State)
 }
 
 // NewID makes the id of an installation: a UUID v4.

@@ -8,19 +8,23 @@ import (
 	"github.com/horchestra/pack/internal/adapter"
 	"github.com/horchestra/pack/internal/graph"
 	"github.com/horchestra/pack/internal/interrupt"
+	"github.com/horchestra/pack/internal/workdir"
 	"github.com/horchestra/pack/pkg/api"
 	"github.com/horchestra/pack/pkg/plan"
+	"github.com/horchestra/pack/pkg/saga"
 )
 
 func init() {
 	deleteCmd.Flags().BoolVar(&deleteDry, "dry-run", false, "say what would be done, do nothing")
 	deleteCmd.Flags().StringVar(&deleteApprove, "approve", "", "take the installation away, as --dry-run says it by this digest, whatever run.approve says")
+	deleteCmd.Flags().BoolVar(&deleteDestroy, "destroy", false, "take the keys' OS packages away too, by name, no autoremove — for a host the installation has to itself")
 	rootCmd.AddCommand(deleteCmd)
 }
 
 var (
 	deleteDry     bool
 	deleteApprove string
+	deleteDestroy bool
 )
 
 var deleteCmd = &cobra.Command{
@@ -40,7 +44,14 @@ var deleteCmd = &cobra.Command{
 			return err
 		}
 		if rec == nil || len(rec.Pack) == 0 {
-			return withCode(api.CodeNothingInstalled, fmt.Errorf("nothing is installed on %s", s.Target))
+			// state: observe keeps no record: what the release wants rendered now is what there is to take away
+			if s.Dir.Release.State != workdir.StateObserve {
+				return withCode(api.CodeNothingInstalled, fmt.Errorf("nothing is installed on %s", s.Target))
+			}
+			if b, rel, err = s.Render(); err != nil {
+				return err
+			}
+			rec = &saga.Record{Installation: saga.Installation{Pack: b.Name, Version: b.Version}}
 		}
 		if rec.Unfinished() {
 			return withCode(api.CodeSagaUnfinished, fmt.Errorf("a saga towards %s did not finish (%s: %s): apply it again, or pack rollback", rec.Saga.Pack, rec.State, rec.Saga.Error))
@@ -66,7 +77,7 @@ var deleteCmd = &cobra.Command{
 		if err := approved(s, p, deleteApprove, howDelete); err != nil {
 			return err
 		}
-		if err := s.Remove(ctx, g, rel); err != nil {
+		if err := s.Remove(ctx, g, rel, deleteDestroy); err != nil {
 			return withCode(api.CodeSagaFailed, err)
 		}
 		fmt.Println("not installed any more")

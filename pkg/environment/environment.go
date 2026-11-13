@@ -71,6 +71,11 @@ type Environment struct {
 	// Lang is the language of what pack writes for the operator — the comments of values.yaml: one of the pack's
 	// docs/ (ru, pt-BR); empty — $LANG's, else the pack's base language.
 	Lang string `env:"LANG"`
+	// HistoryCount is how many snapshots of a managed file a target keeps (<path>.bak.N): 0 — none, and a failed
+	// saga stops where it is instead of compensating (there is nothing to restore a file from); above 0 — a file
+	// step's undo restores the snapshot. Empty — the target's default. With state: observe the snapshots are the
+	// only memory a rollback has.
+	HistoryCount *int `env:"HISTORY_COUNT"`
 	// Keys is how the environment runs each key of the pack, by the key's name (the section `keys`).
 	Keys map[string]Key `env:"-"`
 	// Settings is the whole set, keys in lower case: what the provider gets — the default target's, without the

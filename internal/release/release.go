@@ -37,7 +37,8 @@ type Release struct {
 	Dir    string   `json:"-"`
 	Pack   string   `json:"pack,omitempty"`   // directory or registry reference to install
 	Values []string `json:"values,omitempty"` // more values files or directories than the ones found by name
-	// State is where the record of the installation is kept: file (.pack/state.json, the default), target, or db.
+	// State is where the record of the installation is kept: file (.pack/state.json, the default), target, db,
+	// or observe — no record at all: the plan is derived from what the target says it holds.
 	State string `json:"state,omitempty"`
 	// StateDSNEnv names the variable the DSN of the state database is in (state: db; PACK_STATE_DSN by default):
 	// postgres://… or sqlite://<path>. The DSN is never in the file.

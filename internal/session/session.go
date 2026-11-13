@@ -11,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strconv"
 	"strings"
 
 	"github.com/horchestra/pack/internal/graph"
@@ -75,6 +76,15 @@ func Open(ctx context.Context, d *workdir.Dir, readOnly bool) (*Session, error) 
 		kind = workdir.StateFile
 	}
 	storeSet[target.SettingPackState] = kind
+	if hc := env.HistoryCount; hc != nil {
+		if *hc < 0 {
+			return nil, fmt.Errorf("history_count: %d is below zero", *hc)
+		}
+		storeSet["history_count"] = strconv.Itoa(*hc)
+		if *hc == 0 {
+			env.Run.NoRollback = true // no snapshots: a rollback has nothing to restore a file from
+		}
+	}
 	maps.Copy(env.Settings, storeSet)
 
 	lock, err := release.ReadLock(d.Release.Dir)

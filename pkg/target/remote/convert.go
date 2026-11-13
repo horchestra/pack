@@ -15,7 +15,7 @@ import (
 func stepTo(s target.Step) (*remotepb.ExecuteRequest, error) {
 	req := &remotepb.ExecuteRequest{Step: &remotepb.Step{
 		N: int64(s.N), Key: s.Key, Kind: s.Kind, Name: s.Name, Phase: s.Phase, Timeout: s.Timeout,
-		Exclusive: s.Exclusive, Image: s.Image, Command: s.Command, Rollback: s.Rollback,
+		Exclusive: s.Exclusive, Image: s.Image, Command: s.Command, Rollback: s.Rollback, Destroy: s.Destroy,
 	}}
 	var err error
 	if s.Unit != nil {
@@ -41,7 +41,7 @@ func stepFrom(req *remotepb.ExecuteRequest) (target.Step, error) {
 	s := target.Step{
 		N: int(p.GetN()), Key: p.GetKey(), Kind: p.GetKind(), Name: p.GetName(), Phase: p.GetPhase(),
 		Timeout: p.GetTimeout(), Exclusive: p.GetExclusive(), Image: p.GetImage(), Command: p.GetCommand(),
-		Rollback: p.GetRollback(),
+		Rollback: p.GetRollback(), Destroy: p.GetDestroy(),
 	}
 	if len(req.UnitJson) > 0 {
 		s.Unit = new(render.Unit)
