@@ -335,3 +335,37 @@ func TestAPackThatHoldsItselfIsRefused(t *testing.T) {
 		t.Fatalf("err = %v", err)
 	}
 }
+
+type dependencyV1 struct{}
+type dependencyV2 struct{}
+
+func (*dependencyV1) SetDefaults() {}
+func (*dependencyV1) Meta() sdk.Meta {
+	return sdk.Meta{Name: "dependency", Version: "1", Dir: "/nonexistent"}
+}
+func (*dependencyV1) PackRoot() packschema.Root { return packschema.Root{} }
+func (*dependencyV2) SetDefaults()              {}
+func (*dependencyV2) Meta() sdk.Meta {
+	return sdk.Meta{Name: "dependency", Version: "2", Dir: "/nonexistent"}
+}
+func (*dependencyV2) PackRoot() packschema.Root { return packschema.Root{} }
+
+type conflictingComposition struct {
+	First  *dependencyV1 `json:"first,omitempty"`
+	Second *dependencyV2 `json:"second,omitempty"`
+}
+
+func (*conflictingComposition) SetDefaults() {}
+func (*conflictingComposition) Meta() sdk.Meta {
+	return sdk.Meta{Name: "composition", Version: "1", Dir: "/nonexistent"}
+}
+func (*conflictingComposition) PackRoot() packschema.Root { return packschema.Root{} }
+
+func TestACompositionRejectsTwoVersionsOfOnePack(t *testing.T) {
+	if _, err := sdk.Packs(&conflictingComposition{}); err == nil || !strings.Contains(err.Error(), "versions 1 and 2") {
+		t.Fatalf("a version conflict must say both versions: %v", err)
+	}
+	if err := sdk.Generate(t.TempDir(), &Twin{}); err != nil {
+		t.Fatalf("a repeated dependency of one version stays valid: %v", err)
+	}
+}

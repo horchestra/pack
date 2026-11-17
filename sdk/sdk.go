@@ -88,7 +88,7 @@ type Secret = packschema2.Secret
 // operator may name it in the values. A pack that holds itself, however far down, is refused.
 func Packs(root Pack) ([]Pack, error) {
 	var out []Pack
-	seen := map[string]bool{}
+	seen := map[string]string{}
 	var walk func(p Pack, path []string) error
 	walk = func(p Pack, path []string) error {
 		name := p.Meta().Name
@@ -98,10 +98,13 @@ func Packs(root Pack) ([]Pack, error) {
 		if slices.Contains(path, name) {
 			return fmt.Errorf("pack %q holds itself: %s", name, strings.Join(append(slices.Clone(path), name), " → "))
 		}
-		if seen[name] {
+		if version, ok := seen[name]; ok {
+			if version != p.Meta().Version {
+				return fmt.Errorf("pack %q is held at versions %s and %s: one composition has one version of a pack", name, version, p.Meta().Version)
+			}
 			return nil
 		}
-		seen[name] = true
+		seen[name] = p.Meta().Version
 		out = append(out, p)
 		for _, sub := range holds(p) {
 			if err := walk(sub, append(slices.Clone(path), name)); err != nil {
