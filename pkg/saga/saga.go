@@ -368,7 +368,7 @@ func (r *Run) finish() error {
 func (r *Run) fail(ctx context.Context, res *runner.Result, runErr error) error {
 	cause := res.Err()
 	if cause == nil {
-		cause = ErrInterrupted
+		cause = errors.Join(ErrInterrupted, runErr)
 	}
 	r.mu.Lock()
 	r.rec.State, r.rec.Saga.Error = Failed, cause.Error()

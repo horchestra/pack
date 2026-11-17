@@ -91,6 +91,15 @@ func TestInstall(t *testing.T) {
 	}
 }
 
+func TestExecuteCancellationReturnsContextError(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	err := run(t, &exec{}, &store{}).Execute(ctx)
+	if !errors.Is(err, context.Canceled) || !errors.Is(err, ErrInterrupted) {
+		t.Fatalf("err = %v", err)
+	}
+}
+
 // A failure rolls back to the last savepoint: zk is committed and stays, nn goes.
 func TestRollbackStopsAtSavepoint(t *testing.T) {
 	e, s := &exec{fail: map[string]error{"dn": errors.New("boom")}}, &store{}
