@@ -253,20 +253,20 @@ const (
 // Lock takes the installation's saga lock. PostgreSQL: pg_advisory_lock of the installation's hash, on a
 // connection of its own — it goes with the connection. SQLite: a row of pack_locks with a lease the saga renews;
 // an expired one is the next pack's to take.
-func (s *Store) Lock() (unlock func(), err error) {
+func (s *Store) Lock(ctx context.Context) (unlock func(context.Context) error, err error) {
 	if s.db.driver == "postgres" {
-		conn, err := s.db.sql.Conn(context.Background())
+		conn, err := s.db.sql.Conn(ctx)
 		if err != nil {
 			return nil, err
 		}
-		if _, err := conn.ExecContext(context.Background(), `SELECT pg_advisory_lock(hashtext($1))`, s.installation); err != nil {
+		if _, err := conn.ExecContext(ctx, `SELECT pg_advisory_lock(hashtext($1))`, s.installation); err != nil {
 			_ = conn.Close()
 			return nil, err
 		}
 		s.lockConn = conn
-		return func() {
+		return func(context.Context) error {
 			_, _ = conn.ExecContext(context.Background(), `SELECT pg_advisory_unlock(hashtext($1))`, s.installation)
-			_ = conn.Close()
+			return conn.Close()
 		}, nil
 	}
 	owner := strconv.Itoa(os.Getpid())
@@ -295,9 +295,10 @@ func (s *Store) Lock() (unlock func(), err error) {
 			}
 		}
 	}()
-	return func() {
+	return func(context.Context) error {
 		close(stop)
-		_, _ = s.db.sql.Exec(s.db.q(`DELETE FROM pack_locks WHERE installation = ? AND owner = ?`), s.installation, owner)
+		_, err := s.db.sql.Exec(s.db.q(`DELETE FROM pack_locks WHERE installation = ? AND owner = ?`), s.installation, owner)
+		return err
 	}, nil
 }
 

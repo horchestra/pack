@@ -118,6 +118,9 @@ func loadFrom(src Source, ref string) (*Bundle, error) {
 // empty for a directory.
 func (b *Bundle) load(src Source, f *Files, ref string) (*Pack, error) {
 	if p, ok := b.Packs[f.Name]; ok {
+		if p.Version != f.Version {
+			return nil, fmt.Errorf("pack %q is held at versions %s and %s: one composition has one version of a pack", f.Name, p.Version, f.Version)
+		}
 		return p, nil
 	}
 

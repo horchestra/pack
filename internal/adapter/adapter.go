@@ -48,6 +48,14 @@ func (s Store) Save(r *saga.Record) error {
 
 func (s Store) Delete() error { return s.X.DeleteInstalled() }
 
+func (s Store) Lock(ctx context.Context) (func(context.Context) error, error) {
+	locker, ok := s.X.(target.Locker)
+	if !ok {
+		return nil, fmt.Errorf("state: target: the target cannot lock the installation's saga")
+	}
+	return locker.Lock(ctx)
+}
+
 // Specs are the nodes of a rendered release for graph.New: its keys, and what each waits for (Report.Deps, the
 // keys that are in the release). Every unit of the plan that names a savepoint adds a node of its own,
 // `savepoint:<name>`, that waits for all the keys of the unit: when it is done, the unit and what it waits for stay

@@ -65,8 +65,9 @@ The apply needs no files for the pack itself: `cmd.ApplyOptions{Pack: p, Values:
 it already is and the values as the document the caller assembled — nothing is generated to a `packs/` directory,
 no `release.yaml` names it, no values file is read (`bundle.FromPack` builds the bundle in memory: the schema the
 type reflects, the templates its `content/` holds). The release directory is still the environment's: `env.yaml`,
-the secrets and the state live there; with `state: observe` even the state is the target's own truth, and such an
-apply leaves no file of the pack's at all.
+the secrets and the state live there. Persistent state names a content-addressed snapshot in pack's cache, so a later
+binary can plan from and roll back to the version actually installed; with `state: observe` no snapshot or other file
+of the pack is kept.
 
 ## PackRoot
 
@@ -237,8 +238,9 @@ Services: []string{"docker"},
 - **A repository's key is a keyring file,** delivered by `Repo` beside the entry that names it (`Signed-By:` of a
   deb822 `.sources`, `signed-by=` of a `.list`): `apt-key` is gone past Debian 12. An armored key lands as `.asc`,
   whatever its URL's bytes. A changed `Repo` file is what runs `apt-get update`; an unchanged one runs nothing.
-- **A package that is there is not installed again.** A present name — at the version a `name=version` pin says —
-  is skipped, so a repeat apply neither upgrades what it never meant to touch nor spends an `apt-get install` on it.
+- **Packages follow the repository unless pinned.** An absent name is installed, and an unpinned one is upgraded when
+  the repository has another candidate; with `state: observe`, that update is seen as a difference. A `name=version`
+  pin is skipped only at that exact version (including an RPM epoch), so a repeat apply of a current pin installs nothing.
 - **The host is taken to be empty:** nothing conflicting is looked for or removed.
 
 ## Documentation
@@ -296,7 +298,8 @@ groups:
 A field whose type is a pack holds it: the settings of the two join in one schema (the held one as `pack://name#`), a
 held pack is installed **before** the pack that holds it. A pointer (Go), `Optional` (Python) or `null` (Java) makes it
 optional.
-A pack that holds itself, however far down, is refused.
+A pack that holds itself, however far down, is refused. One composition has one version per pack name: two fields may
+hold the same pack, but two versions of it are refused rather than silently resolved to one.
 
 ## Generating
 

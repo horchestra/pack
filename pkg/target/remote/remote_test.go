@@ -2,6 +2,8 @@ package remote
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"os"
 	"os/exec"
@@ -86,6 +88,24 @@ func TestTargetAsAProgramOfItsOwn(t *testing.T) {
 	}
 }
 
+func TestBlobApply(t *testing.T) {
+	fakeBin(t)
+	in := open(t, t.TempDir(), nil)
+	content := []byte(strings.Repeat("x", inlineBlobMax+1))
+	var events []string
+	err := in.Execute(context.Background(), target.Step{N: 1, Key: "kafka", Kind: target.Apply, Unit: &render.Unit{
+		Image: "images/kafka:3", Files: []render.File{{Path: "/large", Content: content}},
+	}}, func(s string) { events = append(events, s) })
+	if err != nil {
+		t.Fatal(err)
+	}
+	sum := sha256.Sum256(content)
+	want := "/large:" + hex.EncodeToString(sum[:])
+	if len(events) != 1 || !strings.Contains(events[0], want) {
+		t.Fatalf("the target did not receive the verified content: %v", events)
+	}
+}
+
 func TestRecordAndObserve(t *testing.T) {
 	fakeBin(t)
 	in := open(t, t.TempDir(), nil)
@@ -108,6 +128,19 @@ func TestRecordAndObserve(t *testing.T) {
 	held, err := in.(target.Observer).Observe(context.Background())
 	if err != nil || held["kafka"].Replicas != 3 || held["kafka"].Image != "images/kafka:3" {
 		t.Fatalf("observed = %v %v", held, err)
+	}
+}
+
+func TestRecordLock(t *testing.T) {
+	fakeBin(t)
+	in := open(t, t.TempDir(), nil)
+	locker := in.(target.Locker)
+	unlock, err := locker.Lock(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := unlock(context.Background()); err != nil {
+		t.Fatal(err)
 	}
 }
 

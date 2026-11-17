@@ -7,11 +7,13 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/fs"
+	"maps"
 	"os"
 	"path/filepath"
 	"slices"
 	"strings"
 
+	packer "github.com/arenadata/oci-packer/types"
 	"github.com/horchestra/pack/internal/adapter"
 	"github.com/horchestra/pack/internal/graph"
 	"github.com/horchestra/pack/internal/oci"
@@ -24,6 +26,9 @@ import (
 	"github.com/horchestra/pack/pkg/saga"
 	"github.com/horchestra/pack/pkg/target"
 	"github.com/horchestra/pack/pkg/target/remote"
+	"github.com/horchestra/pack/sdk"
+	"github.com/horchestra/pack/sdk/format"
+	"sigs.k8s.io/yaml"
 )
 
 // Change is what apply and plan both work out: the installed version, the wanted one, and the plan between.
@@ -195,7 +200,13 @@ func (s *Session) Apply(ctx context.Context, c *Change) error {
 		return err
 	}
 	run := s.Run(g, &adapter.Exec{Plan: c.Plan, From: c.FromRel, To: c.ToRel, Credentials: c.Credentials, X: s.Inst, Execs: s.Execs})
-	run.To = saga.Installation{Pack: recordRef(c.Ref, c.ToB), Version: c.ToB.Version, Values: vals}
+	record := RecordRef(c.Ref)
+	if s.Dir.Release.State != workdir.StateObserve {
+		if record, err = recordRef(c.Ref, c.ToB); err != nil {
+			return err
+		}
+	}
+	run.To = saga.Installation{Pack: record, Version: c.ToB.Version, Values: vals}
 	run.Finish = func(ctx context.Context) error { return s.RemoveDropped(ctx, c.FromRel, c.ToRel) }
 	return run.Execute(ctx)
 }
@@ -280,6 +291,9 @@ func (s *Session) Version(in saga.Installation) (*bundle.Bundle, *render.Release
 	if err != nil {
 		return nil, nil, err
 	}
+	if strings.HasPrefix(in.Pack, "sdk://") && len(in.Version) > 0 && b.Version != in.Version {
+		return nil, nil, fmt.Errorf("%s %s: the installed version was recorded without a cache snapshot; the process holds %s", in.Pack, in.Version, b.Version)
+	}
 	rel, err := render.Render(b, v, s.Ctx)
 	if err != nil {
 		return nil, nil, err
@@ -299,38 +313,94 @@ func RecordRef(ref string) string {
 	return ref
 }
 
-// recordRef is RecordRef that can see the bundle: a directory pack goes into the cache (PACK_CACHE/packs) with
-// the packs it holds beside it, the path named by the digest of the files — a checkout the run was of does not
-// outlive it, the cache does; a later run, on whatever checkout, reads the installed version there.
-func recordRef(ref string, b *bundle.Bundle) string {
-	if oci.IsRef(ref) || b == nil || strings.HasPrefix(ref, "sdk://") {
-		return RecordRef(ref)
+// recordRef is RecordRef that can see the bundle: a directory pack goes into the cache (PACK_CACHE/packs), and an
+// in-memory pack is snapshotted there, with the packs each holds beside it. The path named by the digest of the
+// files outlives the checkout or process; a later run reads the installed version there.
+func recordRef(ref string, b *bundle.Bundle) (string, error) {
+	if oci.IsRef(ref) || b == nil {
+		return RecordRef(ref), nil
 	}
 	cached, err := cachePack(b)
 	if err != nil {
-		return RecordRef(ref)
+		if strings.HasPrefix(ref, "sdk://") {
+			return "", fmt.Errorf("cache the embedded pack: %w", err)
+		}
+		return RecordRef(ref), nil
 	}
-	return cached
+	return cached, nil
+}
+
+// snapshotFiles renders an in-memory pack as the directory bundle.Load reads.
+func snapshotFiles(b *bundle.Bundle, p *bundle.Pack) (map[string][]byte, error) {
+	pf := packer.Pack{
+		Metadata: packer.Metadata{Annotations: map[string]string{
+			bundle.AnnotationName: p.Name, bundle.AnnotationVersion: p.Version,
+		}},
+		Type:  bundle.ArtifactPack,
+		Items: []packer.Descriptor{{From: "file://" + format.SchemaFile, Type: bundle.ArtifactSchema}},
+	}
+	if len(p.Templates) > 0 {
+		pf.Items = append(pf.Items, packer.Descriptor{From: "dir://" + format.TemplatesDir + "/", Type: bundle.ArtifactTemplate})
+	}
+	if len(p.ImageRef) > 0 {
+		pf.Items = append(pf.Items, packer.Descriptor{From: "oci://" + p.ImageRef, Annotations: map[string]string{bundle.AnnotationImage: "true"}})
+	}
+	for _, h := range p.Holds {
+		held := b.Packs[h.Pack]
+		if held == nil {
+			return nil, fmt.Errorf("pack %q holds %q, which is not in the bundle", p.Name, h.Pack)
+		}
+		pf.Items = append(pf.Items, packer.Descriptor{From: fmt.Sprintf("oci://%s/%s:%s", sdk.DefaultRepo, held.Name, held.Version)})
+	}
+	raw, err := yaml.Marshal(&pf)
+	if err != nil {
+		return nil, err
+	}
+	files := map[string][]byte{format.SchemaFile: p.SchemaRaw, format.PackFile: raw}
+	for name, data := range p.Templates {
+		files[filepath.Join(format.TemplatesDir, filepath.FromSlash(name))] = data
+	}
+	if p.Image != nil {
+		if files["image.json"], err = json.Marshal(p.Image); err != nil {
+			return nil, err
+		}
+	}
+	return files, nil
 }
 
 // cachePack copies the bundle's packs into the cache, each a sibling of the others the way the holds resolve,
-// under packs/<digest of every file>/; the record names the root's directory in it.
+// under packs/<digest of every file>/; the record names the root's directory in it. An in-memory pack is snapshotted
+// in the same form, so a later process can still render and roll back the version that was actually installed.
 func cachePack(b *bundle.Bundle) (string, error) {
 	h := sha256.New()
-	files := map[string][]string{} // pack name → its files
+	files := map[string]map[string][]byte{} // pack name → relative path → content
 	var names []string
 	for name, p := range b.Packs {
-		if len(p.Dir) == 0 {
-			return "", fmt.Errorf("pack %q has no directory to cache", name)
-		}
 		names = append(names, name)
+		files[name] = map[string][]byte{}
+		if len(p.Dir) == 0 {
+			var err error
+			if files[name], err = snapshotFiles(b, p); err != nil {
+				return "", err
+			}
+			continue
+		}
 		if err := filepath.WalkDir(p.Dir, func(path string, d fs.DirEntry, err error) error {
 			if err != nil {
 				return err
 			}
-			if d.Type().IsRegular() {
-				files[name] = append(files[name], path)
+			if !d.Type().IsRegular() {
+				return nil
 			}
+			data, err := os.ReadFile(path)
+			if err != nil {
+				return err
+			}
+			rel, err := filepath.Rel(p.Dir, path)
+			if err != nil {
+				return err
+			}
+			files[name][rel] = data
 			return nil
 		}); err != nil {
 			return "", err
@@ -338,15 +408,9 @@ func cachePack(b *bundle.Bundle) (string, error) {
 	}
 	slices.Sort(names)
 	for _, name := range names {
-		p := b.Packs[name]
-		slices.Sort(files[name])
-		for _, f := range files[name] {
-			data, err := os.ReadFile(f)
-			if err != nil {
-				return "", err
-			}
-			rel, _ := filepath.Rel(p.Dir, f)
-			fmt.Fprintf(h, "%s/%s %d\n", name, filepath.ToSlash(rel), len(data))
+		for _, f := range slices.Sorted(maps.Keys(files[name])) {
+			data := files[name][f]
+			_, _ = fmt.Fprintf(h, "%s/%s %d\n", name, filepath.ToSlash(f), len(data))
 			_, _ = h.Write(data)
 		}
 	}
@@ -362,19 +426,14 @@ func cachePack(b *bundle.Bundle) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	defer os.RemoveAll(tmp)
+	defer func() { _ = os.RemoveAll(tmp) }()
 	for _, name := range names {
-		for _, f := range files[name] {
-			rel, _ := filepath.Rel(b.Packs[name].Dir, f)
-			to := filepath.Join(tmp, name, rel)
+		for _, f := range slices.Sorted(maps.Keys(files[name])) {
+			to := filepath.Join(tmp, name, f)
 			if err := os.MkdirAll(filepath.Dir(to), 0o755); err != nil {
 				return "", err
 			}
-			data, err := os.ReadFile(f)
-			if err != nil {
-				return "", err
-			}
-			if err := os.WriteFile(to, data, 0o644); err != nil {
+			if err := os.WriteFile(to, files[name][f], 0o644); err != nil {
 				return "", err
 			}
 		}

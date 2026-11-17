@@ -467,6 +467,28 @@ func TestPackagesAreTemplates(t *testing.T) {
 	}
 }
 
+type workloadTarget struct{ *memory.Target }
+
+func (t *workloadTarget) Resolve(key string, p render.Placement) (*render.Resolved, error) {
+	resolved, err := t.Target.Resolve(key, p)
+	if resolved != nil {
+		resolved.Workload = render.WorkloadPackages
+	}
+	return resolved, err
+}
+
+func TestTargetDecidesTheWorkloadKind(t *testing.T) {
+	rel, err := render.Render(loadPack(t, &HostCmd{}), render.Values{Values: map[string]any{"dir": "/data"}}, render.Context{
+		Installation: "test", Target: &workloadTarget{memory.New()},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(rel.Units) != 1 || rel.Units[0].Workload != render.WorkloadPackages {
+		t.Fatalf("the target's workload did not reach the unit: %+v", rel.Units)
+	}
+}
+
 // Told reads the facts of its key's target: a quarter of the first host's memory, unless the operator says.
 type Told struct {
 	Cache string `json:"cache,omitempty" env:"CACHE"`

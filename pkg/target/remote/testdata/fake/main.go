@@ -5,6 +5,8 @@ package main
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"os"
@@ -43,6 +45,21 @@ func (i *inst) Resolve(key string, p render.Placement) (*render.Resolved, error)
 		res.Reach = &render.Reach{Instances: p.Reach.Instances, Ports: p.Reach.Ports}
 	}
 	return res, nil
+}
+
+func (i *inst) Lock(ctx context.Context) (func(context.Context) error, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	path := filepath.Join(i.dir, "lock")
+	f, err := os.OpenFile(path, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o600)
+	if err != nil {
+		return nil, err
+	}
+	if err := f.Close(); err != nil {
+		return nil, err
+	}
+	return func(context.Context) error { return os.Remove(path) }, nil
 }
 
 func (i *inst) ReadInstalled() ([]byte, bool, error) {
@@ -89,6 +106,10 @@ func (i *inst) Execute(_ context.Context, s target.Step, events func(string)) er
 	}
 	if s.Unit != nil && s.Kind == "apply" {
 		what += " " + s.Unit.Image
+		for _, file := range s.Unit.Files {
+			sum := sha256.Sum256(file.Content)
+			what += " " + file.Path + ":" + hex.EncodeToString(sum[:])
+		}
 	}
 	f, err := os.OpenFile(filepath.Join(i.dir, "log"), os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o600)
 	if err != nil {
@@ -104,7 +125,7 @@ func (i *inst) Execute(_ context.Context, s target.Step, events func(string)) er
 }
 
 func main() {
-	if err := remote.Serve("fake", factory, remote.CapRecord, remote.CapObserve, remote.CapDiscover); err != nil {
+	if err := remote.Serve("fake", factory, remote.CapRecord, remote.CapLock, remote.CapBlob, remote.CapObserve, remote.CapDiscover); err != nil {
 		_, _ = fmt.Fprintln(os.Stderr, "pack-target-fake:", err)
 		os.Exit(1)
 	}

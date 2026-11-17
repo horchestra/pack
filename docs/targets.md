@@ -160,8 +160,10 @@ runtime:
       - VAULT_TOKEN
   ```
 
-  The Pod, its Secret (the token, `env`), its Service and its NetworkPolicy live as long as the command: the Pod owns
-  the rest, and taking it away takes them along. They are labelled with the installation and the target, the Pod
+  The Pod, its Secret (the token, `env` and, for a Service connection, the run's TLS keys), its Service and its
+  NetworkPolicy live as long as the command: the Pod owns the rest, and taking it away takes them along. Service and
+  externally addressed connections require mutual TLS with a run-scoped CA and client/server certificates; unix
+  sockets, SSH tunnels and port-forward keep their existing secure channel. They are labelled with the installation and the target, the Pod
   annotated with the pack that made it; what a pack of this machine left (killed) is taken away by the next one. The
   Pod has no home of the release (`.pack/home/<name>` is the machine's): what a target keeps in `~` there lasts the
   command. A Pod that cannot pull its image, cannot be placed or whose target exits says so, before pack speaks to it;
@@ -221,17 +223,23 @@ so the target refuses one and keeps no record (`state: db` is pack's database's)
 
 `proto/target.proto` (`pack.target.v1`) is the seam, for a target in any language. pack tells the process in its
 environment where to listen and what to demand — `PACK_TARGET_ADDRESS` (`unix:///<path>`, or `tcp://<host>:<port>` for
-an image) and `PACK_TARGET_TOKEN`, carried by every call as the metadata `pack-target-token` — and closes its stdin when
-it is done: that is the target's signal to exit.
+an image) and `PACK_TARGET_TOKEN`, carried by every call as the metadata `pack-target-token`. With mutual TLS,
+`PACK_TARGET_TLS_CA`, `PACK_TARGET_TLS_CERT` and `PACK_TARGET_TLS_KEY` name the CA, certificate and key files. Pack
+closes the target's stdin when it is done: that is the target's signal to exit.
 
 ```
 Handshake(protocol) → protocol, target, capabilities [record, observe]
 Configure(installation, settings) → namespace
 Resolve(key, placement_json) → service, address, instances, reach
 ReadInstalled / WriteInstalled / DeleteInstalled        (record)
+AcquireLock / ReleaseLock                               (lock: one saga of the installation)
+PutBlob(digest, chunks)                                  (blob: verified content for Execute)
 Observe → held[key] = {image, replicas}                  (observe)
 Execute(step, unit_json, previous_json, credentials_json) → stream of events; the last one says done or the error
 ```
 
 What the render knows of a key travels as JSON — `render.Unit`, `render.Placement`, `[]render.Credential` — because
-they grow and a number in them must stay an integer where it was one. `make proto` regenerates the Go stubs.
+they grow and a number in them must stay an integer where it was one. Files up to 256 KiB stay inline; larger content
+is a SHA-256 digest and size in the unit, uploaded by `PutBlob` in 1 MiB chunks and verified before `Execute`. The
+server hydrates the unit, so a target implementation still reads `render.File.Content`. `make proto` regenerates the
+Go stubs.

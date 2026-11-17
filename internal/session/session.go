@@ -186,25 +186,7 @@ func (s *Session) pruneJournal() {
 
 // Placements are the environment's keys as the render takes them.
 func Placements(keys map[string]environment.Key) map[string]render.Placement {
-	out := make(map[string]render.Placement, len(keys))
-	for name, k := range keys {
-		p := render.Placement{Target: k.Target, Replicas: k.Replicas, Labels: k.Labels, Annotations: k.Annotations, Raw: k.Raw}
-		if k.Resources != nil {
-			p.Resources = &render.Resources{Requests: k.Resources.Requests, Limits: k.Resources.Limits}
-		}
-		for _, e := range k.Env {
-			ev := render.EnvVar{Name: e.Name, Value: e.Value}
-			if e.SecretRef != nil {
-				ev.Secret = &render.SecretRef{Name: e.SecretRef.Name, Key: e.SecretRef.Key}
-			}
-			p.Env = append(p.Env, ev)
-		}
-		if k.Reach != nil {
-			p.Reach = &render.Reach{Instances: k.Reach.Instances, Ports: k.Reach.Ports}
-		}
-		out[name] = p
-	}
-	return out
+	return environment.Placements(keys)
 }
 
 // Close releases the session: a target that is a program of its own (target/remote) is stopped.

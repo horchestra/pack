@@ -1,6 +1,7 @@
 package storage
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"slices"
@@ -43,22 +44,22 @@ func TestFileStore(t *testing.T) {
 
 func TestFileStoreLock(t *testing.T) {
 	s := FileStore{Dir: t.TempDir(), Name: "adh"}
-	unlock, err := s.Lock()
+	unlock, err := s.Lock(context.Background())
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.Lock(); err == nil {
+	if _, err := s.Lock(context.Background()); err == nil {
 		t.Fatal("a second lock must be refused")
 	}
-	if _, err := (FileStore{Dir: s.Dir, Name: "other"}).Lock(); err != nil {
+	if _, err := (FileStore{Dir: s.Dir, Name: "other"}).Lock(context.Background()); err != nil {
 		t.Fatalf("another installation is free: %v", err)
 	}
-	unlock()
-	unlock2, err := s.Lock()
+	unlock(context.Background())
+	unlock2, err := s.Lock(context.Background())
 	if err != nil {
 		t.Fatalf("after unlock: %v", err)
 	}
-	unlock2()
+	unlock2(context.Background())
 	var _ saga.Locker = s
 }
 

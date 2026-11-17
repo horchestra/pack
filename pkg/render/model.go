@@ -31,11 +31,21 @@ type Release struct {
 	Report      Report
 }
 
+// WorkloadKind is how a target runs a unit.
+type WorkloadKind string
+
+const (
+	WorkloadUnknown    WorkloadKind = ""
+	WorkloadContainers WorkloadKind = "containers"
+	WorkloadPackages   WorkloadKind = "packages"
+)
+
 // Unit is one key of the pack: one program, run from an image, as
 // one instance or as Replicas of them.
 type Unit struct {
 	Key       string
 	Component string
+	Workload  WorkloadKind `json:",omitempty"`
 	// Replicas is 0 for a key the environment gave no replicas — one instance,
 	// addressed as the key — and n ≥ 1 where it did.
 	Replicas      int
@@ -126,6 +136,12 @@ type Claim struct {
 // File is one rendered config file. Its bytes may carry ${secret:<name>/<key>}
 // where the values held a reference: the target resolves them where the file
 // lands, so a credential never passes through the render as plaintext.
+// BlobRef identifies file content kept outside the unit.
+type BlobRef struct {
+	Digest string
+	Size   int64
+}
+
 type File struct {
 	Path string
 	Mode *fs.FileMode
@@ -133,9 +149,11 @@ type File struct {
 	URL string `json:",omitempty"`
 	// Content is the file of a unit; nil for a per-instance file.
 	Content []byte
+	Blob    *BlobRef `json:",omitempty"`
 	// Instances are a per-instance file's bytes, replica i at i; nil where a
 	// replica's section was left empty and the file does not exist for it.
-	Instances [][]byte
+	Instances     [][]byte
+	InstanceBlobs []*BlobRef `json:",omitempty"`
 	// Secrets are the names the placeholders refer to, in order of appearance.
 	Secrets []string
 }

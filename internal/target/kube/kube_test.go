@@ -50,6 +50,21 @@ func TestObjects(t *testing.T) {
 	if np == nil || np.Spec.PodSelector.MatchLabels[LabelInstance] != pod.Name || np.Spec.Ingress[0].From[0].PodSelector.MatchLabels[LabelClient] != "true" {
 		t.Errorf("network policy: %+v", np)
 	}
+
+	withTLS := testInstance(config{})
+	withTLS.tls = &remote.TLSMaterial{CACert: []byte("ca"), ServerCert: []byte("cert"), ServerKey: []byte("key")}
+	pod, secret, _, _ = objects(withTLS)
+	if string(secret.Data["ca.crt"]) != "ca" || string(secret.Data["server.crt"]) != "cert" || string(secret.Data["server.key"]) != "key" {
+		t.Errorf("the TLS material is not in the run's Secret: %+v", secret.Data)
+	}
+	container := pod.Spec.Containers[0]
+	if len(container.VolumeMounts) != 1 || container.VolumeMounts[0].MountPath != tlsDir || len(pod.Spec.Volumes) != 1 {
+		t.Errorf("the TLS Secret is not mounted: %+v", pod.Spec)
+	}
+	env := container.Env
+	if env[len(env)-1].Value != tlsDir+"/server.key" {
+		t.Errorf("the target was not told its TLS key: %+v", env)
+	}
 }
 
 // What a run makes is owned by its Pod; removing the Pod is all there is to do. An orphan is a run whose owner is

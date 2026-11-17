@@ -41,7 +41,7 @@ type Store interface {
 // Locker is a Store that can refuse a second saga on the same installation. The saga takes the lock for
 // Execute and for Remove, if its Store has one.
 type Locker interface {
-	Lock() (unlock func(), err error)
+	Lock(ctx context.Context) (unlock func(context.Context) error, err error)
 }
 
 const (
@@ -256,11 +256,11 @@ func (r *Run) save() error { return r.Store.Save(r.rec) }
 // A failure rolls back every node in effect that no savepoint commits; the
 // record then says what failed and what is still in effect.
 func (r *Run) Execute(ctx context.Context) error {
-	unlock, err := r.lock()
+	unlock, err := r.lock(ctx)
 	if err != nil {
 		return err
 	}
-	defer unlock()
+	defer func() { _ = unlock(context.Background()) }()
 	rec, err := r.Store.Load()
 	if err != nil {
 		return fmt.Errorf("the installation's record: %w", err)
@@ -452,11 +452,11 @@ func (r *Run) rollback(ctx context.Context) error {
 // before the saga is installed, as it was, or, for a first installation, that nothing is: the record goes.
 // Graph is the graph of the version the saga went to; Exec's Undo returns a node to the version it replaced.
 func (r *Run) Undo(ctx context.Context) error {
-	unlock, err := r.lock()
+	unlock, err := r.lock(ctx)
 	if err != nil {
 		return err
 	}
-	defer unlock()
+	defer func() { _ = unlock(context.Background()) }()
 	rec, err := r.Store.Load()
 	if err != nil {
 		return fmt.Errorf("the installation's record: %w", err)
@@ -501,11 +501,11 @@ func (r *Run) Undo(ctx context.Context) error {
 
 // Remove uninstalls: every node is undone, dependents first, and the record goes.
 func (r *Run) Remove(ctx context.Context) error {
-	unlock, err := r.lock()
+	unlock, err := r.lock(ctx)
 	if err != nil {
 		return err
 	}
-	defer unlock()
+	defer func() { _ = unlock(context.Background()) }()
 	if err := r.removeNodes(ctx); err != nil {
 		return err
 	}
@@ -542,11 +542,11 @@ func (r *Run) clear(rec *Record) error {
 // RemoveNodes undoes every node of the graph, dependents first, and leaves the record: what an upgrade does
 // with the keys the new version no longer has.
 func (r *Run) RemoveNodes(ctx context.Context) error {
-	unlock, err := r.lock()
+	unlock, err := r.lock(ctx)
 	if err != nil {
 		return err
 	}
-	defer unlock()
+	defer func() { _ = unlock(context.Background()) }()
 	return r.removeNodes(ctx)
 }
 
@@ -560,11 +560,11 @@ func (r *Run) removeNodes(ctx context.Context) error {
 	return nil
 }
 
-func (r *Run) lock() (func(), error) {
+func (r *Run) lock(ctx context.Context) (func(context.Context) error, error) {
 	if l, ok := r.Store.(Locker); ok {
-		return l.Lock()
+		return l.Lock(ctx)
 	}
-	return func() {}, nil
+	return func(context.Context) error { return nil }, nil
 }
 
 func remove(s []string, name string) []string {

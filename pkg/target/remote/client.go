@@ -108,6 +108,7 @@ type Plugin struct {
 	conn    *grpc.ClientConn
 	client  remotepb.TargetClient
 	caps    []string
+	tls     *TLSMaterial
 	relay   io.WriteCloser // the process's stdout and stderr: its log, logged again
 }
 
@@ -188,6 +189,12 @@ func Connect(name, what, addr, token string, within time.Duration, exited chan e
 	return p.dial(addr, token, within)
 }
 
+// ConnectTLS connects with the run's client certificate and CA instead of plaintext.
+func ConnectTLS(name, what, addr, token string, within time.Duration, exited chan error, stop func(), material *TLSMaterial) (*Plugin, error) {
+	p := &Plugin{name: name, what: what, exited: exited, stop: stop, tls: material}
+	return p.dial(addr, token, within)
+}
+
 // NewToken is a token a target is given to require of pack.
 func NewToken() (string, error) { return newToken() }
 
@@ -203,7 +210,21 @@ func (p *Plugin) dial(addr, token string, within time.Duration) (*Plugin, error)
 	// the provider is starting: try often, not after gRPC's usual second
 	connect := grpc.ConnectParams{Backoff: backoff.Config{BaseDelay: 20 * time.Millisecond, Multiplier: 1.5, MaxDelay: time.Second}, MinConnectTimeout: time.Second}
 	logUnary, logStream := clientLog(p.name)
-	if p.conn, err = grpc.NewClient(addr, grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithConnectParams(connect),
+	transport := insecure.NewCredentials()
+	if p.tls != nil {
+		transport, err = p.tls.ClientCredentials()
+	} else {
+		var set bool
+		transport, set, err = clientCredentialsFromEnv()
+		if err == nil && !set {
+			transport = insecure.NewCredentials()
+		}
+	}
+	if err != nil {
+		p.Close()
+		return nil, err
+	}
+	if p.conn, err = grpc.NewClient(addr, grpc.WithTransportCredentials(transport), grpc.WithConnectParams(connect),
 		grpc.WithChainUnaryInterceptor(auth, logUnary), grpc.WithChainStreamInterceptor(authStream, logStream),
 		grpc.WithDefaultCallOptions(grpc.MaxCallRecvMsgSize(MaxMessage), grpc.MaxCallSendMsgSize(MaxMessage))); err != nil {
 		p.Close()
@@ -348,6 +369,9 @@ func (r *remote) Execute(ctx context.Context, step target.Step, events func(stri
 	if slices.Contains(r.p.caps, CapFileURL) {
 		step.Unit, step.Previous = stripFetched(step.Unit), stripFetched(step.Previous)
 	}
+	if err := r.p.externalizeBlobs(ctx, &step); err != nil {
+		return err
+	}
 	req, err := stepTo(step)
 	if err != nil {
 		return err
@@ -374,6 +398,19 @@ func (r *remote) Execute(ctx context.Context, step target.Step, events func(stri
 			return nil
 		}
 	}
+}
+
+func (r *remote) Lock(ctx context.Context) (func(context.Context) error, error) {
+	if !slices.Contains(r.p.caps, CapLock) {
+		return nil, fmt.Errorf("target %s cannot lock the installation's saga", r.p.name)
+	}
+	if _, err := r.p.client.AcquireLock(ctx, &remotepb.AcquireLockRequest{}); err != nil {
+		return nil, unwrap(err)
+	}
+	return func(ctx context.Context) error {
+		_, err := r.p.client.ReleaseLock(ctx, &remotepb.ReleaseLockRequest{})
+		return unwrap(err)
+	}, nil
 }
 
 func (r *remote) ReadInstalled() ([]byte, bool, error) {

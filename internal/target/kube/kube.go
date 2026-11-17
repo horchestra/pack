@@ -24,6 +24,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -149,6 +150,8 @@ func restConfig(c config) (rc *rest.Config, namespace string, inCluster bool, er
 	return rc, namespace, false, nil
 }
 
+const tlsDir = "/pack-tls"
+
 // instance is one run of a target's image.
 type instance struct {
 	name                 string // the Pod's, its Service's, its Secret's
@@ -157,6 +160,7 @@ type instance struct {
 	namespace            string
 	env                  map[string]string // the values of runtime.env
 	cfg                  config
+	tls                  *remote.TLSMaterial
 }
 
 func (in instance) labels() map[string]string {
@@ -182,6 +186,14 @@ func objects(in instance) (*corev1.Pod, *corev1.Secret, *corev1.Service, *networ
 		k, v, _ := strings.Cut(kv, "=")
 		env = append(env, corev1.EnvVar{Name: k, Value: v})
 	}
+	if in.tls != nil {
+		data["ca.crt"], data["server.crt"], data["server.key"] = in.tls.CACert, in.tls.ServerCert, in.tls.ServerKey
+		env = append(env,
+			corev1.EnvVar{Name: remote.EnvTLSCA, Value: tlsDir + "/ca.crt"},
+			corev1.EnvVar{Name: remote.EnvTLSCert, Value: tlsDir + "/server.crt"},
+			corev1.EnvVar{Name: remote.EnvTLSKey, Value: tlsDir + "/server.key"},
+		)
+	}
 	pod := &corev1.Pod{ObjectMeta: in.meta(), Spec: corev1.PodSpec{
 		RestartPolicy:      corev1.RestartPolicyNever,
 		ServiceAccountName: in.cfg.serviceAccount,
@@ -195,6 +207,10 @@ func objects(in instance) (*corev1.Pod, *corev1.Secret, *corev1.Service, *networ
 			Stdin: true,
 		}},
 	}}
+	if in.tls != nil {
+		pod.Spec.Volumes = []corev1.Volume{{Name: "tls", VolumeSource: corev1.VolumeSource{Secret: &corev1.SecretVolumeSource{SecretName: in.name}}}}
+		pod.Spec.Containers[0].VolumeMounts = []corev1.VolumeMount{{Name: "tls", MountPath: tlsDir, ReadOnly: true}}
+	}
 	if len(in.cfg.pullSecret) > 0 {
 		pod.Spec.ImagePullSecrets = []corev1.LocalObjectReference{{Name: in.cfg.pullSecret}}
 	}
@@ -461,6 +477,17 @@ func start(name, installation string, rt remote.Runtime) (*remote.Plugin, error)
 	}
 	in := instance{name: remote.Prefix + name + "-" + token[:10], target: name, installation: installation,
 		image: rt.Image, token: token, owner: remote.Owner(), namespace: namespace, env: env, cfg: cfg}
+	addr, isForward := how(cfg, inCluster, in)
+	if !isForward {
+		host, _, err := net.SplitHostPort(addr)
+		if err != nil {
+			return nil, err
+		}
+		in.tls, err = remote.NewTLSMaterial([]string{host})
+		if err != nil {
+			return nil, fmt.Errorf("target %s: TLS: %w", name, err)
+		}
+	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), remote.ImageStart)
 	defer cancel()
@@ -485,7 +512,6 @@ func start(name, installation string, rt remote.Runtime) (*remote.Plugin, error)
 	go func() { exited <- watchEnd(watch, cs, namespace, in.name, 2*time.Second) }()
 	go followLog(watch, cs, namespace, in.name, name)
 	gone := func() { unwatch(); remove() }
-	addr, isForward := how(cfg, inCluster, in)
 	stop := gone
 	if isForward {
 		local, closeForward, err := forward(rc, cs, namespace, in.name)
@@ -494,6 +520,9 @@ func start(name, installation string, rt remote.Runtime) (*remote.Plugin, error)
 			return nil, fmt.Errorf("target %s: %w", name, err)
 		}
 		addr, stop = local, func() { closeForward(); gone() }
+	}
+	if in.tls != nil {
+		return remote.ConnectTLS(name, rt.Image+" in "+namespace+"/"+in.name, addr, token, afterRunning, exited, stop, in.tls)
 	}
 	return remote.Connect(name, rt.Image+" in "+namespace+"/"+in.name, addr, token, afterRunning, exited, stop)
 }

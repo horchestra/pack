@@ -54,6 +54,9 @@ func (r *render) unit(key string) (*Unit, error) {
 		km = map[string]any{}
 	}
 	u := &Unit{Key: key, Component: comp.Name, Replicas: r.replicas(key)}
+	if resolved := r.resolved[key]; resolved != nil {
+		u.Workload = resolved.Workload
+	}
 
 	// image: empty for a component that runs on hosts, not in a container (the ansible target installs its packages);
 	// a target that runs containers refuses a unit that has none

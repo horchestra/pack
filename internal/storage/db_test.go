@@ -69,19 +69,19 @@ func TestDBLock(t *testing.T) {
 	db := sqliteDB(t)
 	s1, _ := db.Store(idA)
 	s2, _ := db.Store(idA)
-	unlock, err := s1.Lock()
+	unlock, err := s1.Lock(context.Background())
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s2.Lock(); err == nil || !strings.Contains(err.Error(), "locked") {
+	if _, err := s2.Lock(context.Background()); err == nil || !strings.Contains(err.Error(), "locked") {
 		t.Fatalf("taken: %v", err)
 	}
-	unlock()
-	unlock2, err := s2.Lock()
+	unlock(context.Background())
+	unlock2, err := s2.Lock(context.Background())
 	if err != nil {
 		t.Fatal(err)
 	}
-	unlock2()
+	unlock2(context.Background())
 	var _ saga.Locker = s1
 }
 

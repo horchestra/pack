@@ -48,6 +48,10 @@ const (
 
 	// CapRecord: the target keeps the installation's record in its own system (target.Recorder).
 	CapRecord = "record"
+	// CapLock: the target serializes the installation's sagas (target.Locker).
+	CapLock = "lock"
+	// CapBlob: the target accepts digest-verified file blobs before Execute.
+	CapBlob = "blob"
 	// CapObserve: the target says what it holds (target.Observer).
 	CapObserve = "observe"
 	// CapDiscover: the target tells the facts of where it installs (target.Discoverer).
@@ -98,7 +102,7 @@ func Serve(name string, f target.Factory, caps ...string) error {
 	}
 	log := logging.For("serve")
 	logUnary, logStream := serverLog("")
-	s := grpc.NewServer(grpc.MaxRecvMsgSize(MaxMessage), grpc.MaxSendMsgSize(MaxMessage), grpc.ChainUnaryInterceptor(func(ctx context.Context, req any, _ *grpc.UnaryServerInfo, h grpc.UnaryHandler) (any, error) {
+	options := []grpc.ServerOption{grpc.MaxRecvMsgSize(MaxMessage), grpc.MaxSendMsgSize(MaxMessage), grpc.ChainUnaryInterceptor(func(ctx context.Context, req any, _ *grpc.UnaryServerInfo, h grpc.UnaryHandler) (any, error) {
 		if err := authorized(ctx, token); err != nil {
 			return nil, err
 		}
@@ -108,7 +112,15 @@ func Serve(name string, f target.Factory, caps ...string) error {
 			return err
 		}
 		return h(srv, ss)
-	}, logStream))
+	}, logStream)}
+	creds, tlsSet, err := serverCredentialsFromEnv()
+	if err != nil {
+		return err
+	}
+	if tlsSet {
+		options = append(options, grpc.Creds(creds))
+	}
+	s := grpc.NewServer(options...)
 	log.Debug().Str("target", name).Str("network", l.Addr().Network()).Strs("caps", caps).Msg("listening")
 	srv := &server{name: name, f: f, caps: caps}
 	defer srv.close()
@@ -146,14 +158,23 @@ type server struct {
 	f    target.Factory
 	caps []string
 
-	mu   sync.Mutex
-	inst target.Installation
+	mu       sync.Mutex
+	inst     target.Installation
+	unlock   func(context.Context) error
+	blobs    *blobStore
+	lockLost <-chan struct{}
 }
 
 // close lets the installation go, if it holds anything — a tunnel, a connection — that must not outlive the target.
 func (s *server) close() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if s.unlock != nil {
+		_ = s.unlock(context.Background())
+	}
+	if s.blobs != nil {
+		_ = os.RemoveAll(s.blobs.dir)
+	}
 	if c, ok := s.inst.(io.Closer); ok {
 		_ = c.Close()
 	}
@@ -203,7 +224,7 @@ func (s *server) Resolve(_ context.Context, req *remotepb.ResolveRequest) (*remo
 }
 
 func resolvedTo(res *render.Resolved) *remotepb.ResolveResponse {
-	out := &remotepb.ResolveResponse{Service: res.Service, Address: res.Address}
+	out := &remotepb.ResolveResponse{Service: res.Service, Address: res.Address, Workload: string(res.Workload)}
 	for _, in := range res.Instances {
 		out.Instances = append(out.Instances, &remotepb.Instance{Name: in.Name, Address: in.Address})
 	}
@@ -220,7 +241,7 @@ func resolvedTo(res *render.Resolved) *remotepb.ResolveResponse {
 }
 
 func resolvedFrom(resp *remotepb.ResolveResponse) *render.Resolved {
-	res := &render.Resolved{Service: resp.Service, Address: resp.Address}
+	res := &render.Resolved{Service: resp.Service, Address: resp.Address, Workload: render.WorkloadKind(resp.Workload)}
 	for _, in := range resp.Instances {
 		res.Instances = append(res.Instances, render.Instance{Name: in.Name, Address: in.Address})
 	}
@@ -403,6 +424,78 @@ func (s *server) Inspect(ctx context.Context, req *remotepb.InspectRequest) (*re
 	return &remotepb.InspectResponse{Hold: string(hold)}, nil
 }
 
+func (s *server) blobStorage() (*blobStore, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.blobs != nil {
+		return s.blobs, nil
+	}
+	dir, err := os.MkdirTemp("", "pack-target-blobs-")
+	if err != nil {
+		return nil, err
+	}
+	s.blobs = newBlobStore(dir)
+	return s.blobs, nil
+}
+
+func (s *server) PutBlob(stream remotepb.Target_PutBlobServer) error {
+	if _, err := s.installation(); err != nil {
+		return err
+	}
+	store, err := s.blobStorage()
+	if err != nil {
+		return status.Error(codes.Internal, err.Error())
+	}
+	first, err := stream.Recv()
+	if err != nil {
+		return status.Error(codes.InvalidArgument, err.Error())
+	}
+	reader := &blobStreamReader{stream: stream, rest: first.Data, digest: first.Digest}
+	if err := store.put(first.Digest, reader); err != nil {
+		return status.Error(codes.InvalidArgument, err.Error())
+	}
+	return stream.SendAndClose(&remotepb.BlobResponse{})
+}
+
+func (s *server) AcquireLock(ctx context.Context, _ *remotepb.AcquireLockRequest) (*remotepb.AcquireLockResponse, error) {
+	inst, err := s.installation()
+	if err != nil {
+		return nil, err
+	}
+	locker, ok := inst.(target.Locker)
+	if !ok {
+		return nil, status.Error(codes.Unimplemented, "the target cannot lock an installation")
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.unlock != nil {
+		return nil, status.Error(codes.AlreadyExists, "the installation is already locked")
+	}
+	unlock, err := locker.Lock(ctx)
+	if err != nil {
+		return nil, status.Error(codes.Unavailable, err.Error())
+	}
+	s.unlock = unlock
+	if lease, ok := inst.(interface{ LockLost() <-chan struct{} }); ok {
+		s.lockLost = lease.LockLost()
+	}
+	return &remotepb.AcquireLockResponse{}, nil
+}
+
+func (s *server) ReleaseLock(_ context.Context, _ *remotepb.ReleaseLockRequest) (*remotepb.ReleaseLockResponse, error) {
+	s.mu.Lock()
+	unlock := s.unlock
+	s.unlock, s.lockLost = nil, nil
+	s.mu.Unlock()
+	if unlock == nil {
+		return nil, status.Error(codes.FailedPrecondition, "the installation is not locked")
+	}
+	if err := unlock(context.Background()); err != nil {
+		return nil, status.Error(codes.Internal, err.Error())
+	}
+	return &remotepb.ReleaseLockResponse{}, nil
+}
+
 func (s *server) Execute(req *remotepb.ExecuteRequest, stream remotepb.Target_ExecuteServer) error {
 	inst, err := s.installation()
 	if err != nil {
@@ -410,6 +503,16 @@ func (s *server) Execute(req *remotepb.ExecuteRequest, stream remotepb.Target_Ex
 	}
 	step, err := stepFrom(req)
 	if err != nil {
+		return status.Error(codes.InvalidArgument, err.Error())
+	}
+	blobs, err := s.blobStorage()
+	if err != nil {
+		return status.Error(codes.Internal, err.Error())
+	}
+	if err := blobs.hydrateUnit(step.Unit); err != nil {
+		return status.Error(codes.InvalidArgument, err.Error())
+	}
+	if err := blobs.hydrateUnit(step.Previous); err != nil {
 		return status.Error(codes.InvalidArgument, err.Error())
 	}
 	log := logging.For("step").With().Str("target", s.name).Int("n", step.N).Str("key", step.Key).Str("kind", step.Kind).
@@ -424,7 +527,20 @@ func (s *server) Execute(req *remotepb.ExecuteRequest, stream remotepb.Target_Ex
 	}
 	last := &remotepb.ExecuteEvent{Done: true}
 	start := time.Now()
-	if err := inst.Execute(stream.Context(), step, events); err != nil {
+	ctx := stream.Context()
+	if lost := s.lockLost; lost != nil {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithCancel(ctx)
+		defer cancel()
+		go func() {
+			select {
+			case <-lost:
+				cancel()
+			case <-ctx.Done():
+			}
+		}()
+	}
+	if err := inst.Execute(ctx, step, events); err != nil {
 		last.Error = err.Error()
 		if len(last.Error) == 0 {
 			last.Error = "failed"

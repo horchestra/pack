@@ -44,7 +44,8 @@ type ApplyOptions struct {
 	// applied at all ("added", "config only", "drift") — what a repeat apply was expected to skip.
 	Planned func(*plan.Plan)
 	// Pack is the release's pack as Go (self-deploy: the process deploys the very pack it is built of). Set, it
-	// is the pack applied — nothing is generated or written to read back; Values are the release's values then.
+	// is the pack applied directly from memory; Values are the release's values then. Persistent state keeps a cache
+	// snapshot of the installed version for later upgrades and rollback.
 	Pack   sdk.Pack
 	Values map[string]any
 }

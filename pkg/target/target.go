@@ -36,6 +36,11 @@ type Recorder interface {
 	DeleteInstalled() error
 }
 
+// Locker serializes sagas of one installation. The unlock belongs to the caller; process death must release the lock.
+type Locker interface {
+	Lock(ctx context.Context) (unlock func(context.Context) error, err error)
+}
+
 // Observed is a key as the target holds it.
 type Observed struct {
 	Image    string

@@ -129,6 +129,10 @@ flowchart TD
     casbin --> decide{"allow?"}
 ```
 
+Embedded `cmd.Apply` calls in one process are serialized because cache and credential settings are process-wide
+environment variables; it is a self-deploy API, not a concurrent fleet queue. The operator supplies fleet concurrency
+with one pack process per job.
+
 What is a person's stays a person's: neither MCP server has an approve or a merge tool; a secret's value
 is never read over any API; with `auth: none` the dev user is an admin everywhere — a mode that is only
 ever switched on explicitly and is announced in the log at start.

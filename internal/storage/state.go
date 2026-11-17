@@ -4,6 +4,7 @@
 package storage
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -77,7 +78,10 @@ func (s FileStore) Delete() error {
 // Lock takes the installation: a second saga on it, from this directory, is refused while the first runs.
 // The lock is a file made exclusively; it holds the pid of the owner. A crash leaves it behind, and the error
 // says which file to remove.
-func (s FileStore) Lock() (unlock func(), err error) {
+func (s FileStore) Lock(ctx context.Context) (unlock func(context.Context) error, err error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	if err := os.MkdirAll(s.Dir, 0o700); err != nil {
 		return nil, err
 	}
@@ -92,5 +96,5 @@ func (s FileStore) Lock() (unlock func(), err error) {
 	}
 	_, _ = f.WriteString(strconv.Itoa(os.Getpid()))
 	_ = f.Close()
-	return func() { _ = os.Remove(p) }, nil
+	return func(context.Context) error { return os.Remove(p) }, nil
 }

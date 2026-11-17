@@ -1,6 +1,7 @@
 package bundle_test
 
 import (
+	"fmt"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -68,6 +69,26 @@ func (*Outer) Meta() sdk.Meta {
 	return sdk.Meta{Name: "outer", Version: "1", Dir: "/nonexistent"}
 }
 func (*Outer) PackRoot() packschema.Root { return packschema.Root{} }
+
+type versionConflictSource struct{ calls int }
+
+func (s *versionConflictSource) Root() (*bundle.Files, error) {
+	return &bundle.Files{
+		Name: "root", Version: "1", Templates: map[string][]byte{},
+		Schema: []byte(`{"type":"object","properties":{"a":{"$ref":"pack://dep#"},"b":{"$ref":"pack://dep#"}},"x-pack":{}}`),
+	}, nil
+}
+
+func (s *versionConflictSource) Member(string) (*bundle.Files, error) {
+	s.calls++
+	return &bundle.Files{Name: "dep", Version: fmt.Sprint(s.calls), Templates: map[string][]byte{}, Schema: []byte(`{"type":"object","x-pack":{}}`)}, nil
+}
+
+func TestBundleRejectsTwoVersionsOfOnePack(t *testing.T) {
+	if _, err := bundle.LoadFrom(&versionConflictSource{}); err == nil || !strings.Contains(err.Error(), "versions 1 and 2") {
+		t.Fatalf("a version conflict must say both versions: %v", err)
+	}
+}
 
 // The instances: the pack itself, and each pack held in a field — held ones before the one that holds them.
 func TestInstances(t *testing.T) {

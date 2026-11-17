@@ -71,8 +71,9 @@ type Target interface {
 type Resolved struct {
 	// Service is the key's stable name; Address how a neighbour reaches it
 	// as one service.
-	Service string
-	Address string
+	Service  string
+	Address  string
+	Workload WorkloadKind
 	// Instances are its replicas in order — empty for a key the environment
 	// gave no replicas.
 	Instances []Instance
